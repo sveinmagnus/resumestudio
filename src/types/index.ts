@@ -287,15 +287,20 @@ export interface Reference {
   internal_notes: string | null
 }
 
-export interface TargetedResume {
+export interface ViewSection {
+  key: string
+  enabled: boolean
+  sort_order: number
+}
+
+export interface ResumeView {
   id: string
-  resume_id: string
   name: string
-  locale: string
-  skill_tags: string[]
-  sections: string[]
-  starred_only: boolean
+  introduction: LocalizedString
+  sections: ViewSection[]
+  excluded_item_ids: string[]
   include_photo: boolean
+  starred_only: boolean
   page_limit: number | null
   template_id: string | null
   last_exported_at: string | null
@@ -322,7 +327,7 @@ export interface ResumeStore {
   honor_awards: HonorAward[]
   publications: Publication[]
   references: Reference[]
-  targeted_resumes: TargetedResume[]
+  views: ResumeView[]
 }
 
 // ─── UI state ────────────────────────────────────────────────────────────────

@@ -3,13 +3,13 @@ import { SECTIONS, GROUP_LABELS } from '../../lib/sections'
 import {
   LayoutDashboard, User, FileText, Briefcase, Building2, Users,
   GraduationCap, BookOpen, Award, Layers, Languages, Presentation,
-  Newspaper, Trophy, Contact, Tags, SquareUser, Circle,
+  Newspaper, Trophy, Contact, Tags, SquareUser, LayoutList, Circle,
 } from 'lucide-react'
 
 const ICON_MAP: Record<string, React.FC<{ size?: number }>> = {
   LayoutDashboard, User, FileText, Briefcase, Building2, Users,
   GraduationCap, BookOpen, Award, Layers, Languages, Presentation,
-  Newspaper, Trophy, Contact, Tags, SquareUser,
+  Newspaper, Trophy, Contact, Tags, SquareUser, LayoutList,
 }
 
 export function Sidebar() {

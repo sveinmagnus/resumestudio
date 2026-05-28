@@ -1,36 +1,36 @@
 :root {
-  /* ── Palette: warm paper + deep ink, single sharp accent ── */
-  --paper: #f4f1ea;
-  --paper-raised: #faf8f3;
-  --paper-sunken: #ebe6db;
-  --ink: #1a1714;
-  --ink-soft: #4a443c;
-  --ink-faint: #8a8276;
-  --line: #d9d2c5;
-  --line-strong: #c4bbab;
+  /* ── Palette: Cartavio brand — white + navy #002E6E + cyan #00B8DE ── */
+  --paper: #ffffff;
+  --paper-raised: #f8f9fc;
+  --paper-sunken: #f0f4f8;
+  --ink: #111111;
+  --ink-soft: #374151;
+  --ink-faint: #6B7280;
+  --line: #d1d8e8;
+  --line-strong: #b0bcd4;
 
-  /* accent: oxblood */
-  --accent: #8a2b2e;
-  --accent-bright: #a63437;
-  --accent-wash: #f0e3e0;
+  /* accent: Cartavio navy — exact value from cartavio.no */
+  --accent: #002E6E;
+  --accent-bright: #1B4A9A;
+  --accent-wash: #e6ecf8;
 
-  /* secondary language tint */
-  --secondary-tint: #eef0f2;
-  --secondary-line: #c8d0d6;
-  --secondary-ink: #3a4750;
+  /* secondary language tint: Cartavio cyan — exact value from cartavio.no */
+  --secondary-tint: #e0f8ff;
+  --secondary-line: #7dd9f0;
+  --secondary-ink: #00B8DE;
 
   --gold: #9a7b3f;
 
-  --shadow-sm: 0 1px 2px rgba(26,23,20,0.06);
-  --shadow-md: 0 4px 16px rgba(26,23,20,0.10);
-  --shadow-lg: 0 12px 40px rgba(26,23,20,0.16);
+  --shadow-sm: 0 1px 2px rgba(0,46,110,0.08);
+  --shadow-md: 0 4px 16px rgba(0,46,110,0.12);
+  --shadow-lg: 0 12px 40px rgba(0,46,110,0.18);
 
   --r-sm: 4px;
   --r-md: 7px;
   --r-lg: 12px;
 
-  --serif: 'DM Serif Display', Georgia, serif;
-  --sans: 'DM Sans', -apple-system, sans-serif;
+  --serif: 'Open Sans Condensed', sans-serif;
+  --sans: 'Ubuntu', -apple-system, sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -61,7 +61,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; color: inher
 
 ::selection { background: var(--accent); color: var(--paper-raised); }
 
-h1,h2,h3,h4 { font-family: var(--serif); font-weight: 400; line-height: 1.1; }
+h1,h2,h3,h4 { font-family: var(--serif); font-weight: 300; line-height: 1.1; }
 
 /* scrollbar */
 ::-webkit-scrollbar { width: 11px; height: 11px; }

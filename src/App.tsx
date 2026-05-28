@@ -12,6 +12,7 @@ import {
   SpokenLanguagesEditor, ProfileEditor,
 } from './components/editor/SimpleEditors'
 import { SkillsEditor, RolesEditor, ReferencesEditor, TechCategoriesEditor } from './components/editor/RegistryEditors'
+import { ResumeViewsEditor } from './components/editor/ResumeViewsEditor'
 import { Download, FileJson } from 'lucide-react'
 
 export default function App() {
@@ -66,6 +67,7 @@ export default function App() {
           {activeSection === 'references' && <ReferencesEditor />}
           {activeSection === 'skills' && <SkillsEditor />}
           {activeSection === 'roles' && <RolesEditor />}
+          {activeSection === 'views' && <ResumeViewsEditor />}
         </div>
       </main>
 

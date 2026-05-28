@@ -37,7 +37,7 @@ const emptyStore: ResumeStore = {
   work_experiences: [], educations: [], courses: [], certifications: [],
   spoken_languages: [], technology_categories: [], positions: [],
   presentations: [], honor_awards: [], publications: [], references: [],
-  targeted_resumes: [],
+  views: [],
 }
 
 export const useStore = create<AppState>((set) => ({

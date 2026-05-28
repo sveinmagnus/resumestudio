@@ -30,6 +30,8 @@ export const SECTIONS: SectionDef[] = [
 
   { key: 'skills', label: 'Skill Registry', storeKey: 'skills', icon: 'Tags', group: 'registry' },
   { key: 'roles', label: 'Role Registry', storeKey: 'roles', icon: 'SquareUser', group: 'registry' },
+
+  { key: 'views', label: 'Resume Views', storeKey: 'views', icon: 'LayoutList', group: 'export' },
 ]
 
 export const GROUP_LABELS: Record<string, string> = {
@@ -38,4 +40,5 @@ export const GROUP_LABELS: Record<string, string> = {
   credentials: 'Education & Credentials',
   extras: 'Additional',
   registry: 'Reusable Registries',
+  export: 'Export',
 }
