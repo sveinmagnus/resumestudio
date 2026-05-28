@@ -1,0 +1,126 @@
+import { ReactNode } from 'react'
+import { useStore } from '../../store/useStore'
+import { ChevronDown, Star, Eye, EyeOff, ArrowUp, ArrowDown, Trash2 } from 'lucide-react'
+import type { ResumeStore } from '../../types'
+
+type ArraySection = Exclude<keyof ResumeStore, 'resume'>
+
+interface EditorCardProps {
+  section: ArraySection
+  id: string
+  title: string
+  subtitle?: string
+  meta?: string
+  starred?: boolean
+  disabled?: boolean
+  canStar?: boolean
+  canDisable?: boolean
+  children: ReactNode
+}
+
+export function EditorCard({
+  section, id, title, subtitle, meta, starred, disabled,
+  canStar = true, canDisable = true, children,
+}: EditorCardProps) {
+  const { expandedItemId, setExpandedItem, updateItem, removeItem, reorderItem } = useStore()
+  const open = expandedItemId === id
+
+  return (
+    <div className={`ec ${open ? 'open' : ''} ${disabled ? 'is-disabled' : ''}`}>
+      <div className="ec-head" onClick={() => setExpandedItem(id)}>
+        <button className="ec-chev"><ChevronDown size={17} /></button>
+        <div className="ec-titles">
+          <div className="ec-title">
+            {starred && <Star size={13} className="ec-star-ind" fill="currentColor" />}
+            {title || <span className="ec-untitled">Untitled</span>}
+          </div>
+          {subtitle && <div className="ec-subtitle">{subtitle}</div>}
+        </div>
+        {meta && <div className="ec-meta">{meta}</div>}
+        <div className="ec-actions" onClick={(e) => e.stopPropagation()}>
+          {canStar && (
+            <button className={`ec-act ${starred ? 'on' : ''}`} title="Feature"
+              onClick={() => updateItem(section, id, { starred: !starred } as never)}>
+              <Star size={15} fill={starred ? 'currentColor' : 'none'} />
+            </button>
+          )}
+          {canDisable && (
+            <button className={`ec-act ${disabled ? 'on-off' : ''}`} title={disabled ? 'Hidden from exports' : 'Visible'}
+              onClick={() => updateItem(section, id, { disabled: !disabled } as never)}>
+              {disabled ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          )}
+          <button className="ec-act" title="Move up" onClick={() => reorderItem(section, id, 'up')}><ArrowUp size={15} /></button>
+          <button className="ec-act" title="Move down" onClick={() => reorderItem(section, id, 'down')}><ArrowDown size={15} /></button>
+          <button className="ec-act ec-del" title="Delete"
+            onClick={() => { if (confirm('Delete this item?')) removeItem(section, id) }}>
+            <Trash2 size={15} />
+          </button>
+        </div>
+      </div>
+      {open && <div className="ec-body">{children}</div>}
+
+      <style>{`
+        .ec {
+          background: var(--paper-raised); border: 1px solid var(--line);
+          border-radius: var(--r-md); margin-bottom: 10px; overflow: hidden;
+          transition: box-shadow .2s, border-color .2s;
+        }
+        .ec.open { box-shadow: var(--shadow-md); border-color: var(--line-strong); }
+        .ec.is-disabled { opacity: .55; }
+        .ec-head {
+          display: flex; align-items: center; gap: 12px; padding: 13px 15px; cursor: pointer;
+        }
+        .ec-head:hover { background: var(--paper-sunken); }
+        .ec-chev { color: var(--ink-faint); transition: transform .2s; display: grid; place-items: center; }
+        .ec.open .ec-chev { transform: rotate(180deg); }
+        .ec-titles { flex: 1; min-width: 0; }
+        .ec-title {
+          font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 7px;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .ec-star-ind { color: var(--gold); flex-shrink: 0; }
+        .ec-untitled { color: var(--ink-faint); font-weight: 400; font-style: italic; }
+        .ec-subtitle { font-size: 12.5px; color: var(--ink-faint); margin-top: 1px; }
+        .ec-meta { font-size: 12px; color: var(--ink-faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .ec-actions { display: flex; gap: 1px; }
+        .ec-act {
+          width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-sm);
+          color: var(--ink-faint); transition: all .13s;
+        }
+        .ec-act:hover { background: var(--paper); color: var(--ink); }
+        .ec-act.on { color: var(--gold); }
+        .ec-act.on-off { color: var(--accent); }
+        .ec-del:hover { background: var(--accent-wash); color: var(--accent); }
+        .ec-body {
+          padding: 6px 18px 20px; border-top: 1px solid var(--line);
+          animation: fadeIn .25s ease;
+        }
+      `}</style>
+    </div>
+  )
+}
+
+export function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button className="add-btn" onClick={onClick}>
+      + {label}
+      <style>{`
+        .add-btn {
+          width: 100%; padding: 13px; border: 1.5px dashed var(--line-strong);
+          border-radius: var(--r-md); color: var(--ink-soft); font-weight: 600; font-size: 14px;
+          transition: all .15s; background: transparent;
+        }
+        .add-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-wash); }
+      `}</style>
+    </button>
+  )
+}
+
+export function FieldRow({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+      {children}
+    </div>
+  )
+}

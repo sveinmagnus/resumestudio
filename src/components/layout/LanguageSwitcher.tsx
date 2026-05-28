@@ -1,0 +1,87 @@
+import { useStore } from '../../store/useStore'
+import { LOCALE_LABELS } from '../../lib/locales'
+import { ArrowLeftRight, Eye, EyeOff } from 'lucide-react'
+
+export function LanguageSwitcher() {
+  const { data, primaryLocale, secondaryLocale, setPrimaryLocale, setSecondaryLocale } = useStore()
+  const locales = data.resume?.supported_locales || ['en']
+
+  const swap = () => {
+    if (!secondaryLocale) return
+    setPrimaryLocale(secondaryLocale)
+    setSecondaryLocale(primaryLocale)
+  }
+
+  return (
+    <div className="lang-switch">
+      <div className="lang-block">
+        <span className="lang-role">Primary</span>
+        <select value={primaryLocale} onChange={(e) => setPrimaryLocale(e.target.value)} className="lang-sel lang-sel-primary">
+          {locales.map((l) => (
+            <option key={l} value={l} disabled={l === secondaryLocale}>
+              {LOCALE_LABELS[l]?.flag} {LOCALE_LABELS[l]?.name || l}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <button className="lang-swap" onClick={swap} disabled={!secondaryLocale} title="Swap languages">
+        <ArrowLeftRight size={15} />
+      </button>
+
+      <div className="lang-block">
+        <span className="lang-role lang-role-sec">Secondary</span>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <select
+            value={secondaryLocale || ''}
+            onChange={(e) => setSecondaryLocale(e.target.value || null)}
+            className="lang-sel lang-sel-secondary">
+            <option value="">— none —</option>
+            {locales.map((l) => (
+              <option key={l} value={l} disabled={l === primaryLocale}>
+                {LOCALE_LABELS[l]?.flag} {LOCALE_LABELS[l]?.name || l}
+              </option>
+            ))}
+          </select>
+          <button
+            className="lang-toggle"
+            onClick={() => setSecondaryLocale(secondaryLocale ? null : (locales.find((l) => l !== primaryLocale) || null))}
+            title={secondaryLocale ? 'Hide secondary column' : 'Show secondary column'}>
+            {secondaryLocale ? <Eye size={14} /> : <EyeOff size={14} />}
+          </button>
+        </div>
+      </div>
+
+      <style>{`
+        .lang-switch {
+          display: flex; align-items: flex-end; gap: 10px;
+          padding: 10px 14px; background: var(--paper-raised);
+          border: 1px solid var(--line); border-radius: var(--r-md);
+          box-shadow: var(--shadow-sm);
+        }
+        .lang-block { display: flex; flex-direction: column; gap: 4px; }
+        .lang-role { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+        .lang-role-sec { color: var(--secondary-ink); }
+        .lang-sel {
+          padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--line);
+          background: var(--paper); font-weight: 500; font-size: 13px; cursor: pointer;
+        }
+        .lang-sel-primary { border-color: var(--accent); }
+        .lang-sel-secondary { border-color: var(--secondary-line); }
+        .lang-swap {
+          width: 32px; height: 32px; display: grid; place-items: center; margin-bottom: 1px;
+          border-radius: var(--r-sm); background: var(--paper-sunken); color: var(--ink-soft);
+          transition: all .15s;
+        }
+        .lang-swap:hover:not(:disabled) { background: var(--accent); color: var(--paper-raised); }
+        .lang-swap:disabled { opacity: .3; cursor: default; }
+        .lang-toggle {
+          width: 32px; display: grid; place-items: center;
+          border-radius: var(--r-sm); background: var(--paper-sunken); color: var(--ink-soft);
+          border: 1px solid var(--line);
+        }
+        .lang-toggle:hover { color: var(--accent); border-color: var(--accent); }
+      `}</style>
+    </div>
+  )
+}
