@@ -34,7 +34,12 @@ export class ServerError extends Error {
 
 // ─── HTTP base ────────────────────────────────────────────────────────────────
 
-async function request(method: string, url: string, body?: unknown): Promise<Response> {
+async function request(
+  method: string,
+  url: string,
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
   const headers: Record<string, string> = {}
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
@@ -45,10 +50,20 @@ async function request(method: string, url: string, body?: unknown): Promise<Res
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal,
   })
 
   if (res.status === 401) throw new UnauthorizedError()
   return res
+}
+
+/**
+ * True when the given error is a fetch abort (caller cancelled via
+ * AbortController). Callers typically want to ignore these silently — an
+ * abort means the work was superseded, not failed.
+ */
+export function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError'
 }
 
 // ─── API surface ──────────────────────────────────────────────────────────────
@@ -82,10 +97,15 @@ export const api = {
 
   /**
    * Persist the current store to the server.
+   *
+   * Pass an `AbortSignal` to cancel an in-flight save when a newer one fires —
+   * the resulting AbortError can be detected with `isAbortError()` and is
+   * typically not user-visible.
+   *
    * Throws UnauthorizedError or ServerError on failure.
    */
-  async save(data: ResumeStore): Promise<void> {
-    const res = await request('PUT', '/api/resume', data)
+  async save(data: ResumeStore, signal?: AbortSignal): Promise<void> {
+    const res = await request('PUT', '/api/resume', data, signal)
     if (!res.ok) throw new ServerError(res.status, `Save failed: ${res.statusText}`)
   },
 }

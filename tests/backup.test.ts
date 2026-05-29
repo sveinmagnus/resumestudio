@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { isBackupFormat, exportToBackup, importFromBackup } from '../src/lib/backup'
+import {
+  isBackupFormat, exportToBackup, importFromBackup,
+  migrateBackup, UnsupportedBackupVersionError, CURRENT_FORMAT_VERSION,
+  type AnyBackup,
+} from '../src/lib/backup'
 import {
   emptyStore, makeProject, makeWork, makeEducation, makeKQ,
   makeReference, makeSpokenLanguage, makeSkill, makeRole,
@@ -34,20 +38,29 @@ describe('isBackupFormat()', () => {
     })).toBe(false)
   })
 
-  it('rejects backup with wrong format_version', () => {
+  it('accepts an envelope from a future format version (detection layer is lenient — migrateBackup decides if we can read it)', () => {
+    // We want users with future-version backups to see "unsupported version"
+    // rather than the misleading "this looks like a CVpartner file" error.
     expect(isBackupFormat({
-      $schema: 'resumestudio/v1',
+      $schema: 'resumestudio/v2',
       format_version: 2,
       profile: null,
-      registries: {},
       sections: {},
-    })).toBe(false)
+    })).toBe(true)
   })
 
-  it('rejects backup missing the registries section', () => {
+  it('rejects backup missing the sections payload', () => {
     expect(isBackupFormat({
       $schema: 'resumestudio/v1',
       format_version: 1,
+      profile: null,
+    })).toBe(false)
+  })
+
+  it('rejects when format_version is not a number', () => {
+    expect(isBackupFormat({
+      $schema: 'resumestudio/v1',
+      format_version: '1',
       profile: null,
       sections: {},
     })).toBe(false)
@@ -115,5 +128,37 @@ describe('round-trip (exportToBackup → importFromBackup)', () => {
     store.resume = null
     const restored = importFromBackup(exportToBackup(store))
     expect(restored.resume).toBeNull()
+  })
+})
+
+describe('migrateBackup() & UnsupportedBackupVersionError', () => {
+  it('passes v1 through unchanged (current = v1)', () => {
+    expect(CURRENT_FORMAT_VERSION).toBe(1)
+    const v1 = exportToBackup(emptyStore())
+    expect(migrateBackup(v1)).toBe(v1)
+  })
+
+  it('throws a typed error for an unknown future version', () => {
+    const fromTheFuture = {
+      ...exportToBackup(emptyStore()),
+      format_version: 99,
+    } as unknown as AnyBackup
+    expect(() => migrateBackup(fromTheFuture)).toThrow(UnsupportedBackupVersionError)
+    try {
+      migrateBackup(fromTheFuture)
+    } catch (e) {
+      expect(e).toBeInstanceOf(UnsupportedBackupVersionError)
+      expect((e as UnsupportedBackupVersionError).version).toBe(99)
+      // The user-facing message must mention versions
+      expect((e as Error).message).toMatch(/version/i)
+    }
+  })
+
+  it('importFromBackup propagates the migration error for unknown versions', () => {
+    const fromTheFuture = {
+      ...exportToBackup(emptyStore()),
+      format_version: 7,
+    } as unknown as AnyBackup
+    expect(() => importFromBackup(fromTheFuture)).toThrow(UnsupportedBackupVersionError)
   })
 })

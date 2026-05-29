@@ -20,6 +20,12 @@ import type {
 
 // ─── Backup format types ──────────────────────────────────────────────────────
 
+/**
+ * Highest format version this build knows how to read AND write. Bumped only
+ * when the on-disk shape changes in a way that requires migration.
+ */
+export const CURRENT_FORMAT_VERSION = 1
+
 export interface BackupV1 {
   $schema: 'resumestudio/v1'
   format_version: 1
@@ -47,23 +53,60 @@ export interface BackupV1 {
   views: ResumeView[]
 }
 
+/**
+ * Union of every backup shape this build can read. When you add a new format
+ * version, add its interface to this union AND extend `migrateBackup` below.
+ */
+export type AnyBackup = BackupV1
+
 // ─── Detection ────────────────────────────────────────────────────────────────
 
 /**
- * Returns true if the parsed JSON object is a Resume Studio backup file.
- * Distinguished from CVpartner exports by the presence of `format_version`
- * and `$schema`.
+ * Returns true if the parsed JSON object looks like ANY known Resume Studio
+ * backup version. Distinguishes backup files from CVpartner exports without
+ * yet asserting which version it is — use `migrateBackup` to actually read it.
+ *
+ * Older callers expecting a BackupV1 type guard still work: today every known
+ * version IS v1, so the guard is correct. When a v2 is added, this stays the
+ * same but the guard narrows to `AnyBackup`.
  */
-export function isBackupFormat(json: unknown): json is BackupV1 {
+export function isBackupFormat(json: unknown): json is AnyBackup {
   if (!json || typeof json !== 'object') return false
   const obj = json as Record<string, unknown>
-  return (
-    obj['$schema'] === 'resumestudio/v1' &&
-    obj['format_version'] === 1 &&
-    'profile' in obj &&
-    'registries' in obj &&
-    'sections' in obj
-  )
+  if (typeof obj['$schema'] !== 'string') return false
+  if (!String(obj['$schema']).startsWith('resumestudio/')) return false
+  if (typeof obj['format_version'] !== 'number') return false
+  if (!('profile' in obj) || !('sections' in obj)) return false
+  return true
+}
+
+// ─── Migration scaffold ───────────────────────────────────────────────────────
+
+export class UnsupportedBackupVersionError extends Error {
+  constructor(public version: unknown) {
+    super(
+      `Unsupported backup format_version: ${String(version)}. ` +
+      `This build understands versions 1 through ${CURRENT_FORMAT_VERSION}. ` +
+      `The file may have been saved by a newer build of Resume Studio.`
+    )
+    this.name = 'UnsupportedBackupVersionError'
+  }
+}
+
+/**
+ * Bring any known backup shape up to the current version.
+ *
+ * Today there is only v1 so this is a pass-through. When a v2 is introduced,
+ * add a `migrateV1toV2(v1)` step and chain it here. The pattern keeps each
+ * step small and independently testable.
+ *
+ * Throws `UnsupportedBackupVersionError` for unknown versions — callers
+ * should catch and present a useful error to the user.
+ */
+export function migrateBackup(raw: AnyBackup): BackupV1 {
+  const v = raw.format_version
+  if (v === 1) return raw
+  throw new UnsupportedBackupVersionError(v)
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
@@ -100,26 +143,32 @@ export function exportToBackup(store: ResumeStore): BackupV1 {
 
 // ─── Import ───────────────────────────────────────────────────────────────────
 
-/** Restore a ResumeStore from a backup file. */
-export function importFromBackup(backup: BackupV1): ResumeStore {
+/**
+ * Restore a ResumeStore from a backup file.
+ *
+ * Accepts any known backup version — migration is applied first. Throws
+ * `UnsupportedBackupVersionError` if the version is unknown.
+ */
+export function importFromBackup(backup: AnyBackup): ResumeStore {
+  const v1 = migrateBackup(backup)
   return {
-    resume:                  backup.profile,
-    skills:                  backup.registries.skills,
-    roles:                   backup.registries.roles,
-    key_qualifications:      backup.sections.key_qualifications,
-    projects:                backup.sections.projects,
-    work_experiences:        backup.sections.work_experiences,
-    educations:              backup.sections.educations,
-    courses:                 backup.sections.courses,
-    certifications:          backup.sections.certifications,
-    spoken_languages:        backup.sections.spoken_languages,
-    technology_categories:   backup.sections.technology_categories,
-    positions:               backup.sections.positions,
-    presentations:           backup.sections.presentations,
-    honor_awards:            backup.sections.honor_awards,
-    publications:            backup.sections.publications,
-    references:              backup.sections.references,
-    views:                   backup.views,
+    resume:                  v1.profile,
+    skills:                  v1.registries.skills,
+    roles:                   v1.registries.roles,
+    key_qualifications:      v1.sections.key_qualifications,
+    projects:                v1.sections.projects,
+    work_experiences:        v1.sections.work_experiences,
+    educations:              v1.sections.educations,
+    courses:                 v1.sections.courses,
+    certifications:          v1.sections.certifications,
+    spoken_languages:        v1.sections.spoken_languages,
+    technology_categories:   v1.sections.technology_categories,
+    positions:               v1.sections.positions,
+    presentations:           v1.sections.presentations,
+    honor_awards:            v1.sections.honor_awards,
+    publications:            v1.sections.publications,
+    references:              v1.sections.references,
+    views:                   v1.views,
   }
 }
 

@@ -1,9 +1,9 @@
 import { useStore } from '../../store/useStore'
 import { LOCALE_LABELS } from '../../lib/locales'
-import { ArrowLeftRight, Eye, EyeOff } from 'lucide-react'
+import { ArrowLeftRight, Eye, EyeOff, RefreshCw } from 'lucide-react'
 
 export function LanguageSwitcher() {
-  const { data, primaryLocale, secondaryLocale, setPrimaryLocale, setSecondaryLocale } = useStore()
+  const { data, primaryLocale, secondaryLocale, setPrimaryLocale, setSecondaryLocale, detectAndSetLocales } = useStore()
   const locales = data.resume?.supported_locales || ['en']
 
   const swap = () => {
@@ -52,6 +52,14 @@ export function LanguageSwitcher() {
         </div>
       </div>
 
+      <button
+        className="lang-detect"
+        onClick={detectAndSetLocales}
+        title="Re-scan content for languages and update the list"
+      >
+        <RefreshCw size={13} />
+      </button>
+
       <style>{`
         .lang-switch {
           display: flex; align-items: flex-end; gap: 10px;
@@ -81,6 +89,12 @@ export function LanguageSwitcher() {
           border: 1px solid var(--line);
         }
         .lang-toggle:hover { color: var(--accent); border-color: var(--accent); }
+        .lang-detect {
+          width: 32px; height: 32px; display: grid; place-items: center; margin-bottom: 1px;
+          border-radius: var(--r-sm); background: var(--paper-sunken); color: var(--ink-soft);
+          transition: all .15s;
+        }
+        .lang-detect:hover { color: var(--accent); background: var(--accent-wash); }
       `}</style>
     </div>
   )

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { resolve, fmtDate, fmtRange, LOCALE_LABELS } from '../src/lib/locales'
+import { resolve, fmtDate, fmtRange, LOCALE_LABELS, detectLocalesInData, sortLocales } from '../src/lib/locales'
+import { emptyStore, makeProject, makeWork } from './fixtures'
 
 describe('resolve()', () => {
   it('returns the requested locale when present', () => {
@@ -79,5 +80,65 @@ describe('LOCALE_LABELS', () => {
       expect(LOCALE_LABELS[code].name).toBeTruthy()
       expect(LOCALE_LABELS[code].flag).toBeTruthy()
     }
+  })
+})
+
+describe('detectLocalesInData()', () => {
+  it('returns an empty list for a store with no localized content', () => {
+    const store = emptyStore()
+    if (store.resume) {
+      store.resume.title = {}
+      store.resume.nationality = {}
+      store.resume.place_of_residence = {}
+    }
+    expect(detectLocalesInData(store)).toEqual([])
+  })
+
+  it('finds locales from nested entity fields', () => {
+    const store = emptyStore()
+    store.projects.push(makeProject({ customer: { no: 'X', se: 'Y' } }))
+    store.work_experiences.push(makeWork({ employer: { dk: 'Z' } }))
+    const found = new Set(detectLocalesInData(store))
+    // resume fixture has { en, no } in title — those count too
+    for (const l of ['en', 'no', 'se', 'dk']) {
+      expect(found.has(l)).toBe(true)
+    }
+  })
+
+  it('ignores keys that are not in LOCALE_LABELS', () => {
+    const store = emptyStore()
+    store.projects.push(makeProject({
+      customer: { en: 'X', not_a_locale: 'Y' } as Record<string, string>,
+    }))
+    expect(detectLocalesInData(store)).not.toContain('not_a_locale')
+  })
+
+  it('normalises "int" to "en"', () => {
+    const store = emptyStore()
+    if (store.resume) store.resume.title = { int: 'Consultant' } as Record<string, string>
+    expect(detectLocalesInData(store)).toContain('en')
+    expect(detectLocalesInData(store)).not.toContain('int')
+  })
+
+  it('ignores empty/whitespace-only values', () => {
+    const store = emptyStore()
+    store.projects.push(makeProject({ customer: { se: '   ', dk: '' } }))
+    const found = detectLocalesInData(store)
+    expect(found).not.toContain('se')
+    expect(found).not.toContain('dk')
+  })
+})
+
+describe('sortLocales()', () => {
+  it('puts no first, then en, then others alphabetically-stable', () => {
+    expect(sortLocales(['se', 'en', 'no', 'dk'])).toEqual(['no', 'en', 'se', 'dk'])
+  })
+
+  it('deduplicates input', () => {
+    expect(sortLocales(['en', 'en', 'no', 'no'])).toEqual(['no', 'en'])
+  })
+
+  it('leaves a single-locale list alone', () => {
+    expect(sortLocales(['en'])).toEqual(['en'])
   })
 })

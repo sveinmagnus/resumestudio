@@ -1,6 +1,6 @@
 import { useStore } from '../../store/useStore'
 import { LOCALE_LABELS, resolve } from '../../lib/locales'
-import type { LocalizedString } from '../../types'
+import { computeCompleteness } from '../../lib/completeness'
 
 export function Overview() {
   const { data, setActiveSection } = useStore()
@@ -76,24 +76,3 @@ export function Overview() {
   )
 }
 
-function computeCompleteness(data: ReturnType<typeof useStore.getState>['data'], locales: string[]): Record<string, number> {
-  const result: Record<string, number> = {}
-  const fields: LocalizedString[] = []
-
-  const collect = (ls: LocalizedString | undefined) => { if (ls && Object.keys(ls).length) fields.push(ls) }
-
-  if (data.resume) { collect(data.resume.title); collect(data.resume.nationality); collect(data.resume.place_of_residence) }
-  data.key_qualifications.forEach((k) => { collect(k.summary); collect(k.tag_line) })
-  data.projects.forEach((p) => { collect(p.customer); collect(p.description); collect(p.long_description) })
-  data.work_experiences.forEach((w) => { collect(w.employer); collect(w.long_description) })
-  data.educations.forEach((e) => { collect(e.school); collect(e.degree) })
-  data.courses.forEach((c) => collect(c.name))
-  data.certifications.forEach((c) => collect(c.name))
-
-  for (const l of locales) {
-    if (fields.length === 0) { result[l] = 100; continue }
-    const present = fields.filter((f) => f[l] && f[l].trim()).length
-    result[l] = Math.round((present / fields.length) * 100)
-  }
-  return result
-}

@@ -1,4 +1,4 @@
-import type { LocalizedString } from '../types'
+import type { LocalizedString, ResumeStore } from '../types'
 
 export const LOCALE_LABELS: Record<string, { name: string; flag: string }> = {
   en: { name: 'English', flag: '🇬🇧' },
@@ -32,4 +32,48 @@ export function fmtRange(start: { year: number; month: number | null } | null, e
   const e = end ? fmtDate(end) : 'Present'
   if (!s) return e === 'Present' ? '' : e
   return `${s} – ${e}`
+}
+
+// ─── Detection ────────────────────────────────────────────────────────────────
+
+/**
+ * Walk the entire store and return every locale code (from LOCALE_LABELS)
+ * that has at least one non-empty value somewhere. Used when:
+ *
+ *   - the importer needs to detect locales the source file under-declared
+ *     (CVpartner exports lie about language_codes)
+ *   - the user pastes content in a new language and wants the LanguageSwitcher
+ *     to surface it
+ *
+ * `int` is normalised to `en` to match the importer's convention.
+ */
+export function detectLocalesInData(data: ResumeStore): string[] {
+  // `int` is the CVpartner-export name for English; we treat it as `en`
+  // here so this detector matches the importer's normalization.
+  const known = new Set([...Object.keys(LOCALE_LABELS), 'int'])
+  const found = new Set<string>()
+
+  const scan = (val: unknown): void => {
+    if (!val || typeof val !== 'object') return
+    if (Array.isArray(val)) { val.forEach(scan); return }
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      if (known.has(k) && typeof v === 'string' && v.trim()) {
+        found.add(k === 'int' ? 'en' : k)
+      } else if (typeof v === 'object') {
+        scan(v)
+      }
+    }
+  }
+  scan(data)
+  return [...found]
+}
+
+/**
+ * Order locales for display: `no` first, then `en`, then the rest in their
+ * incoming order. Mirrors the importer's convention so the same set always
+ * displays the same way.
+ */
+export function sortLocales(locales: string[]): string[] {
+  const rank = (l: string) => (l === 'no' ? 0 : l === 'en' ? 1 : 2)
+  return [...new Set(locales)].sort((a, b) => rank(a) - rank(b))
 }

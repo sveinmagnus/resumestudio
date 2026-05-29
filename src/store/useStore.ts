@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
 import type { ResumeStore, Resume, LocalizedString } from '../types'
 import { importFromCVPartner } from '../lib/importer'
+import { detectLocalesInData, sortLocales } from '../lib/locales'
 
 interface AppState {
   data: ResumeStore
@@ -21,6 +22,9 @@ interface AppState {
   setSecondaryLocale: (l: string | null) => void
   setExpandedItem: (id: string | null) => void
   updateResume: (patch: Partial<Resume>) => void
+
+  /** Rescan all data, merge any new locales into resume.supported_locales. */
+  detectAndSetLocales: () => void
 
   // generic array item ops
   updateItem: <K extends ArraySectionKey>(section: K, id: string, patch: Partial<ArrayItem<K>>) => void
@@ -119,6 +123,22 @@ export const useStore = create<AppState>((set) => ({
       resume: st.data.resume ? { ...st.data.resume, ...patch, updated_at: new Date().toISOString() } : null,
     },
   })),
+
+  detectAndSetLocales: () => set((st) => {
+    if (!st.data.resume) return {}
+    const detected = detectLocalesInData(st.data)
+    const merged   = sortLocales([...st.data.resume.supported_locales, ...detected, 'en'])
+    if (merged.length === st.data.resume.supported_locales.length &&
+        merged.every((l, i) => l === st.data.resume!.supported_locales[i])) {
+      return {} // no-op
+    }
+    return {
+      data: {
+        ...st.data,
+        resume: { ...st.data.resume, supported_locales: merged, updated_at: new Date().toISOString() },
+      },
+    }
+  }),
 
   updateItem: (section, id, patch) => set((st) => {
     const arr = st.data[section] as Array<{ id: string }>
