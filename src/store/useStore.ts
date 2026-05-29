@@ -15,6 +15,7 @@ interface AppState {
   // actions
   loadFromCVPartner: (raw: Record<string, unknown>) => void
   loadStore: (store: ResumeStore) => void
+  startFresh: () => void
   setActiveSection: (s: string) => void
   setPrimaryLocale: (l: string) => void
   setSecondaryLocale: (l: string | null) => void
@@ -67,6 +68,43 @@ export const useStore = create<AppState>((set) => ({
       data: store, hasData: true,
       primaryLocale: locales[0],
       secondaryLocale: locales[1] || null,
+    })
+  },
+
+  startFresh: () => {
+    const now = new Date().toISOString()
+    const freshStore: ResumeStore = {
+      resume: {
+        id: uuidv4(),
+        full_name: '',
+        email: '',
+        phone: null,
+        title: {},
+        nationality: {},
+        place_of_residence: {},
+        date_of_birth: null,
+        twitter: null,
+        linkedin_url: null,
+        website_url: null,
+        profile_image_url: null,
+        default_locale: 'en',
+        supported_locales: ['en'],
+        created_at: now,
+        updated_at: now,
+      },
+      skills: [], roles: [], key_qualifications: [], projects: [],
+      work_experiences: [], educations: [], courses: [], certifications: [],
+      spoken_languages: [], technology_categories: [], positions: [],
+      presentations: [], honor_awards: [], publications: [], references: [],
+      views: [],
+    }
+    set({
+      data: freshStore,
+      hasData: true,
+      activeSection: 'header',
+      expandedItemId: null,
+      primaryLocale: 'en',
+      secondaryLocale: null,
     })
   },
 

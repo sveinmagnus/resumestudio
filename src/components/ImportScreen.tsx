@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react'
 import { useStore } from '../store/useStore'
-import { Upload, FileJson, Sparkles } from 'lucide-react'
+import { Upload, FileJson, Sparkles, FilePlus } from 'lucide-react'
 import { isBackupFormat, importFromBackup } from '../lib/backup'
 
 export function ImportScreen() {
-  const { loadFromCVPartner, loadStore } = useStore()
+  const { loadFromCVPartner, loadStore, startFresh } = useStore()
   const [error, setError]     = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -67,6 +67,13 @@ export function ImportScreen() {
           <div className="is-feat"><FileJson size={16} /> CVpartner export (.json) — import projects, employment, education, skills &amp; more</div>
           <div className="is-feat"><Sparkles size={16} /> Side-by-side dual-language editing in any two locales</div>
         </div>
+
+        <div className="is-divider"><span>or</span></div>
+
+        <button className="is-fresh" onClick={startFresh}>
+          <FilePlus size={16} />
+          Start with an empty resume
+        </button>
       </div>
 
       <style>{`
@@ -107,6 +114,23 @@ export function ImportScreen() {
         }
         .is-feat { display: flex; align-items: center; gap: 10px; color: var(--ink-soft); font-size: 14px; }
         .is-feat svg { color: var(--accent); flex-shrink: 0; }
+        .is-divider {
+          display: flex; align-items: center; gap: 12px; margin: 28px 0 20px;
+          color: var(--ink-faint); font-size: 12px; font-weight: 600; letter-spacing: .05em;
+          text-transform: uppercase;
+        }
+        .is-divider::before, .is-divider::after {
+          content: ''; flex: 1; height: 1px; background: var(--line);
+        }
+        .is-fresh {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 11px 22px; border-radius: var(--r-md);
+          border: 1.5px solid var(--line-strong);
+          font-size: 14px; font-weight: 600; color: var(--ink-soft);
+          transition: all .15s; width: 100%; justify-content: center;
+        }
+        .is-fresh:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-wash); }
+        .is-fresh svg { flex-shrink: 0; }
       `}</style>
     </div>
   )
