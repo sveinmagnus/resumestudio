@@ -13,6 +13,15 @@ interface AppState {
   expandedItemId: string | null
   hasData: boolean
 
+  /**
+   * Monotonic counter that increments on every USER-initiated data mutation.
+   * Load actions reset it to 0. The auto-save effect uses this to decide
+   * whether to fire — comparing it to a "last-saved" ref. This replaced an
+   * earlier hack of remembering to flip a `skipNextSave` ref before each
+   * load call site.
+   */
+  mutationCount: number
+
   // actions
   loadFromCVPartner: (raw: Record<string, unknown>) => void
   loadStore: (store: ResumeStore) => void
@@ -52,6 +61,7 @@ export const useStore = create<AppState>((set) => ({
   secondaryLocale: 'no',
   expandedItemId: null,
   hasData: false,
+  mutationCount: 0,
 
   loadFromCVPartner: (raw) => {
     const data = importFromCVPartner(raw)
@@ -59,6 +69,7 @@ export const useStore = create<AppState>((set) => ({
     set({
       data,
       hasData: true,
+      mutationCount: 0,
       activeSection: 'overview',
       primaryLocale: locales.includes('no') ? 'no' : locales[0],
       secondaryLocale: locales.includes('en') && locales[0] !== 'en' ? 'en'
@@ -70,6 +81,7 @@ export const useStore = create<AppState>((set) => ({
     const locales = store.resume?.supported_locales || ['en']
     set({
       data: store, hasData: true,
+      mutationCount: 0,
       primaryLocale: locales[0],
       secondaryLocale: locales[1] || null,
     })
@@ -105,6 +117,7 @@ export const useStore = create<AppState>((set) => ({
     set({
       data: freshStore,
       hasData: true,
+      mutationCount: 0,
       activeSection: 'header',
       expandedItemId: null,
       primaryLocale: 'en',
@@ -117,12 +130,16 @@ export const useStore = create<AppState>((set) => ({
   setSecondaryLocale: (l) => set({ secondaryLocale: l }),
   setExpandedItem: (id) => set((st) => ({ expandedItemId: st.expandedItemId === id ? null : id })),
 
-  updateResume: (patch) => set((st) => ({
-    data: {
-      ...st.data,
-      resume: st.data.resume ? { ...st.data.resume, ...patch, updated_at: new Date().toISOString() } : null,
-    },
-  })),
+  updateResume: (patch) => set((st) => {
+    if (!st.data.resume) return {}
+    return {
+      data: {
+        ...st.data,
+        resume: { ...st.data.resume, ...patch, updated_at: new Date().toISOString() },
+      },
+      mutationCount: st.mutationCount + 1,
+    }
+  }),
 
   detectAndSetLocales: () => set((st) => {
     if (!st.data.resume) return {}
@@ -137,23 +154,28 @@ export const useStore = create<AppState>((set) => ({
         ...st.data,
         resume: { ...st.data.resume, supported_locales: merged, updated_at: new Date().toISOString() },
       },
+      mutationCount: st.mutationCount + 1,
     }
   }),
 
   updateItem: (section, id, patch) => set((st) => {
     const arr = st.data[section] as Array<{ id: string }>
     const next = arr.map((it) => (it.id === id ? { ...it, ...patch } : it))
-    return { data: { ...st.data, [section]: next } }
+    return { data: { ...st.data, [section]: next }, mutationCount: st.mutationCount + 1 }
   }),
 
   addItem: (section, item) => set((st) => {
     const arr = st.data[section] as Array<unknown>
-    return { data: { ...st.data, [section]: [...arr, item] }, expandedItemId: (item as { id: string }).id }
+    return {
+      data: { ...st.data, [section]: [...arr, item] },
+      expandedItemId: (item as { id: string }).id,
+      mutationCount: st.mutationCount + 1,
+    }
   }),
 
   removeItem: (section, id) => set((st) => {
     const arr = st.data[section] as Array<{ id: string }>
-    return { data: { ...st.data, [section]: arr.filter((it) => it.id !== id) } }
+    return { data: { ...st.data, [section]: arr.filter((it) => it.id !== id) }, mutationCount: st.mutationCount + 1 }
   }),
 
   reorderItem: (section, id, direction) => set((st) => {
@@ -164,7 +186,7 @@ export const useStore = create<AppState>((set) => ({
     if (swapIdx < 0 || swapIdx >= arr.length) return {}
     ;[arr[idx], arr[swapIdx]] = [arr[swapIdx], arr[idx]]
     arr.forEach((it, i) => { it.sort_order = i })
-    return { data: { ...st.data, [section]: arr } }
+    return { data: { ...st.data, [section]: arr }, mutationCount: st.mutationCount + 1 }
   }),
 }))
 

@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore'
 import { ImportScreen } from './components/ImportScreen'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Sidebar } from './components/layout/Sidebar'
 import { LanguageSwitcher } from './components/layout/LanguageSwitcher'
+import { SaveStatus, type SaveState } from './components/layout/SaveStatus'
 import { SECTIONS } from './lib/sections'
 import { Overview } from './components/editor/Overview'
 import { HeaderEditor } from './components/editor/HeaderEditor'
@@ -14,73 +16,108 @@ import {
 } from './components/editor/SimpleEditors'
 import { SkillsEditor, RolesEditor, ReferencesEditor, TechCategoriesEditor } from './components/editor/RegistryEditors'
 import { ResumeViewsEditor } from './components/editor/ResumeViewsEditor'
-import { Download, Upload, Check, Server } from 'lucide-react'
-import { api, UnauthorizedError, setStoredToken, clearStoredToken, getStoredToken } from './lib/api'
-import { downloadBackup, isBackupFormat, importFromBackup } from './lib/backup'
+import { Download, Upload, Server } from 'lucide-react'
+import { api, UnauthorizedError, isAbortError, setStoredToken, clearStoredToken, getStoredToken } from './lib/api'
+import {
+  downloadBackup, isBackupFormat, importFromBackup,
+  UnsupportedBackupVersionError,
+} from './lib/backup'
+import { loadCache, saveCache, clearCache } from './lib/localCache'
 
 // ─── App-level load state ─────────────────────────────────────────────────────
 
 type AppLoad = 'loading' | 'auth' | 'ready'
 
 export default function App() {
-  const { hasData, activeSection, data, loadStore, loadFromCVPartner } = useStore()
+  const { hasData, activeSection, data, mutationCount, loadStore, loadFromCVPartner } = useStore()
 
   const [loadState, setLoadState]   = useState<AppLoad>('loading')
-  const [savedFlash, setSavedFlash] = useState(false)
+  const [saveState, setSaveState]   = useState<SaveState>('idle')
+  const [cacheSavedAt, setCacheSavedAt] = useState<string | null>(null)
   const [tokenInput, setTokenInput] = useState('')
   const [authError, setAuthError]   = useState('')
 
-  // Prevent auto-save firing immediately on the initial server load
-  const skipNextSave = useRef(true)
-  const saveTimer    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // ── Auto-save plumbing ────────────────────────────────────────────────────
+  // mutationCount captures "has the user changed anything since the last
+  // successful server save?" Loads reset it to 0 in the store.
+  const lastSavedMutation = useRef(0)
+  const saveTimer         = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveAbort         = useRef<AbortController | null>(null)
 
-  // ── Initial load from server ───────────────────────────────────────────────
+  // Push the current data to the server. Reuses the effect's logic so the
+  // user's "Retry" button hits the same code path as the auto-save.
+  const flushToServer = useCallback(async () => {
+    saveAbort.current?.abort()
+    saveAbort.current = new AbortController()
+    setSaveState('saving')
+    try {
+      await api.save(data, saveAbort.current.signal)
+      lastSavedMutation.current = mutationCount
+      setSaveState('saved')
+      // Clear the local cache once it matches the server — keeps things tidy
+      // and avoids stale data lingering after a successful sync.
+      clearCache()
+      setCacheSavedAt(null)
+      setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 2000)
+    } catch (err) {
+      if (isAbortError(err)) return
+      if (err instanceof UnauthorizedError) { setLoadState('auth'); return }
+      console.error('Auto-save failed:', err)
+      setSaveState('error')
+    }
+  }, [data, mutationCount])
+
+  // ── Initial load: prefer server, fall back to local cache ─────────────────
   useEffect(() => {
     api.load()
       .then((store) => {
         if (store) {
-          skipNextSave.current = true
           loadStore(store)
+          // Server is the source of truth — drop any local cache.
+          clearCache()
+          setCacheSavedAt(null)
+        } else {
+          // Server is up but has no resume yet. If we have local work,
+          // restore it silently so the user doesn't lose anything.
+          const cached = loadCache()
+          if (cached) {
+            loadStore(cached.data)
+            setCacheSavedAt(cached.saved_at)
+          }
         }
         setLoadState('ready')
       })
       .catch((err: unknown) => {
-        if (err instanceof UnauthorizedError) {
-          setLoadState('auth')
-        } else {
-          // Server unreachable or other network error — still show the app
-          console.warn('Could not reach server:', err)
-          setLoadState('ready')
+        if (err instanceof UnauthorizedError) { setLoadState('auth'); return }
+        // Server unreachable — try the local cache so the user can keep working.
+        console.warn('Could not reach server:', err)
+        const cached = loadCache()
+        if (cached) {
+          loadStore(cached.data)
+          setCacheSavedAt(cached.saved_at)
+          setSaveState('offline')
         }
+        setLoadState('ready')
       })
-  // Run once on mount only
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Auto-save: debounce 1 s after every data change ───────────────────────
+  // ── Local-cache write: every mutation, no debounce. Cheap and synchronous. ──
   useEffect(() => {
     if (!hasData) return
-    if (skipNextSave.current) { skipNextSave.current = false; return }
+    if (mutationCount === 0) return
+    saveCache(data)
+    setCacheSavedAt(new Date().toISOString())
+  }, [data, mutationCount, hasData])
 
+  // ── Server save: 1s debounce after the latest user mutation ───────────────
+  useEffect(() => {
+    if (!hasData) return
+    if (mutationCount === lastSavedMutation.current) return
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => {
-      api.save(data)
-        .then(() => {
-          setSavedFlash(true)
-          setTimeout(() => setSavedFlash(false), 2000)
-        })
-        .catch((err: unknown) => {
-          if (err instanceof UnauthorizedError) setLoadState('auth')
-          else console.error('Auto-save failed:', err)
-        })
-    }, 1000)
-
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current)
-    }
-  // data changes by reference on every mutation — correct dependency
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, hasData])
+    saveTimer.current = setTimeout(() => { void flushToServer() }, 1000)
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
+  }, [data, mutationCount, hasData, flushToServer])
 
   // ── Auth modal submit ──────────────────────────────────────────────────────
   const handleTokenSubmit = async () => {
@@ -88,10 +125,7 @@ export default function App() {
     setStoredToken(tokenInput)
     try {
       const store = await api.load()
-      if (store) {
-        skipNextSave.current = true
-        loadStore(store)
-      }
+      if (store) loadStore(store)
       setLoadState('ready')
     } catch (err) {
       if (err instanceof UnauthorizedError) {
@@ -111,23 +145,20 @@ export default function App() {
       const text = await file.text()
       const json = JSON.parse(text) as unknown
 
-      const isBackup = (
-        json !== null &&
-        typeof json === 'object' &&
-        (json as Record<string, unknown>)['$schema'] === 'resumestudio/v1'
-      )
-
-      if (isBackup) {
-        if (isBackupFormat(json)) {
-          skipNextSave.current = false
-          loadStore(importFromBackup(json))
-        }
+      if (isBackupFormat(json)) {
+        // Routes through migrateBackup → throws UnsupportedBackupVersionError
+        // if the file was saved by a newer build.
+        loadStore(importFromBackup(json))
       } else {
-        skipNextSave.current = false
+        // Anything else we assume is a CVpartner export — the importer is
+        // defensive enough to handle most malformed inputs.
         loadFromCVPartner(json as Record<string, unknown>)
       }
     } catch (e) {
-      alert(`Could not load file: ${(e as Error).message}`)
+      const msg = e instanceof UnsupportedBackupVersionError
+        ? e.message
+        : `Could not load file: ${(e as Error).message}`
+      alert(msg)
     }
   }
 
@@ -236,9 +267,11 @@ export default function App() {
             <h1 className="ah-title">{section?.label}</h1>
           </div>
           <div className="ah-controls">
-            {savedFlash && (
-              <span className="ah-saved"><Check size={13} /> Saved</span>
-            )}
+            <SaveStatus
+              state={saveState}
+              cacheSavedAt={cacheSavedAt}
+              onRetry={() => { void flushToServer() }}
+            />
             <LanguageSwitcher />
 
             {/* Load file — accepts backup JSON or CVpartner JSON */}
@@ -274,24 +307,27 @@ export default function App() {
         </header>
 
         <div className="app-content">
-          {activeSection === 'overview'              && <Overview />}
-          {activeSection === 'header'                && <HeaderEditor />}
-          {activeSection === 'key_qualifications'    && <ProfileEditor />}
-          {activeSection === 'projects'              && <ProjectsEditor />}
-          {activeSection === 'work_experiences'      && <WorkEditor />}
-          {activeSection === 'positions'             && <PositionsEditor />}
-          {activeSection === 'educations'            && <EducationEditor />}
-          {activeSection === 'courses'               && <CoursesEditor />}
-          {activeSection === 'certifications'        && <CertificationsEditor />}
-          {activeSection === 'technology_categories' && <TechCategoriesEditor />}
-          {activeSection === 'spoken_languages'      && <SpokenLanguagesEditor />}
-          {activeSection === 'presentations'         && <PresentationsEditor />}
-          {activeSection === 'publications'          && <PublicationsEditor />}
-          {activeSection === 'honor_awards'          && <AwardsEditor />}
-          {activeSection === 'references'            && <ReferencesEditor />}
-          {activeSection === 'skills'                && <SkillsEditor />}
-          {activeSection === 'roles'                 && <RolesEditor />}
-          {activeSection === 'views'                 && <ResumeViewsEditor />}
+          {/* Reset boundary on section change so a crashed view never traps the user. */}
+          <ErrorBoundary resetKey={activeSection}>
+            {activeSection === 'overview'              && <Overview />}
+            {activeSection === 'header'                && <HeaderEditor />}
+            {activeSection === 'key_qualifications'    && <ProfileEditor />}
+            {activeSection === 'projects'              && <ProjectsEditor />}
+            {activeSection === 'work_experiences'      && <WorkEditor />}
+            {activeSection === 'positions'             && <PositionsEditor />}
+            {activeSection === 'educations'            && <EducationEditor />}
+            {activeSection === 'courses'               && <CoursesEditor />}
+            {activeSection === 'certifications'        && <CertificationsEditor />}
+            {activeSection === 'technology_categories' && <TechCategoriesEditor />}
+            {activeSection === 'spoken_languages'      && <SpokenLanguagesEditor />}
+            {activeSection === 'presentations'         && <PresentationsEditor />}
+            {activeSection === 'publications'          && <PublicationsEditor />}
+            {activeSection === 'honor_awards'          && <AwardsEditor />}
+            {activeSection === 'references'            && <ReferencesEditor />}
+            {activeSection === 'skills'                && <SkillsEditor />}
+            {activeSection === 'roles'                 && <RolesEditor />}
+            {activeSection === 'views'                 && <ResumeViewsEditor />}
+          </ErrorBoundary>
         </div>
       </main>
 
@@ -306,12 +342,6 @@ export default function App() {
         .ah-crumb { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
         .ah-title { font-size: 30px; margin-top: 2px; }
         .ah-controls { display: flex; align-items: center; gap: 10px; }
-        .ah-saved {
-          display: inline-flex; align-items: center; gap: 5px;
-          font-size: 12px; font-weight: 600; color: #27ae60;
-          animation: fadeIn .2s ease;
-        }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(3px) } to { opacity: 1; transform: none } }
         .ah-btn-secondary {
           display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px;
           border: 1.5px solid var(--line-strong); border-radius: var(--r-md);
