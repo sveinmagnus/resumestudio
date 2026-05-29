@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from './store/useStore'
+import { useUndoRedo } from './store/useUndoRedo'
 import { ImportScreen } from './components/ImportScreen'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { Sidebar } from './components/layout/Sidebar'
@@ -16,7 +17,7 @@ import {
 } from './components/editor/SimpleEditors'
 import { SkillsEditor, RolesEditor, ReferencesEditor, TechCategoriesEditor } from './components/editor/RegistryEditors'
 import { ResumeViewsEditor } from './components/editor/ResumeViewsEditor'
-import { Download, Upload, Server } from 'lucide-react'
+import { Download, Upload, Server, Undo2, Redo2 } from 'lucide-react'
 import { api, UnauthorizedError, isAbortError, setStoredToken, clearStoredToken, getStoredToken } from './lib/api'
 import {
   downloadBackup, isBackupFormat, importFromBackup,
@@ -30,6 +31,7 @@ type AppLoad = 'loading' | 'auth' | 'ready'
 
 export default function App() {
   const { hasData, activeSection, data, mutationCount, loadStore, loadFromCVPartner } = useStore()
+  const { undo, redo, canUndo, canRedo } = useUndoRedo()
 
   const [loadState, setLoadState]   = useState<AppLoad>('loading')
   const [saveState, setSaveState]   = useState<SaveState>('idle')
@@ -272,6 +274,26 @@ export default function App() {
               cacheSavedAt={cacheSavedAt}
               onRetry={() => { void flushToServer() }}
             />
+            <div className="ah-history">
+              <button
+                className="ah-hist-btn"
+                onClick={undo}
+                disabled={!canUndo}
+                title="Undo (Ctrl/Cmd+Z)"
+                aria-label="Undo"
+              >
+                <Undo2 size={15} />
+              </button>
+              <button
+                className="ah-hist-btn"
+                onClick={redo}
+                disabled={!canRedo}
+                title="Redo (Ctrl/Cmd+Shift+Z)"
+                aria-label="Redo"
+              >
+                <Redo2 size={15} />
+              </button>
+            </div>
             <LanguageSwitcher />
 
             {/* Load file — accepts backup JSON or CVpartner JSON */}
@@ -342,6 +364,17 @@ export default function App() {
         .ah-crumb { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
         .ah-title { font-size: 30px; margin-top: 2px; }
         .ah-controls { display: flex; align-items: center; gap: 10px; }
+        .ah-history {
+          display: inline-flex; align-items: stretch; gap: 1px;
+          background: var(--paper-raised); border: 1px solid var(--line);
+          border-radius: var(--r-sm); overflow: hidden;
+        }
+        .ah-hist-btn {
+          width: 30px; height: 32px; display: grid; place-items: center;
+          color: var(--ink-soft); transition: all .13s;
+        }
+        .ah-hist-btn:hover:not(:disabled) { background: var(--accent-wash); color: var(--accent); }
+        .ah-hist-btn:disabled { opacity: .3; cursor: default; }
         .ah-btn-secondary {
           display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px;
           border: 1.5px solid var(--line-strong); border-radius: var(--r-md);

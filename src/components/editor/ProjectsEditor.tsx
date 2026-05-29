@@ -2,6 +2,7 @@ import { useStore, newId } from '../../store/useStore'
 import { DualField } from '../ui/DualField'
 import { TextField, DateField, TagField } from '../ui/Fields'
 import { EditorCard, AddButton, FieldRow } from '../ui/EditorCard'
+import { SortableList } from '../ui/SortableList'
 import { resolve, fmtRange } from '../../lib/locales'
 import type { Project, ProjectRole, ProjectSkill } from '../../types'
 import { Plus, X } from 'lucide-react'
@@ -26,6 +27,7 @@ export function ProjectsEditor() {
 
   return (
     <div className="section-pane">
+      <SortableList section="projects" ids={projects.map((p) => p.id)}>
       {projects.map((p) => (
         <EditorCard key={p.id} section="projects" id={p.id}
           title={resolve(p.customer, primaryLocale) || resolve(p.description, primaryLocale)}
@@ -56,6 +58,7 @@ export function ProjectsEditor() {
             onChange={(t) => updateItem('projects', p.id, { skill_tags: t })} />
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add project" onClick={addProject} />
       <PaneStyles />
     </div>

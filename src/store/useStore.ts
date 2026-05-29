@@ -40,6 +40,8 @@ interface AppState {
   addItem: <K extends ArraySectionKey>(section: K, item: ArrayItem<K>) => void
   removeItem: (section: ArraySectionKey, id: string) => void
   reorderItem: (section: ArraySectionKey, id: string, direction: 'up' | 'down') => void
+  /** Move `id` to the given index (clamped to bounds), then renormalise sort_order. */
+  moveItem: (section: ArraySectionKey, id: string, toIndex: number) => void
 }
 
 type ArraySectionKey = Exclude<keyof ResumeStore, 'resume'>
@@ -185,6 +187,23 @@ export const useStore = create<AppState>((set) => ({
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1
     if (swapIdx < 0 || swapIdx >= arr.length) return {}
     ;[arr[idx], arr[swapIdx]] = [arr[swapIdx], arr[idx]]
+    arr.forEach((it, i) => { it.sort_order = i })
+    return { data: { ...st.data, [section]: arr }, mutationCount: st.mutationCount + 1 }
+  }),
+
+  moveItem: (section, id, toIndex) => set((st) => {
+    const arr = [...(st.data[section] as Array<{ id: string; sort_order: number }>)]
+    const fromIndex = arr.findIndex((it) => it.id === id)
+    if (fromIndex === -1) return {}
+    // Sort by current sort_order so the displayed order matches array order
+    // before we move. Otherwise drag-drop indexes (computed from rendered
+    // order) won't line up with raw array indexes.
+    arr.sort((a, b) => a.sort_order - b.sort_order)
+    const realFrom = arr.findIndex((it) => it.id === id)
+    const clamped = Math.max(0, Math.min(toIndex, arr.length - 1))
+    if (realFrom === clamped) return {}
+    const [item] = arr.splice(realFrom, 1)
+    arr.splice(clamped, 0, item)
     arr.forEach((it, i) => { it.sort_order = i })
     return { data: { ...st.data, [section]: arr }, mutationCount: st.mutationCount + 1 }
   }),

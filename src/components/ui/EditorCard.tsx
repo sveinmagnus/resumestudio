@@ -1,7 +1,11 @@
 import { ReactNode } from 'react'
 import { useStore } from '../../store/useStore'
-import { ChevronDown, Star, Eye, EyeOff, ArrowUp, ArrowDown, Trash2 } from 'lucide-react'
+import {
+  ChevronDown, Star, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, GripVertical,
+} from 'lucide-react'
 import type { ResumeStore } from '../../types'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 type ArraySection = Exclude<keyof ResumeStore, 'resume'>
 
@@ -25,9 +29,37 @@ export function EditorCard({
   const { expandedItemId, setExpandedItem, updateItem, removeItem, reorderItem } = useStore()
   const open = expandedItemId === id
 
+  // useSortable works when an ancestor wrapped us in <SortableContext>;
+  // outside of one it's a no-op (transform/transition are empty), so the
+  // card still renders fine if a section isn't wrapped yet.
+  const {
+    attributes, listeners, setNodeRef, transform, transition, isDragging,
+  } = useSortable({ id })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
   return (
-    <div className={`ec ${open ? 'open' : ''} ${disabled ? 'is-disabled' : ''}`}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      data-card-id={id}
+      className={`ec ${open ? 'open' : ''} ${disabled ? 'is-disabled' : ''} ${isDragging ? 'is-dragging' : ''}`}
+    >
       <div className="ec-head" onClick={() => setExpandedItem(id)}>
+        <button
+          className="ec-grip"
+          {...attributes}
+          {...listeners}
+          onClick={(e) => e.stopPropagation()}
+          title="Drag to reorder"
+          aria-label="Drag handle"
+        >
+          <GripVertical size={15} />
+        </button>
         <button className="ec-chev"><ChevronDown size={17} /></button>
         <div className="ec-titles">
           <div className="ec-title">
@@ -68,10 +100,17 @@ export function EditorCard({
         }
         .ec.open { box-shadow: var(--shadow-md); border-color: var(--line-strong); }
         .ec.is-disabled { opacity: .55; }
+        .ec.is-dragging { box-shadow: var(--shadow-lg); border-color: var(--accent); z-index: 5; position: relative; }
         .ec-head {
-          display: flex; align-items: center; gap: 12px; padding: 13px 15px; cursor: pointer;
+          display: flex; align-items: center; gap: 8px; padding: 13px 15px; cursor: pointer;
         }
         .ec-head:hover { background: var(--paper-sunken); }
+        .ec-grip {
+          color: var(--ink-faint); cursor: grab; padding: 4px 2px;
+          display: grid; place-items: center; touch-action: none;
+        }
+        .ec-grip:active { cursor: grabbing; }
+        .ec-grip:hover { color: var(--accent); }
         .ec-chev { color: var(--ink-faint); transition: transform .2s; display: grid; place-items: center; }
         .ec.open .ec-chev { transform: rotate(180deg); }
         .ec-titles { flex: 1; min-width: 0; }

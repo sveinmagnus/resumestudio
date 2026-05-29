@@ -2,6 +2,7 @@ import { useStore, newId } from '../../store/useStore'
 import { DualField } from '../ui/DualField'
 import { TextField, DateField, TagField } from '../ui/Fields'
 import { EditorCard, AddButton, FieldRow } from '../ui/EditorCard'
+import { SortableList } from '../ui/SortableList'
 import { resolve, fmtRange, fmtDate } from '../../lib/locales'
 import type {
   WorkExperience, Education, Course, Certification, Position,
@@ -23,6 +24,7 @@ export function WorkEditor() {
   }
   return (
     <div className="section-pane">
+      <SortableList section="work_experiences" ids={items.map((x) => x.id)}>
       {items.map((w) => (
         <EditorCard key={w.id} section="work_experiences" id={w.id}
           title={resolve(w.employer, primaryLocale)} subtitle={resolve(w.role_title, primaryLocale)}
@@ -51,6 +53,7 @@ export function WorkEditor() {
           </FieldRow>
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add employment" onClick={add} />
     </div>
   )
@@ -71,6 +74,7 @@ export function EducationEditor() {
   }
   return (
     <div className="section-pane">
+      <SortableList section="educations" ids={items.map((x) => x.id)}>
       {items.map((e) => (
         <EditorCard key={e.id} section="educations" id={e.id}
           title={resolve(e.school, primaryLocale)} subtitle={resolve(e.degree, primaryLocale)}
@@ -89,6 +93,7 @@ export function EducationEditor() {
           </label>
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add education" onClick={add} />
       <CheckStyles />
     </div>
@@ -109,6 +114,7 @@ export function CoursesEditor() {
   }
   return (
     <div className="section-pane">
+      <SortableList section="courses" ids={items.map((x) => x.id)}>
       {items.map((c) => (
         <EditorCard key={c.id} section="courses" id={c.id}
           title={resolve(c.name, primaryLocale)} subtitle={resolve(c.program, primaryLocale)}
@@ -119,6 +125,7 @@ export function CoursesEditor() {
           <DateField label="Completed" value={c.completed} onChange={(v) => updateItem('courses', c.id, { completed: v })} />
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add course" onClick={add} />
     </div>
   )
@@ -139,6 +146,7 @@ export function CertificationsEditor() {
   }
   return (
     <div className="section-pane">
+      <SortableList section="certifications" ids={items.map((x) => x.id)}>
       {items.map((c) => (
         <EditorCard key={c.id} section="certifications" id={c.id}
           title={resolve(c.name, primaryLocale)} subtitle={resolve(c.organiser, primaryLocale)}
@@ -153,6 +161,7 @@ export function CertificationsEditor() {
           <TextField label="Credential URL" value={c.credential_url || ''} onChange={(v) => updateItem('certifications', c.id, { credential_url: v })} />
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add certification" onClick={add} />
     </div>
   )
@@ -172,6 +181,7 @@ export function PositionsEditor() {
   }
   return (
     <div className="section-pane">
+      <SortableList section="positions" ids={items.map((x) => x.id)}>
       {items.map((p) => (
         <EditorCard key={p.id} section="positions" id={p.id}
           title={resolve(p.name, primaryLocale)} subtitle={resolve(p.organisation, primaryLocale)}
@@ -185,6 +195,7 @@ export function PositionsEditor() {
           </FieldRow>
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add position" onClick={add} />
     </div>
   )
@@ -204,6 +215,7 @@ export function PresentationsEditor() {
   }
   return (
     <div className="section-pane">
+      <SortableList section="presentations" ids={items.map((x) => x.id)}>
       {items.map((p) => (
         <EditorCard key={p.id} section="presentations" id={p.id}
           title={resolve(p.title, primaryLocale)} subtitle={resolve(p.event, primaryLocale)}
@@ -217,6 +229,7 @@ export function PresentationsEditor() {
           </FieldRow>
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add presentation" onClick={add} />
     </div>
   )
@@ -237,6 +250,7 @@ export function PublicationsEditor() {
   }
   return (
     <div className="section-pane">
+      <SortableList section="publications" ids={items.map((x) => x.id)}>
       {items.map((p) => (
         <EditorCard key={p.id} section="publications" id={p.id}
           title={resolve(p.title, primaryLocale)} subtitle={resolve(p.publisher, primaryLocale)}
@@ -262,6 +276,7 @@ export function PublicationsEditor() {
           </FieldRow>
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add publication" onClick={add} />
     </div>
   )
@@ -281,6 +296,7 @@ export function AwardsEditor() {
   }
   return (
     <div className="section-pane">
+      <SortableList section="honor_awards" ids={items.map((x) => x.id)}>
       {items.map((a) => (
         <EditorCard key={a.id} section="honor_awards" id={a.id}
           title={resolve(a.name, primaryLocale)} subtitle={resolve(a.issuer, primaryLocale)}
@@ -292,6 +308,7 @@ export function AwardsEditor() {
           <DateField label="Date" value={a.date} onChange={(v) => updateItem('honor_awards', a.id, { date: v })} />
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add award" onClick={add} />
     </div>
   )
@@ -308,6 +325,7 @@ export function SpokenLanguagesEditor() {
   }
   return (
     <div className="section-pane">
+      <SortableList section="spoken_languages" ids={items.map((x) => x.id)}>
       {items.map((l) => (
         <EditorCard key={l.id} section="spoken_languages" id={l.id}
           title={resolve(l.name, primaryLocale)} subtitle={resolve(l.level, primaryLocale)}
@@ -316,6 +334,7 @@ export function SpokenLanguagesEditor() {
           <DualField label="Proficiency level" value={l.level} onChange={(v) => updateItem('spoken_languages', l.id, { level: v })} />
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add language" onClick={add} />
     </div>
   )
@@ -354,6 +373,7 @@ export function ProfileEditor() {
 
   return (
     <div className="section-pane">
+      <SortableList section="key_qualifications" ids={items.map((x) => x.id)}>
       {items.map((kq) => (
         <EditorCard key={kq.id} section="key_qualifications" id={kq.id}
           title={resolve(kq.label, primaryLocale) || 'Profile'} subtitle={resolve(kq.tag_line, primaryLocale)}
@@ -380,6 +400,7 @@ export function ProfileEditor() {
           </div>
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add profile block" onClick={add} />
     </div>
   )

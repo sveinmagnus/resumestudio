@@ -152,6 +152,61 @@ describe('reorderItem()', () => {
   })
 })
 
+describe('moveItem()', () => {
+  it('moves the item to the requested index and renormalises sort_order', () => {
+    const items = [
+      makeProject({ id: 'a', sort_order: 0 }),
+      makeProject({ id: 'b', sort_order: 1 }),
+      makeProject({ id: 'c', sort_order: 2 }),
+      makeProject({ id: 'd', sort_order: 3 }),
+    ]
+    items.forEach((p) => useStore.getState().addItem('projects', p))
+    useStore.getState().moveItem('projects', 'a', 2)
+    expect(useStore.getState().data.projects.map((p) => p.id)).toEqual(['b', 'c', 'a', 'd'])
+    expect(useStore.getState().data.projects.map((p) => p.sort_order)).toEqual([0, 1, 2, 3])
+  })
+
+  it('clamps a too-high target index to last position', () => {
+    useStore.getState().addItem('projects', makeProject({ id: 'a' }))
+    useStore.getState().addItem('projects', makeProject({ id: 'b' }))
+    useStore.getState().moveItem('projects', 'a', 99)
+    expect(useStore.getState().data.projects.map((p) => p.id)).toEqual(['b', 'a'])
+  })
+
+  it('clamps a negative target index to 0', () => {
+    useStore.getState().addItem('projects', makeProject({ id: 'a' }))
+    useStore.getState().addItem('projects', makeProject({ id: 'b' }))
+    useStore.getState().moveItem('projects', 'b', -5)
+    expect(useStore.getState().data.projects.map((p) => p.id)).toEqual(['b', 'a'])
+  })
+
+  it('is a no-op when moving to current position', () => {
+    useStore.getState().addItem('projects', makeProject({ id: 'a' }))
+    useStore.getState().addItem('projects', makeProject({ id: 'b' }))
+    const before = useStore.getState().mutationCount
+    useStore.getState().moveItem('projects', 'a', 0)
+    expect(useStore.getState().mutationCount).toBe(before)
+  })
+
+  it('is a no-op for an unknown id', () => {
+    useStore.getState().addItem('projects', makeProject({ id: 'a' }))
+    const before = useStore.getState().mutationCount
+    useStore.getState().moveItem('projects', 'missing', 0)
+    expect(useStore.getState().mutationCount).toBe(before)
+  })
+
+  it('respects current sort_order when computing positions (not raw array order)', () => {
+    // Add items with intentionally inverted sort_order
+    useStore.getState().addItem('projects', makeProject({ id: 'a', sort_order: 2 }))
+    useStore.getState().addItem('projects', makeProject({ id: 'b', sort_order: 0 }))
+    useStore.getState().addItem('projects', makeProject({ id: 'c', sort_order: 1 }))
+    // Visible order is b, c, a — moving b to index 2 should put it last
+    useStore.getState().moveItem('projects', 'b', 2)
+    const ordered = [...useStore.getState().data.projects].sort((x, y) => x.sort_order - y.sort_order)
+    expect(ordered.map((p) => p.id)).toEqual(['c', 'a', 'b'])
+  })
+})
+
 // ─── Resume mutation ────────────────────────────────────────────────────────
 
 describe('updateResume()', () => {

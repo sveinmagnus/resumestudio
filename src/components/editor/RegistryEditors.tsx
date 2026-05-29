@@ -2,19 +2,32 @@ import { useStore, newId } from '../../store/useStore'
 import { DualField } from '../ui/DualField'
 import { TextField } from '../ui/Fields'
 import { EditorCard, AddButton, FieldRow } from '../ui/EditorCard'
+import { SortableList } from '../ui/SortableList'
 import { resolve } from '../../lib/locales'
+import {
+  mergeSkills, mergeRoles, countSkillReferences, countRoleReferences,
+} from '../../lib/merge'
 import type { Skill, Role, Reference, TechnologyCategory, CategorySkill } from '../../types'
-import { X, Plus } from 'lucide-react'
+import { X, Plus, Combine } from 'lucide-react'
 
 // ── Skill registry ───────────────────────────────────────────────────────────
 
 export function SkillsEditor() {
-  const { data, primaryLocale, addItem, updateItem } = useStore()
+  const { data, primaryLocale, addItem, updateItem, loadStore } = useStore()
   const items = [...data.skills].sort((a, b) => resolve(a.name, primaryLocale).localeCompare(resolve(b.name, primaryLocale)))
 
   // compute usage counts across projects
   const usage = new Map<string, number>()
   data.projects.forEach((p) => p.skills.forEach((s) => usage.set(s.skill_id, (usage.get(s.skill_id) || 0) + 1)))
+
+  const onMerge = (sourceId: string, targetId: string) => {
+    if (!targetId || sourceId === targetId) return
+    const refs = countSkillReferences(data, sourceId)
+    const sourceName = resolve(data.skills.find((s) => s.id === sourceId)?.name, primaryLocale)
+    const targetName = resolve(data.skills.find((s) => s.id === targetId)?.name, primaryLocale)
+    if (!confirm(`Merge "${sourceName}" into "${targetName}"? This will rewrite ${refs} reference${refs === 1 ? '' : 's'} and delete "${sourceName}".`)) return
+    loadStore(mergeSkills(data, sourceId, targetId))
+  }
 
   const add = () => {
     const s: Skill = {
@@ -59,6 +72,12 @@ export function SkillsEditor() {
             <input type="checkbox" checked={s.is_highlighted} onChange={(e) => updateItem('skills', s.id, { is_highlighted: e.target.checked })} />
             Highlight in compact skill summaries
           </label>
+          <MergeRow
+            kind="skill"
+            sourceId={s.id}
+            allItems={items.filter((x) => x.id !== s.id).map((x) => ({ id: x.id, label: resolve(x.name, primaryLocale) }))}
+            onMerge={onMerge}
+          />
         </EditorCard>
       ))}
       <AddButton label="Add skill" onClick={add} />
@@ -70,7 +89,7 @@ export function SkillsEditor() {
 // ── Role registry ────────────────────────────────────────────────────────────
 
 export function RolesEditor() {
-  const { data, primaryLocale, addItem, updateItem } = useStore()
+  const { data, primaryLocale, addItem, updateItem, loadStore } = useStore()
   const items = [...data.roles].sort((a, b) => a.sort_order - b.sort_order)
   const usage = new Map<string, number>()
   data.projects.forEach((p) => p.roles.forEach((r) => usage.set(r.role_id, (usage.get(r.role_id) || 0) + 1)))
@@ -82,9 +101,19 @@ export function RolesEditor() {
     }
     addItem('roles', r)
   }
+
+  const onMerge = (sourceId: string, targetId: string) => {
+    if (!targetId || sourceId === targetId) return
+    const refs = countRoleReferences(data, sourceId)
+    const sourceName = resolve(data.roles.find((r) => r.id === sourceId)?.name, primaryLocale)
+    const targetName = resolve(data.roles.find((r) => r.id === targetId)?.name, primaryLocale)
+    if (!confirm(`Merge "${sourceName}" into "${targetName}"? This will rewrite ${refs} reference${refs === 1 ? '' : 's'} and delete "${sourceName}".`)) return
+    loadStore(mergeRoles(data, sourceId, targetId))
+  }
   return (
     <div className="section-pane">
       <p className="registry-note">Reusable role labels referenced by projects. "Solution Architect" is defined once here.</p>
+      <SortableList section="roles" ids={items.map((x) => x.id)}>
       {items.map((r) => (
         <EditorCard key={r.id} section="roles" id={r.id}
           title={resolve(r.name, primaryLocale)} meta={`${usage.get(r.id) || 0} projects`}
@@ -96,10 +125,68 @@ export function RolesEditor() {
             <TextField label="Manual offset (±)" value={r.years_of_experience_offset.toString()} type="number"
               onChange={(v) => updateItem('roles', r.id, { years_of_experience_offset: parseFloat(v) || 0 })} />
           </FieldRow>
+          <MergeRow
+            kind="role"
+            sourceId={r.id}
+            allItems={items.filter((x) => x.id !== r.id).map((x) => ({ id: x.id, label: resolve(x.name, primaryLocale) }))}
+            onMerge={onMerge}
+          />
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add role" onClick={add} />
       <RegistryStyles />
+    </div>
+  )
+}
+
+// ── Reusable merge UI ───────────────────────────────────────────────────────
+
+interface MergeOption { id: string; label: string }
+
+function MergeRow({
+  kind, sourceId, allItems, onMerge,
+}: {
+  kind: 'skill' | 'role'
+  sourceId: string
+  allItems: MergeOption[]
+  onMerge: (sourceId: string, targetId: string) => void
+}) {
+  if (allItems.length === 0) return null
+  return (
+    <div className="merge-row">
+      <Combine size={13} />
+      <span className="merge-label">Merge this {kind} into:</span>
+      <select
+        className="merge-sel"
+        defaultValue=""
+        onChange={(e) => {
+          const v = e.target.value
+          // reset the select so the same target can be re-attempted if needed
+          e.target.value = ''
+          if (v) onMerge(sourceId, v)
+        }}
+      >
+        <option value="">— pick a target —</option>
+        {allItems
+          .filter((x) => x.label.trim())
+          .sort((a, b) => a.label.localeCompare(b.label))
+          .map((x) => (
+            <option key={x.id} value={x.id}>{x.label}</option>
+          ))}
+      </select>
+      <style>{`
+        .merge-row {
+          display: flex; align-items: center; gap: 8px; margin-top: 14px;
+          padding: 10px 12px; background: var(--accent-wash); border-radius: var(--r-sm);
+          font-size: 12.5px; color: var(--accent);
+        }
+        .merge-label { font-weight: 600; }
+        .merge-sel {
+          flex: 1; padding: 5px 9px; border: 1px solid var(--accent);
+          border-radius: var(--r-sm); background: #fff; font-size: 12.5px;
+        }
+      `}</style>
     </div>
   )
 }
@@ -179,6 +266,7 @@ export function TechCategoriesEditor() {
   return (
     <div className="section-pane">
       <p className="registry-note">A curated showcase grouping skills from the registry for display in exports.</p>
+      <SortableList section="technology_categories" ids={items.map((x) => x.id)}>
       {items.map((cat) => (
         <EditorCard key={cat.id} section="technology_categories" id={cat.id}
           title={resolve(cat.name, primaryLocale) || 'Category'} meta={`${cat.skills.length} skills`}
@@ -201,6 +289,7 @@ export function TechCategoriesEditor() {
           </div>
         </EditorCard>
       ))}
+      </SortableList>
       <AddButton label="Add category" onClick={add} />
       <RegistryStyles />
     </div>
