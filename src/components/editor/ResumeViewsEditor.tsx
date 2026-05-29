@@ -10,7 +10,7 @@ import {
 import type { ResumeView, ViewSection } from '../../types'
 import {
   Plus, Pencil, Trash2, ChevronUp, ChevronDown,
-  ArrowLeft, LayoutList, Eye, EyeOff, Star, FileText,
+  ArrowLeft, LayoutList, Eye, EyeOff, Star, FileText, FileDown,
 } from 'lucide-react'
 
 // ─── Content sections (excludes non-content like overview, header, views) ─────
@@ -162,6 +162,8 @@ function ViewEditor({ view, onBack, onDelete, onUpdate }: {
     onUpdate({ excluded_item_ids: next })
   }
 
+  const [docxBusy, setDocxBusy] = useState(false)
+
   const handleExport = () => {
     const html = buildViewHtml(data, view, exportLocale)
     const win = window.open('', '_blank')
@@ -170,6 +172,20 @@ function ViewEditor({ view, onBack, onDelete, onUpdate }: {
     win.document.close()
     setTimeout(() => win.print(), 600)
     onUpdate({ last_exported_at: new Date().toISOString() })
+  }
+
+  // The docx library is ~400 kB — lazy-load only when the user clicks Export DOCX.
+  const handleExportDocx = async () => {
+    setDocxBusy(true)
+    try {
+      const { exportDocx } = await import('../../lib/exporter')
+      await exportDocx(data, view, exportLocale)
+      onUpdate({ last_exported_at: new Date().toISOString() })
+    } catch (e) {
+      alert(`Could not export DOCX: ${(e as Error).message}`)
+    } finally {
+      setDocxBusy(false)
+    }
   }
 
   const locales = data.resume?.supported_locales ?? [primaryLocale]
@@ -348,6 +364,14 @@ function ViewEditor({ view, onBack, onDelete, onUpdate }: {
           </select>
           <button className="rv-export-btn" onClick={handleExport}>
             <FileText size={15} /> Export PDF
+          </button>
+          <button
+            className="rv-export-btn rv-export-docx"
+            onClick={() => void handleExportDocx()}
+            disabled={docxBusy}
+            title="Generate a Microsoft Word (.docx) file"
+          >
+            <FileDown size={15} /> {docxBusy ? 'Building…' : 'Export DOCX'}
           </button>
         </div>
         {view.last_exported_at && (
@@ -535,7 +559,12 @@ function Styles() {
         background: var(--accent); color: #fff; border-radius: var(--r-md);
         font-weight: 600; font-size: 14px; transition: background .15s;
       }
-      .rv-export-btn:hover { background: var(--accent-bright); }
+      .rv-export-btn:hover:not(:disabled) { background: var(--accent-bright); }
+      .rv-export-btn:disabled { opacity: .6; cursor: progress; }
+      .rv-export-docx {
+        background: #fff; color: var(--accent); border: 1.5px solid var(--accent);
+      }
+      .rv-export-docx:hover:not(:disabled) { background: var(--accent-wash); color: var(--accent); }
       .rv-last-export { margin-top: 10px; font-size: 12px; color: var(--ink-faint); }
     `}</style>
   )
