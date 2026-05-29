@@ -7,21 +7,42 @@ This file is read on every session. Read it first before touching code.
 ## 1. What this is
 
 A web app that lets a consultant maintain **one master resume across multiple
-languages** and extract **targeted variants** for different skill areas. The
-project was scaffolded conversationally and is now being continued in Claude
-Code.
+languages** and extract **targeted variants** (Resume Views) for different
+audiences. The project was scaffolded conversationally and is being continued
+in Claude Code.
 
 **Core promise:** the consultant edits once (in the language they choose), can
 view/edit any field in two languages side-by-side, and exports polished `.docx`
-or `.pdf` files via configurable templates.
+or `.pdf` files via a Resume View — a curated subset of the master CV.
 
-It is **not** yet:
-- Persistent (data lives only in memory for the session)
-- Auto-saving
-- Backed by a database or any backend (intentionally — runs entirely client-side)
-- Capable of generating targeted resumes (filter master by skill tags → export)
+### State of the codebase
 
-Those are the planned next features. See section 9.
+What works today:
+- **Auto-save** to an Express + SQLite backend (debounced ~1s), with a
+  **localStorage fallback** so a server outage never costs work.
+- **Auth-gated server** (token-based, see `.env.example`); falls back to a
+  local-only mode if the server is unreachable.
+- **Targeted exports via Resume Views** — pick sections, exclude items,
+  starred-only filter, custom intro, then export PDF (browser print pipeline)
+  or DOCX (lazy-loaded docx lib).
+- **CVpartner JSON import** and **portable JSON backup** (export + load) with
+  a versioned format and a migration scaffold.
+- **Undo / redo** (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) with debounced history.
+- **Drag-and-drop reordering** (`@dnd-kit`) on every section that owns a
+  `sort_order`; up/down arrow buttons kept for keyboard / accessibility.
+- **Registry merge** — "Merge this skill/role into…" rewrites every reference
+  and deletes the source.
+- **React error boundary** around the editor so a crashed view never traps the
+  user.
+
+What's intentionally simple:
+- The server stores **exactly one resume** (single-row table with a CHECK
+  constraint). This is by design — the deployment model is one instance per
+  consultant.
+- Styling is **inline `<style>` blocks per component** + CSS custom properties
+  in `src/index.css`. No Tailwind, no CSS-in-JS lib.
+
+What's still on the wishlist: see section 9.
 
 ---
 
@@ -32,24 +53,28 @@ Those are the planned next features. See section 9.
 | Build | Vite 5 | `npm run dev` / `npm run build` / `npm run preview` |
 | Framework | React 18 + TypeScript | Strict mode on |
 | State | Zustand (single store) | See `src/store/useStore.ts` |
+| Persistence | Express + better-sqlite3 (single-row table) | See `server/`. localStorage fallback in `lib/localCache.ts` |
+| Tests | Vitest (+ jsdom for browser-tied tests) | `npm test`, `npm run test:watch`, `npm run test:coverage` |
 | Icons | lucide-react | **Tree-shaken**: import each icon by name, never `import * as` |
-| Document gen | `docx` npm package | Real `.docx` output; verified against MS Word |
-| PDF gen | Browser print pipeline | HTML → `window.print()` → system Save-as-PDF |
+| DOCX export | `docx` npm package | **Lazy-loaded** (~352 kB chunk) — only fetched when the user clicks Export DOCX |
+| PDF export | Browser print pipeline | HTML → `window.print()` → system Save-as-PDF |
+| Drag-and-drop | `@dnd-kit/core` + `@dnd-kit/sortable` | Pointer + keyboard sensors |
 | Styling | Inline `<style>` blocks per component + CSS custom properties in `src/index.css` | No Tailwind, no CSS-in-JS lib — keep it that way |
 
 ### Code style rules
-- **TypeScript strict mode.** Always typecheck with `npx tsc --noEmit` before committing.
+- **TypeScript strict mode.** `npm run typecheck` covers client + server.
 - **No `any`** unless interfacing with truly unknown shapes (e.g. raw imported JSON). Use `unknown` then narrow.
 - **No default exports** for components — use named exports. (`main.tsx` and `App.tsx` are the only existing default exports; new components are named.)
-- **Inline styles via `<style>` tag inside the component.** Each component owns its CSS. Tokens come from `src/index.css` (see section 6).
+- **Inline styles via `<style>` tag inside the component.** Each component owns its CSS. Tokens come from `src/index.css` (see section 6). The only utility classes in `index.css` are widely-shared widgets (currently just `.check-row`).
 - **Lucide icons must be imported by name**, e.g. `import { Star, ChevronDown } from 'lucide-react'`. Do not import `* as Icons` — it breaks tree-shaking and bloats the bundle by ~700 kB.
-- **No `process.env` at runtime.** This is a pure browser app.
+- **No `process.env` at runtime in the client.** This is a pure browser app once it leaves Vite. The Express server is the only place that reads env vars.
 - **Run `npm run build` after substantial changes** — Vite's prod build catches issues `tsc --noEmit` misses (missing exports from third-party packages, dynamic import problems).
+- **Run `npm test` before committing.** CI also runs typecheck + test + build (`.github/workflows/ci.yml`).
 
 ### Naming
 - Files: `PascalCase.tsx` for components, `camelCase.ts` for libraries.
 - Types: `PascalCase`, no `I` prefix.
-- Store actions: imperative verbs (`addItem`, `updateItem`, `navigateToItem`).
+- Store actions: imperative verbs (`addItem`, `updateItem`, `moveItem`, `replaceData`).
 - Locale codes follow CVpartner where compatible: `en`, `no`, `se`, `dk`. The original `int` is normalized to `en` on import.
 
 ---
@@ -58,46 +83,62 @@ Those are the planned next features. See section 9.
 
 ```
 src/
-├── types/index.ts             ← single source of truth for the data model
-├── store/useStore.ts          ← Zustand store + generic CRUD actions
+├── types/index.ts              ← single source of truth for the data model
+├── store/
+│   ├── useStore.ts             ← Zustand store + generic CRUD actions
+│   └── useUndoRedo.ts          ← Undo/redo hook (Ctrl/Cmd+Z), subscribes to mutationCount
 ├── lib/
-│   ├── importer.ts            ← CVpartner JSON → ResumeStore
-│   ├── experience.ts          ← PURE: compute role/skill totals across data
-│   ├── exporter.ts            ← .docx (docx lib) + .pdf (HTML+print)
-│   ├── locales.ts             ← LOCALE_LABELS, resolve(), fmtDate(), fmtRange()
-│   ├── sections.ts            ← Sidebar section definitions and groups
-│   └── templateCatalog.ts     ← Which sections/fields appear in export templates
+│   ├── api.ts                  ← Server client (load, save with AbortSignal, token auth)
+│   ├── backup.ts               ← Portable JSON backup format + migrateBackup() scaffold
+│   ├── completeness.ts         ← PURE: translation completeness % per locale
+│   ├── exporter.ts             ← LAZY-LOADED .docx generation (Cartavio brand, A4)
+│   ├── importer.ts             ← CVpartner JSON → ResumeStore
+│   ├── localCache.ts           ← localStorage fallback (debounced via App.tsx)
+│   ├── locales.ts              ← LOCALE_LABELS, resolve(), fmt*(), detectLocalesInData(), sortLocales()
+│   ├── merge.ts                ← mergeSkills / mergeRoles + reference counts
+│   ├── sections.ts             ← Sidebar section definitions and groups
+│   └── viewFilter.ts           ← Apply a ResumeView (sections, exclusions, starred); buildViewHtml() for PDF
 ├── components/
-│   ├── ImportScreen.tsx       ← Landing screen (drop CVpartner JSON)
+│   ├── ErrorBoundary.tsx       ← Wraps the editor; resets on activeSection change
+│   ├── ImportScreen.tsx        ← Landing screen (drop CVpartner JSON / backup, or Start Fresh)
 │   ├── layout/
-│   │   ├── Sidebar.tsx        ← Section navigation
-│   │   └── LanguageSwitcher.tsx
+│   │   ├── Sidebar.tsx         ← Section navigation
+│   │   ├── LanguageSwitcher.tsx ← Primary/secondary locale + "re-detect" button
+│   │   └── SaveStatus.tsx      ← Saving / Saved / Save failed / Local only / idle
 │   ├── ui/
-│   │   ├── DualField.tsx      ← THE KEY COMPONENT — side-by-side localized input
-│   │   ├── EditorCard.tsx     ← Collapsible card with star/hide/reorder/delete
-│   │   └── Fields.tsx         ← TextField, DateField, TagField (plain inputs)
+│   │   ├── DualField.tsx       ← THE KEY COMPONENT — side-by-side localized input
+│   │   ├── EditorCard.tsx      ← Collapsible card; drag handle + up/down arrows (via `sortable` prop)
+│   │   ├── Fields.tsx          ← TextField, DateField, TagField (plain inputs)
+│   │   └── SortableList.tsx    ← DndContext + SortableContext wrapper (calls store.moveItem on drop)
 │   └── editor/
-│       ├── Overview.tsx       ← Dashboard with stats + translation %
-│       ├── HeaderEditor.tsx   ← Personal details
-│       ├── ProjectsEditor.tsx ← Edit mode for projects (the richest editor)
-│       ├── ProjectsOverview.tsx ← Read-only project overview (click to edit)
-│       ├── SimpleEditors.tsx  ← Work/Education/Courses/Certs/etc.
-│       ├── RegistryEditors.tsx ← Skill/Role/Reference/TechCat editors
-│       ├── ExportTemplatesEditor.tsx ← Visual template designer + export buttons
-│       └── shared/
-│           ├── RoleBlock.tsx       ← Per-role label+description (reused by projects+work)
-│           ├── SkillBlock.tsx      ← Skill chips linked to registry (reused)
-│           └── ExperiencePanel.tsx ← Computed total + offset + contributing items
-├── App.tsx                    ← Routes activeSection to the right editor
-├── main.tsx                   ← React entry
-└── index.css                  ← Design tokens + body/scrollbar/animations only
+│       ├── Overview.tsx        ← Dashboard with stats + translation %
+│       ├── HeaderEditor.tsx    ← Personal details
+│       ├── ProjectsEditor.tsx  ← Edit mode for projects (the richest editor)
+│       ├── SimpleEditors.tsx   ← Work/Education/Courses/Certs/Positions/Presentations/Publications/Awards/Languages/Profile
+│       ├── RegistryEditors.tsx ← Skill/Role/Reference/TechCat editors + Merge UI
+│       └── ResumeViewsEditor.tsx ← View list + view editor (sections, items, options, Export PDF / Export DOCX)
+├── App.tsx                     ← Routes activeSection; owns load orchestration + auto-save effects
+├── main.tsx                    ← React entry
+└── index.css                   ← Design tokens + body/scrollbar/animations + .check-row utility
+
+server/                         ← Express API + SQLite persistence
+├── index.ts                    ← Express bootstrap, /api/health, /api/resume router
+├── auth.ts                     ← Bearer-token middleware (env: RESUME_API_TOKEN)
+├── db.ts                       ← better-sqlite3, single-row resume_store table
+└── routes/resume.ts            ← GET / PUT /api/resume
+
+tests/                          ← Vitest specs (179 tests at last count)
+├── fixtures.ts                 ← Shared makeProject() / makeRole() / ... factories
+├── backup.test.ts, completeness.test.ts, exporter.test.ts,
+├── importer.test.ts, localCache.test.ts, locales.test.ts,
+├── merge.test.ts, store.test.ts, viewFilter.test.ts
 ```
 
 ### Layered design — these layers must stay clean
 1. **`types/`** has zero runtime imports. Pure type definitions.
-2. **`lib/`** is pure logic. No React, no DOM (except `exporter.ts` for the print window). Easy to test.
+2. **`lib/`** is pure logic. No React. The only DOM touchers are `exporter.ts` (download anchor), `viewFilter.ts` (string-builds HTML), and `localCache.ts` (localStorage). Each is easy to unit-test (see `tests/`).
 3. **`store/`** owns mutable state. Only place where data lives.
-4. **`components/`** read from the store and call store actions. No business logic in components — if a computation is more than one line, it goes in `lib/`.
+4. **`components/`** read from the store and call store actions. **No business logic in components — if a computation is more than one line, it goes in `lib/`** (see `lib/completeness.ts` for an example of moving computation out of a component).
 
 If you're tempted to put computation in a component file, add a function to `lib/` instead.
 
@@ -111,23 +152,21 @@ The data model was carefully designed across several iterations. Don't change sh
 Every translatable field is a `LocalizedString = Record<string, string>` keyed by locale. Resolution chain (in `lib/locales.ts` → `resolve()`):
 1. Requested locale
 2. Fallback locale (default `"en"`)
-3. First available key
+3. First non-empty value (skips empty strings — see the bug fixed in commit `3da1b99`)
 
 **Never** check `value[locale]` directly in components — always go through `resolve()` so the fallback chain works.
 
 ### Dates
 - `YearMonth = { year: number, month: number | null }` — month-precision, not full dates. `month: null` means only year is known.
 - `end: null` on date ranges means ongoing.
-- `Duration = { years: number, months: number }` is used for **manual offsets** on roles/skills. Never use floats for offsets.
 
-### Two kinds of "duration"
-- **Computed durations** (across projects + employment) live nowhere on entities. They're calculated on demand via `computeRoleExperience()` / `computeSkillExperience()`. Don't add `total_months` fields to roles or skills — that's deliberately avoided.
-- **Manual offsets** live as `experience_offset: Duration` on `Role` and `Skill`. They fold into the computed total.
+### Shared registries
+- **`Skill`** lives in a global registry (`data.skills`) and is referenced by `ProjectSkill` (on `Project`) and `CategorySkill` (on `TechnologyCategory`) via `skill_id`. Use `lib/merge.ts → countSkillReferences()` to count all references.
+- **`Role`** also lives in a global registry (`data.roles`). `ProjectRole` references it via `role_id`. Use `countRoleReferences()`.
+- **Snapshot names**: `ProjectSkill.name`, `CategorySkill.name`, and `ProjectRole.name` are denormalized copies of the registry's name at link time, so a registry rename doesn't silently rewrite history. `merge.ts` updates these snapshots when it rewrites references.
 
-### The shared registries
-- **`Skill`** lives in a global registry (`data.skills`) and is referenced by `ProjectSkill` and `CategorySkill` via `skill_id`. Both projects AND employment carry `skills: ProjectSkill[]`.
-- **`Role`** also lives in a global registry (`data.roles`). `ProjectRole` references it via `role_id`. Both projects AND employment carry `roles: ProjectRole[]`.
-- **Snapshot names**: `ProjectSkill.name` and `ProjectRole.name` are denormalized copies of the registry's name at link time, so a registry rename doesn't silently rewrite history. The registry name is the source of truth for display lookups; the snapshot is a fallback when the link is broken.
+### Resume Views
+`ResumeView` (in `data.views`) is the "targeted resume" config: a name, an introduction (localized), a list of enabled sections in display order, an excluded-items list, a starred-only toggle, and an optional page limit. `lib/viewFilter.ts → applyView()` produces a filtered `ResumeStore` from a view; the exporter and HTML renderer consume the filtered store.
 
 ### What's an entity vs. an embedded array
 - Tables (`projects`, `educations`, `courses`, etc.) live as top-level arrays in `ResumeStore`.
@@ -135,7 +174,7 @@ Every translatable field is a `LocalizedString = Record<string, string>` keyed b
 
 ### Disabled vs. starred
 - `disabled: true` excludes from all exports and overview lists. Used to soft-delete.
-- `starred: true` is featured/highlighted ordering. Used by "starred-only" export filtering.
+- `starred: true` is featured/highlighted ordering. Used by `ResumeView.starred_only`.
 
 ---
 
@@ -145,6 +184,7 @@ The single most important UX requirement: **every translatable field renders as 
 - Pick which two locales are visible (independent of which locales the master resume supports).
 - Swap them with one click.
 - Hide the secondary column to focus on one language.
+- **Re-detect locales** from the data — `LanguageSwitcher`'s refresh button calls `detectAndSetLocales()` which scans every `LocalizedString` and merges any new locales into `resume.supported_locales`.
 
 **Implementation:**
 - `useStore().primaryLocale` and `useStore().secondaryLocale` (the latter can be `null` to mean "single column mode").
@@ -174,6 +214,9 @@ CSS custom properties in `src/index.css` are the design system:
 
 **Aesthetic:** Cartavio brand — pure white backgrounds, Cartavio navy (#002E6E) as the primary accent, cyan (#00B8DE) as the secondary/highlight. Open Sans Condensed (weight 300) for headings, Ubuntu for body. Colors and fonts verified directly from cartavio.no CSS. No warm/sepia tones, no oxblood. Brand skill: `.claude/skills/cartavio-brand.md`.
 
+**Utility classes in `index.css`** (use these instead of redefining inline):
+- `.check-row` — inline checkbox + label row.
+
 When adding a component, copy the inline `<style>` pattern from an existing one (e.g. `DualField.tsx`). Use the tokens, don't introduce new colors casually.
 
 ---
@@ -188,20 +231,53 @@ const projects = useStore(s => s.data.projects)
 
 ### Generic CRUD (use these — don't write custom mutations per section)
 ```ts
-const { addItem, updateItem, removeItem, reorderItem } = useStore()
+const { addItem, updateItem, removeItem, moveItem, reorderItem } = useStore()
 
-addItem('projects', newProject)
-updateItem('projects', projectId, { customer: localized })
-removeItem('projects', projectId)
-reorderItem('projects', projectId, 'up' | 'down')
+addItem('projects', newProject)                          // appends + opens
+updateItem('projects', projectId, { customer: localized }) // shallow merge
+removeItem('projects', projectId)                        // no-op if id unknown
+moveItem('projects', projectId, toIndex)                 // drag-and-drop target
+reorderItem('projects', projectId, 'up' | 'down')        // keyboard fallback (thin wrapper over moveItem)
 ```
 
 The generic functions are typed: `updateItem('projects', id, { customer: ... })` will autocomplete to the fields of `Project`. Use them rather than writing one-off mutations.
 
+### Two flavours of "replace all data"
+
+This distinction is critical — choose the right one:
+
+- **`loadStore(store)`** — I/O semantics. Use for **loading** data from the
+  server or a file. Resets `mutationCount` to 0 (so no spurious auto-save fires
+  and undo history starts fresh).
+- **`replaceData(store)`** — in-app rewrite semantics. Use when you've
+  **computed** a new store and want it treated as a user mutation. Bumps
+  `mutationCount`, which means: auto-save will sync it, undo/redo will see it.
+  Currently used by `useUndoRedo` and by the registry merge handlers.
+
+If you call `loadStore` for an in-app rewrite, the change will silently never
+enter the undo stack and may not be saved.
+
+### `mutationCount` and the `mutate()` helper
+
+The store maintains a `mutationCount: number` that increments on every USER
+mutation and resets on `loadStore`/`loadFromCVPartner`/`startFresh`. Auto-save
+compares it to a "last saved" ref to decide whether to fire.
+
+Every mutating action funnels through a private `mutate()` helper inside the
+store that auto-bumps the counter — **new actions should use it too** rather
+than calling `set()` directly. Return `null` from the updater for a no-op
+(e.g. unknown id) so the counter doesn't bump for changes the user can't see.
+
 ### Navigation
-- `setActiveSection(key)` to switch sidebar section.
+- `setActiveSection(key)` to switch sidebar section (resets `expandedItemId`).
 - `setExpandedItem(id)` to toggle an `EditorCard` open/closed.
-- `navigateToItem(section, id)` to jump to a specific item in a specific section (used by registry "contributing items" lists). Sets active section AND expanded item in one go.
+
+### Undo / redo
+- `useUndoRedo()` (in `src/store/useUndoRedo.ts`) is a hook that App.tsx uses.
+- Subscribes to `mutationCount` changes, debounces 500 ms, pushes the
+  pre-mutation snapshot to a past stack capped at 100.
+- Undo/redo apply snapshots via `replaceData` and use a one-shot `suppressNext`
+  flag so the subscriber doesn't re-push the undo as a fresh mutation.
 
 ### Adding a new section
 1. Add the array to `ResumeStore` in `types/index.ts`.
@@ -209,116 +285,157 @@ The generic functions are typed: `updateItem('projects', id, { customer: ... })`
 3. Add an entry to `SECTIONS` in `lib/sections.ts`.
 4. Add the icon import to `Sidebar.tsx`'s `ICON_MAP`.
 5. Create the editor component and wire it into `App.tsx`'s router.
-6. If it should appear in exports: add to `SECTION_CATALOG` in `lib/templateCatalog.ts` and add a `case` to both `buildDocxSection` switch in `exporter.ts` and `renderHtmlSection`.
+6. If the section has `sort_order`, wrap its `<EditorCard>`s in a `<SortableList section="…" ids={items.map(x=>x.id)}>`. If it doesn't, pass `sortable={false}` to each `<EditorCard>` so the drag handle isn't shown.
+7. If it should appear in Resume View exports: add a `case` to both
+   `lib/viewFilter.ts → renderItem` (HTML/PDF path) and `lib/exporter.ts →
+   renderSection` (DOCX path). Also extend `getItemTitle`/`getItemSubtitle`
+   in `viewFilter.ts` for the View-editor item list.
 
 ---
 
-## 8. Importer notes (CVpartner format)
+## 8. Persistence
+
+### Architecture
+- **Source of truth**: SQLite via the Express server (`server/db.ts`).
+- **Cache**: localStorage (`lib/localCache.ts`, key `resumestudio:store-cache:v1`, single `{data, saved_at}` record).
+- **In-memory**: the Zustand store.
+
+### Boot sequence (App.tsx initial effect)
+1. `api.load()` — try the server. If a resume comes back, load it AND clear the local cache (server is canonical).
+2. If the server returned 404 (no resume yet) AND there's a cache, restore from cache silently (offline edits the server hasn't seen yet).
+3. If the server is unreachable, restore from cache AND set save state to `offline` (visible to the user).
+4. If the server returns 401, show the auth modal.
+
+### Save sequence (per mutation)
+1. Cache write debounced 250 ms (cheap, but still not per-keystroke).
+2. Server `PUT /api/resume` debounced 1 s, with an AbortController so a newer mutation supersedes an in-flight save.
+3. On success: clear the local cache (now matches the server), flash "Saved" for 2 s.
+4. On failure: show "Save failed" + Retry. Cache still holds the work.
+5. On 401: kick the user back to the auth modal.
+
+### Backup format
+- `lib/backup.ts` defines `BackupV1` and `migrateBackup()`. The detector (`isBackupFormat`) is intentionally lenient — it accepts any envelope shape that smells like a backup, then `migrateBackup` decides if this build can read it (throws `UnsupportedBackupVersionError` with a user-meaningful message otherwise).
+- When you bump the format, add a `BackupV2` interface, extend `AnyBackup`, write a `migrateV1toV2(v1)` step, and chain it into `migrateBackup`. The existing scaffold + tests at `tests/backup.test.ts` show the shape.
+
+---
+
+## 9. Importer notes (CVpartner format)
 
 `src/lib/importer.ts` maps the CVpartner JSON export to our `ResumeStore`. Key behaviors:
 
 - Localized values can be objects (`{ no: "...", int: "..." }`) or interleaved arrays (`['no', '...', 'int', '...']`). The `localized()` helper handles both. The `int` locale code is renamed to `en` on import.
-- The exporter's source `language_codes` field is unreliable (often only lists `no` even when content is in `no`, `int`, `se`, `dk`). We scan all content recursively to detect actually-used locales — see `scanLocales()` in `importFromCVPartner`.
+- The export's `language_codes` field is unreliable (often only lists `no` even when content is in `no`, `int`, `se`, `dk`). We scan all content recursively to detect actually-used locales — see `scanLocales()` in `importFromCVPartner`. The same logic lives generically in `lib/locales.ts → detectLocalesInData()` for use against any `ResumeStore`.
 - Skills are built from `technologies[].technology_skills` AND any extra skills referenced only by projects (no orphans).
 - Roles come from `cv_roles`. Project roles link via `cv_role_id`.
-- `project.related_work_experience_id` → our `work_experience_id`. The work-experience id map is pre-built before projects map so links resolve.
+- `project.related_work_experience_id` → our `work_experience_id`. **Important**: the work-experience id map is pre-built BEFORE iterating projects so links resolve. (This was a real bug — fixed in commit `3da1b99` with a regression test.)
 - `customer_selected: 'customer_anonymized'` → our `use_anonymized: true`.
 
-**If you're modifying the importer:** test against the real file. There's no fixture in the repo yet, but the user has a CVpartner JSON for verification. Add a `tests/fixtures/` and a small smoke test if you touch this.
+**If you're modifying the importer:** add cases to `tests/importer.test.ts`. The table-driven tests pin every documented behavior of this file.
 
 ---
 
-## 9. Planned next features
+## 10. Testing
 
-Ordered by recommended priority. Each is a self-contained chunk.
-
-### 9.1 Persistence (HIGH — do this first)
-Currently a refresh loses all data. Two reasonable approaches:
-
-**Option A: localStorage** — easiest, but limited to ~5 MB per origin. A medium-size resume comes in well under that. Serialize `data` to JSON, save on every change (debounced), load on app start.
-
-**Option B: file-system save/load** — explicit "Save to file" / "Load from file" buttons. Lower magic, gives the user control, no quota worries.
-
-Recommend implementing **both**: localStorage for auto-save, file save/load as explicit backup + portability mechanism. Make auto-save toggleable.
-
-### 9.2 Targeted resumes
-This is the original project goal — the second half of "extract each item into different targeted resumes for different skill areas." The `TargetedResume` type already exists (`types/index.ts`). Build:
-- A "Targeted Resumes" section in the sidebar listing saved targeted configs.
-- An editor where you set: name, locale, skill tags (filter rule), section list, starred-only toggle, page limit, and which `ExportTemplate` to use.
-- A preview that shows the filtered resume.
-- Export buttons that combine the targeted config + chosen template.
-
-The filter logic should be a pure function in `lib/` (next to `experience.ts`), taking `(ResumeStore, TargetedResume) → ResumeStore` (a filtered subset). The exporter already takes a `ResumeStore`, so it should "just work" with a filtered store.
-
-### 9.3 Drag-and-drop reordering
-Currently uses up/down arrow buttons. Should switch to drag-and-drop. Use `@dnd-kit/core` + `@dnd-kit/sortable`. Don't use `react-beautiful-dnd` — it's unmaintained.
-
-### 9.4 Undo/redo
-The store has all the right shape (immutable updates) for an undo stack. Add a history slice that pushes a snapshot of `data` on each change and supports rewind. Wire to Cmd/Ctrl+Z.
-
-### 9.5 Code-splitting the bundle
-The `docx` library is ~400 kB of the current bundle. Lazy-load `lib/exporter.ts` only when the user clicks an Export button:
-```ts
-const { exportDocx } = await import('./lib/exporter')
+### Running
 ```
-This cuts initial JS to ~230 kB.
+npm test                  # one-shot, headless
+npm run test:watch        # watch mode
+npm run test:coverage     # v8 coverage in coverage/
+```
 
-### 9.6 Translation completeness drill-down
-The Overview shows a translation % per locale. Make it interactive: click a percentage → show a list of fields that are missing in that locale, each linking to the right editor and item.
+### What's covered
+- **`lib/`** — every pure-logic library has a `.test.ts`: `locales`, `completeness`, `viewFilter`, `backup`, `importer`, `merge`, `exporter` (smoke test with jsdom for DOM bits), `localCache` (jsdom).
+- **`store/useStore.ts`** — generic CRUD, `moveItem`/`reorderItem`, `mutationCount` semantics (every mutator bumps once, no-ops don't bump, `loadStore` resets, `replaceData` bumps).
+- **Test fixtures** — `tests/fixtures.ts` exports `emptyStore()` + `makeProject()`, `makeWork()`, etc. Use these instead of constructing entities inline so future shape changes are one-place fixes.
 
-### 9.7 Skill / role merge
-Real data has typos like "Løsningarkitekt" vs "Løsningsarkitekt" appearing as two separate registry entries. Add a "merge into…" action on the registry editor that re-links all references and deletes the redundant entry.
+### What's NOT covered
+- React components — no React Testing Library setup yet. The store is the seam we test through.
+- The Express server — only manually verified end-to-end with curl during the session it was written.
 
-### 9.8 Tests
-There are no tests yet. The two highest-value places to start:
-- `lib/experience.ts` — pure function, easy to unit test, would catch regressions in totals.
-- `lib/importer.ts` — table-driven tests with sample CVpartner JSON snippets.
-
-Use Vitest (Vite-native, fast).
+### Adding a test
+- Pure-logic addition → add a case to the appropriate `tests/*.test.ts`.
+- Store action addition → add a case to `tests/store.test.ts`, including a no-op assertion (`mutationCount` should not bump for unobservable changes).
 
 ---
 
-## 10. Operational notes
+## 11. Operational notes
 
 ### Common commands
 ```
 npm install              # first time only
-npm run dev              # dev server at http://localhost:5173
+npm run dev              # client (Vite, 5173) + server (Express, 3001) via concurrently
+npm run dev:client       # just Vite (no server)
+npm run dev:server       # just Express (tsx watch)
 npm run build            # production build to dist/
 npm run preview          # serve dist/ to verify the prod build works
-npx tsc --noEmit         # typecheck without emitting
+npm test                 # vitest run
+npm run typecheck        # client + server tsc
+npm start                # production server (NODE_ENV=production)
 ```
 
 ### Verifying changes
 After any significant change:
-1. `npx tsc --noEmit` — must be clean.
-2. `npm run build` — must be clean (catches things tsc misses).
-3. Try the import flow with the real CVpartner JSON if you touched the importer or the data model.
-4. Open the dev server and click around — there's no test suite yet.
+1. `npm run typecheck` — must be clean.
+2. `npm test` — must be green.
+3. `npm run build` — must be clean (catches things tsc misses).
+4. For UI changes, open the dev server and click through the affected flow. CI runs all three.
+
+### Server / env
+- Copy `.env.example` to `.env` and set `RESUME_API_TOKEN` for a deployed instance. Leaving it empty disables auth — fine for local dev.
+- `data/resume.db` is the SQLite file; it's gitignored. WAL mode is on.
+- The single-row constraint (`CHECK (id = 1)`) is intentional: this is a single-resume-per-instance product.
 
 ### Known quirks
-- The bundle includes the whole `docx` library upfront because it's imported statically. Lazy-load it when you touch the exporter (see 9.5).
+- The Claude Code preview tool launches `npm run dev` with `PORT=5173` injected for the Vite hint, but Express reads `process.env.PORT` and tries to bind 5173 too — collides with Vite. Outside the preview tool, `npm run dev` works correctly. If you need to verify auto-save end-to-end inside the preview, run the server manually with `PORT=3001 npx tsx server/index.ts`.
 - The `.pdf` export uses `window.open()` + `window.print()`. **Pop-ups must be allowed.** The user gets an alert if blocked.
+- The DOCX exporter (`lib/exporter.ts`) is lazy-loaded via dynamic import in `ResumeViewsEditor`. The first DOCX export triggers a ~352 kB chunk download. Don't statically import it from any always-loaded file or the bundle bloats again.
 - Project skills imported from CVpartner may have proficiency=0 across the board (the source file doesn't populate them). Don't assume non-zero proficiency exists.
 
 ### What NOT to change without good reason
 - The dual-view multi-language pattern (DualField). It's the whole point of the app.
-- The shared role/skill registry design. Computing experience across projects + employment depends on it.
-- Storing `experience_offset` as `Duration` (years + months), not a float.
+- The shared role/skill registry design.
 - The CVpartner importer's locale detection — it handles real-world malformed exports.
+- The `loadStore` vs `replaceData` split in the store (see section 7). It's load-bearing for undo + auto-save semantics.
+- The lazy import of `lib/exporter.ts`. Removing it adds ~350 kB to the initial bundle.
 
 ---
 
-## 11. Working with this project in Claude Code
+## 12. Future work
+
+Ordered loosely by recommended priority. Each is a self-contained chunk.
+
+### 12.1 Translation completeness drill-down
+The Overview shows a translation % per locale via `lib/completeness.ts`. Make it interactive: click a percentage → show the specific fields that are missing in that locale, each linking to the right editor and item. The data needed is one tweak to `computeCompleteness` to return the missing field paths, not just counts.
+
+### 12.2 Generic mergeRegistry
+`mergeSkills` and `mergeRoles` are near-identical. If a third registry kind ever appears (e.g. mergeable industries), refactor to a descriptor-table `mergeRegistry(store, kind, source, target)`. Not worth doing for two kinds today.
+
+### 12.3 Section catalog refactor
+Three switches enumerate the 13 content sections: `viewFilter.getItemTitle/getItemSubtitle`, `viewFilter.renderItem`, `exporter.renderSection`. A section-descriptor registry (one place per section declaring `{titleField, subtitleField, dateField, render}`) would collapse them. The CLAUDE.md "Adding a new section" step would shrink from 7 items to 3. Don't do this if new sections are rare — the duplication is bounded.
+
+### 12.4 React Testing Library for component coverage
+No component tests today. The Zustand store is the natural seam: most component logic is "read from store, render fields, call action on change". Once RTL is set up, every editor would be a thin smoke test.
+
+### 12.5 Multi-resume support
+The DB schema enforces single-tenant via `CHECK (id = 1)`. Multi-resume would mean: drop the constraint, add a `current_resume_id` setting, wire a resume-switcher into the sidebar. The Zustand store wouldn't need to change shape, only what gets loaded into it.
+
+### 12.6 React component splits in App.tsx
+App.tsx orchestrates load + save + auth + file load + header. Extracting `useResumePersistence()` + `<AuthGate>` + `<AppHeader>` would each be ~30-line files and would make App.tsx purely routing. Worth doing the next time you need to add cross-cutting concerns (telemetry, "unsaved changes" prompt, etc.) so they don't compound the existing density.
+
+---
+
+## 13. Working with this project in Claude Code
 
 A few tips specifically for this codebase:
 
 - **Always read the relevant file before editing.** Files are small; reading is cheap.
 - **`types/index.ts` is the source of truth.** When in doubt about a field, look there.
-- **The store actions are generically typed.** Use them; don't write per-section update functions.
-- **Inline styles live next to the component.** Don't extract to global CSS unless something is truly cross-cutting (in which case it goes in `index.css` as a CSS var or animation keyframe).
-- **Before adding a dependency**, check the bundle size (`npm run build` shows it). This is a client-side app; every dep ships to users.
+- **The store actions are generically typed.** Use them; don't write per-section update functions. Use the `mutate()` helper if you add a new action.
+- **Inline styles live next to the component.** Don't extract to global CSS unless something is truly cross-cutting (then promote to `index.css` as a utility class or token).
+- **Before adding a dependency**, check the bundle size (`npm run build` shows it). This is a client-side app; every dep ships to users. If it's used in only one place, consider lazy-loading it like `exporter.ts`.
 - **The `docx` library's API uses `italics: true`, not `italic: true`.** Easy mistake; tsc catches it.
 - **Lucide icons:** check the icon exists before using it (`grep -o "IconName" node_modules/lucide-react/dist/esm/lucide-react.js`). `IdCard` and a few others don't exist in this version; use `SquareUser` etc.
+- **Don't reach for `loadStore` to apply an in-app computed store.** Use `replaceData` (see section 7) so undo + auto-save handle it correctly.
+- **`useSortable` is no-op outside a `<SortableContext>`** but `<EditorCard>` will still show a drag handle. If a card isn't reorderable, pass `sortable={false}`.
 
 If a request is large or touches many files, propose a plan first — list the files you'd change and what each change is. Then proceed once confirmed.

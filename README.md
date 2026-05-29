@@ -1,49 +1,141 @@
-# Resume Studio — Multi-Language Consultant Resume Manager (v2)
+# Resume Studio
 
-## What's new in this iteration
+A multi-language consultant resume manager. Maintain one master CV across
+languages, then export targeted variants — PDF or Microsoft Word — for
+different audiences.
 
-### Project editor improvements
-- **Project description and roles combined** into one flowing block: customer background first, then per-role descriptions stacked beneath (matches the Employment section's pattern).
-- **Read-only project overview** mode shows the full content of every project — full descriptions, all roles with their text, and each skill with its computed total experience. Click any project to open it for editing. Toggle between Overview and Edit mode at the top of the Projects section.
+Built for a single consultant; runs as a small self-hosted web app (React +
+Express + SQLite) with offline-tolerant persistence.
 
-### Shared role and skill registries with computed experience
-- **Roles now span both projects and employment.** Both sections carry roles linked to the same registry; the role registry's experience total aggregates across all of them.
-- **Skills also span projects and employment** (Employment gained skills + roles).
-- **Experience counters are computed, read-only, and dynamic.** Edit a project's role or move a date and the registry total updates instantly.
-- **Years + months precision** everywhere — the manual offset uses separate years/months inputs, and totals display as e.g. "5 yr 5 mo".
-- **Contributing-items list** under each registry entry shows every project and employment that contributes, with click-through links that jump straight to the relevant entry in edit mode.
+---
 
-### Export template designer with real .docx and .pdf
-- New **Export Templates** section with a visual designer:
-  - Pick which sections to include and reorder them.
-  - Toggle individual fields per section (e.g. include team size on projects, hide allocation %).
-  - Override section headings per locale.
-  - Choose heading + body fonts, body font size, accent colour, page size (A4/Letter), date style.
-- **Real `.docx` generation** via the `docx` npm library (verified: produces valid Microsoft Word 2007+ files).
-- **Real `.pdf` generation** via the browser's print pipeline — opens a styled HTML version in a new window and triggers the system Save-as-PDF dialog.
-
-## Run it
+## Quick start
 
 ```bash
 npm install
 npm run dev
-npm run build && npm run preview
 ```
 
-On Windows, if PowerShell blocks scripts, use `npm.cmd` instead of `npm`, or run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+Opens the client on `http://localhost:5173` and the API on `http://localhost:3001`.
+
+For production:
+
+```bash
+cp .env.example .env       # set RESUME_API_TOKEN for a deployed instance
+npm run build
+npm start                  # serves dist/ + API from the same Express process
+```
+
+On Windows, if PowerShell blocks scripts, use `npm.cmd` instead of `npm`, or
+run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+
+---
+
+## What's in the box
+
+### Editing
+- **Dual-language side-by-side editing.** Every translatable field renders as
+  two inputs at once — pick any two of your supported locales, swap with one
+  click, hide the secondary column when you want focus.
+- **Re-detect languages.** A refresh button in the language switcher scans
+  the content and adds any new locale it finds to your supported list.
+- **Drag-and-drop reordering** on every section that has a sort order, with
+  keyboard up/down buttons retained for accessibility.
+- **Undo / Redo** (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) with debounced history.
+- **Skill / role registry merge** — the "Løsningarkitekt" vs
+  "Løsningsarkitekt" problem: pick one as the canonical entry, the other
+  gets rewritten into it and removed.
+
+### Persistence
+- **Auto-save to a SQLite-backed Express server** (debounced 1 s).
+- **localStorage fallback** so a server outage doesn't cost you work — your
+  edits flush to the server the moment it returns.
+- **Status visible in the header**: Saving / Saved / Save failed (with
+  Retry) / Local only.
+- **Portable JSON backup** — "Save to file" downloads a versioned backup;
+  "Load file" restores from a backup *or* imports a CVpartner JSON export.
+
+### Export
+- **Resume Views** — curated subsets of the master CV. Pick which sections
+  to include, exclude individual items, toggle "starred only", add a custom
+  introduction.
+- **PDF** via the browser's print pipeline.
+- **DOCX** (.docx) via the [`docx`](https://docx.js.org/) library, lazy-loaded
+  so it only downloads when you actually click Export.
+
+### Import
+- **CVpartner JSON** exports. The importer handles both shapes CVpartner
+  emits (object + interleaved-array localized values), normalises `int` →
+  `en`, scans content for locales the export under-declares, and links
+  projects to work experiences through the source IDs.
+
+---
 
 ## Architecture
 
-- **React 18 + TypeScript + Vite**, Zustand store, in-memory state for the session.
-- **`src/lib/experience.ts`** — pure functions that compute role/skill totals across projects and employment.
-- **`src/lib/exporter.ts`** — docx + html/pdf generation against an `ExportTemplate` config.
-- **`src/lib/templateCatalog.ts`** — section catalog: which sections and which fields per section can appear in a template.
-- **`src/components/editor/shared/`** — `RoleBlock`, `SkillBlock`, `ExperiencePanel` are reused by both projects and employment.
+```
+React 18 + TypeScript + Vite
+  ├── Zustand store (single source of in-memory state)
+  ├── Express + better-sqlite3 (single-row resume_store table)
+  └── localStorage cache (fallback)
+```
 
-## Verified against real data
+Detailed conventions live in [CLAUDE.md](./CLAUDE.md) — read that before
+making non-trivial changes.
 
-The importer was tested against a real CVpartner export with 45 projects:
-- 217 skills built into the global registry (zero orphans — every project skill links back)
-- 17 roles, with computed totals like "Løsningsarkitekt = 5 yr 5 mo from 2 projects"
-- Skill totals like "Microsoft Visio = 12 yr 5 mo from 10 projects"
-- The shared registry surfaces data-quality issues (e.g. the typo "Løsningarkitekt" vs "Løsningsarkitekt" becomes visible because both have their own experience totals)
+### Layout
+```
+src/
+├── types/       single source of truth for the data model
+├── store/       Zustand store + undo/redo hook
+├── lib/         pure logic: importer, exporter, viewFilter, backup, locales,
+│                completeness, merge, localCache, api, sections
+├── components/  React UI (layout, ui primitives, per-section editors)
+└── App.tsx      routes the active section to the right editor
+
+server/          Express API + SQLite persistence
+tests/           Vitest specs (179 tests, all green)
+```
+
+---
+
+## Scripts
+
+| Command | Does |
+|---|---|
+| `npm run dev` | Concurrently runs Vite (5173) and Express (3001) |
+| `npm run build` | Production client bundle to `dist/` |
+| `npm run preview` | Serve `dist/` to verify the prod build |
+| `npm start` | Production: serves `dist/` + API from one Express process |
+| `npm test` | One-shot Vitest run |
+| `npm run test:watch` | Watch mode |
+| `npm run test:coverage` | v8 coverage report (HTML in `coverage/`) |
+| `npm run typecheck` | `tsc --noEmit` for both client and server |
+
+CI (`.github/workflows/ci.yml`) runs typecheck + test + build on every push
+and PR.
+
+---
+
+## Configuration
+
+`.env` (copy from `.env.example`):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `RESUME_API_TOKEN` | empty | Bearer token required by the API. Empty = auth disabled (local dev). |
+| `PORT` | `3001` | Express listen port. |
+
+The SQLite database lives at `data/resume.db` (gitignored). WAL mode is on.
+
+---
+
+## Working with the codebase
+
+See [CLAUDE.md](./CLAUDE.md) for:
+- The data model and layered architecture
+- Store patterns (`updateItem` / `moveItem` / `replaceData` / `loadStore`)
+- The dual-language `DualField` invariant
+- The Cartavio brand tokens used throughout the UI
+- Testing conventions
+- Future work and known quirks
