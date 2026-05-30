@@ -102,20 +102,44 @@ export function applyView(store: ResumeStore, view: ResumeView): ResumeStore {
 
 // ─── HTML export ─────────────────────────────────────────────────────────────
 
+/**
+ * Escape a string for safe interpolation into HTML text or attribute context.
+ *
+ * Why: every value rendered by buildViewHtml below comes from imported CV
+ * data or user input. Without escaping, a name, description, or introduction
+ * containing `<script>` runs in the same-origin preview iframe / print popup
+ * — which would let a malicious imported file exfiltrate the API token from
+ * sessionStorage. The generated document also carries a restrictive CSP, but
+ * escape-at-render is the primary defence.
+ */
+export function escapeHtml(s: string | null | undefined): string {
+  if (!s) return ''
+  return String(s).replace(/[&<>"']/g, (c) => {
+    switch (c) {
+      case '&': return '&amp;'
+      case '<': return '&lt;'
+      case '>': return '&gt;'
+      case '"': return '&quot;'
+      case "'": return '&#39;'
+      default:  return c
+    }
+  })
+}
+
 function renderItem(sectionKey: string, item: unknown, locale: string): string {
   const it = item as AnyItem
-  const l = (field: string) => ls(it, field, locale)
-  const r = range(it)
+  const l = (field: string) => escapeHtml(ls(it, field, locale))
+  const r = escapeHtml(range(it))
   const meta = (parts: string[]) => parts.filter(Boolean).join(' · ')
 
   switch (sectionKey) {
     case 'projects': {
       const roleNames = (it.roles as Array<{ name: LocalizedString; disabled?: boolean }> ?? [])
         .filter((role) => !role.disabled)
-        .map((role) => resolve(role.name, locale))
+        .map((role) => escapeHtml(resolve(role.name, locale)))
         .filter(Boolean)
       const skills = (it.skills as Array<{ name: LocalizedString }> ?? [])
-        .map((s) => `<span class="ve-tag">${resolve(s.name, locale)}</span>`)
+        .map((s) => `<span class="ve-tag">${escapeHtml(resolve(s.name, locale))}</span>`)
         .join('')
       return `<div class="ve-item">
         <h3>${l('customer')}</h3>
@@ -126,7 +150,7 @@ function renderItem(sectionKey: string, item: unknown, locale: string): string {
     }
     case 'key_qualifications': {
       const points = (it.key_points as Array<{ name: LocalizedString; long_description: LocalizedString }> ?? [])
-        .map((p) => `<li><strong>${resolve(p.name, locale)}</strong>: ${resolve(p.long_description, locale)}</li>`)
+        .map((p) => `<li><strong>${escapeHtml(resolve(p.name, locale))}</strong>: ${escapeHtml(resolve(p.long_description, locale))}</li>`)
         .join('')
       return `<div class="ve-item">
         <h3>${l('label')}</h3>
@@ -155,7 +179,7 @@ function renderItem(sectionKey: string, item: unknown, locale: string): string {
     case 'certifications':
       return `<div class="ve-item">
         <h3>${l('name')}</h3>
-        <div class="ve-meta">${meta([l('organiser'), fmtDate(it.issued as YM)])}</div>
+        <div class="ve-meta">${meta([l('organiser'), escapeHtml(fmtDate(it.issued as YM))])}</div>
         <div class="ve-desc">${l('description')}</div>
       </div>`
     case 'positions':
@@ -168,7 +192,7 @@ function renderItem(sectionKey: string, item: unknown, locale: string): string {
       return `<div class="ve-item ve-inline"><strong>${l('name')}</strong> — ${l('level')}</div>`
     case 'technology_categories': {
       const skills = (it.skills as Array<{ name: LocalizedString }> ?? [])
-        .map((s) => `<span class="ve-tag">${resolve(s.name, locale)}</span>`)
+        .map((s) => `<span class="ve-tag">${escapeHtml(resolve(s.name, locale))}</span>`)
         .join('')
       return `<div class="ve-item">
         <h3>${l('name')}</h3>
@@ -196,8 +220,8 @@ function renderItem(sectionKey: string, item: unknown, locale: string): string {
     case 'references':
       if (!it.include_in_exports) return ''
       return `<div class="ve-item">
-        <h3>${it.name as string}</h3>
-        <div class="ve-meta">${meta([it.title as string, it.company as string])}</div>
+        <h3>${escapeHtml(it.name as string)}</h3>
+        <div class="ve-meta">${meta([escapeHtml(it.title as string), escapeHtml(it.company as string)])}</div>
       </div>`
     default:
       return ''
@@ -228,22 +252,39 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
       if (!items.length) return ''
       const itemsHtml = items.map((item) => renderItem(s.key, item, locale)).filter(Boolean).join('\n')
       if (!itemsHtml) return ''
+      // s.label is a hardcoded constant from SECTIONS, but escape defensively.
       return `<section class="ve-section">
-  <h2>${s.label}</h2>
+  <h2>${escapeHtml(s.label)}</h2>
   ${itemsHtml}
 </section>`
     })
     .filter(Boolean)
     .join('\n')
 
-  const intro = l(view.introduction)
-  const contact = [r.email, r.phone, r.linkedin_url].filter(Boolean).join('  ·  ')
+  const intro = escapeHtml(l(view.introduction))
+  const contact = escapeHtml(
+    [r.email, r.phone, r.linkedin_url].filter(Boolean).join('  ·  '),
+  )
+
+  // Restrictive CSP: blocks any script execution inside the generated document
+  // (defence in depth — the escape-at-render above is the primary defence).
+  // The print popup still works because window.print() is called from the
+  // parent window, not from a script inside the document.
+  const csp = [
+    "default-src 'none'",
+    "style-src 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join('; ')
 
   return `<!DOCTYPE html>
-<html lang="${locale}">
+<html lang="${escapeHtml(locale)}">
 <head>
   <meta charset="UTF-8">
-  <title>${view.name} — ${r.full_name}</title>
+  <meta http-equiv="Content-Security-Policy" content="${csp}">
+  <title>${escapeHtml(view.name)} — ${escapeHtml(r.full_name)}</title>
   <link href="https://fonts.googleapis.com/css2?family=Open+Sans+Condensed:wght@300&family=Ubuntu:wght@400;500&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -279,8 +320,8 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
 </head>
 <body>
   <div class="ve-header">
-    <h1>${r.full_name}</h1>
-    <div class="ve-header-title">${l(r.title)}</div>
+    <h1>${escapeHtml(r.full_name)}</h1>
+    <div class="ve-header-title">${escapeHtml(l(r.title))}</div>
     ${contact ? `<div class="ve-header-contact">${contact}</div>` : ''}
   </div>
 

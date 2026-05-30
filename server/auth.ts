@@ -1,27 +1,44 @@
 import type { Request, Response, NextFunction } from 'express'
+import { timingSafeEqual } from 'crypto'
 
 const TOKEN = process.env.RESUME_API_TOKEN?.trim() || null
+const TOKEN_BYTES = TOKEN ? Buffer.from(TOKEN, 'utf8') : null
+
+/**
+ * Constant-time string comparison. Returns false fast when the lengths differ
+ * (length itself isn't a meaningful secret for a fixed-size random token), then
+ * compares same-length buffers via crypto.timingSafeEqual. Uses bytes rather
+ * than chars because timingSafeEqual requires equal-length buffers.
+ */
+function safeCompare(a: string, b: Buffer): boolean {
+  const aBuf = Buffer.from(a, 'utf8')
+  if (aBuf.length !== b.length) return false
+  return timingSafeEqual(aBuf, b)
+}
 
 /**
  * Token-based auth middleware.
  * - If RESUME_API_TOKEN is not set (local dev): passes through with no check.
  * - If set: requires `Authorization: Bearer <token>` header.
+ *
+ * All failure paths return the same generic 401 — splitting "missing header"
+ * vs "wrong token" used to leak information about what the parser saw.
  */
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  if (!TOKEN) {
+  if (!TOKEN || !TOKEN_BYTES) {
     next()
     return
   }
 
   const header = req.headers.authorization
   if (!header || !header.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Authorization header required' })
+    res.status(401).json({ error: 'Unauthorized' })
     return
   }
 
   const provided = header.slice(7).trim()
-  if (provided !== TOKEN) {
-    res.status(401).json({ error: 'Invalid token' })
+  if (!safeCompare(provided, TOKEN_BYTES)) {
+    res.status(401).json({ error: 'Unauthorized' })
     return
   }
 

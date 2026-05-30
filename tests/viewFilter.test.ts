@@ -293,4 +293,66 @@ describe('buildViewHtml()', () => {
     const html = buildViewHtml(store, view, 'en')
     expect(html).toContain('My custom intro')
   })
+
+  // ─── XSS — escape every interpolated user value ────────────────────────────
+
+  describe('HTML escaping (XSS)', () => {
+    const PAYLOAD = `<script>window.__pwned=true</script><img src=x onerror=alert(1)>`
+    const ESCAPED_OPEN  = '&lt;script&gt;'
+    const ESCAPED_CLOSE = '&lt;/script&gt;'
+
+    function assertSafe(html: string) {
+      // The payload must never appear unescaped — no live <script> or
+      // <img onerror=…> sequence anywhere in the document.
+      expect(html).not.toContain('<script>window.__pwned')
+      expect(html).not.toMatch(/<img\s+src=x\s+onerror=/i)
+      // Escaped form should be present so the data still renders visibly.
+      expect(html).toContain(ESCAPED_OPEN)
+      expect(html).toContain(ESCAPED_CLOSE)
+    }
+
+    it('escapes the resume full_name', () => {
+      const store = emptyStore()
+      store.resume!.full_name = PAYLOAD
+      const html = buildViewHtml(store, makeView({ sections: buildViewSections() }), 'en')
+      assertSafe(html)
+    })
+
+    it('escapes the view introduction', () => {
+      const store = emptyStore()
+      const view = makeView({
+        sections: buildViewSections(),
+        introduction: { en: PAYLOAD },
+      })
+      const html = buildViewHtml(store, view, 'en')
+      assertSafe(html)
+    })
+
+    it('escapes localized fields on projects (customer, description)', () => {
+      const store = emptyStore()
+      store.projects.push(makeProject({
+        customer:          { en: PAYLOAD },
+        long_description:  { en: PAYLOAD },
+      }))
+      const html = buildViewHtml(store, makeView({ sections: buildViewSections() }), 'en')
+      assertSafe(html)
+    })
+
+    it('escapes reference name/title/company (non-localized strings)', () => {
+      const store = emptyStore()
+      store.references.push(makeReference({
+        name: PAYLOAD, title: PAYLOAD, company: PAYLOAD,
+        include_in_exports: true,
+      }))
+      const html = buildViewHtml(store, makeView({ sections: buildViewSections() }), 'en')
+      assertSafe(html)
+    })
+
+    it('includes a restrictive Content-Security-Policy meta tag', () => {
+      const store = emptyStore()
+      const html = buildViewHtml(store, makeView({ sections: buildViewSections() }), 'en')
+      expect(html).toMatch(/<meta http-equiv="Content-Security-Policy"/)
+      expect(html).toContain("default-src 'none'")
+    })
+  })
 })

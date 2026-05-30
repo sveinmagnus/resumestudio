@@ -434,11 +434,18 @@ function ViewEditor({ view, onBack, onDelete, onUpdate }: {
               </span>
             )}
           </div>
+          {/*
+            sandbox="allow-same-origin" disables script execution inside the
+            preview but keeps the document same-origin so the parent can still
+            measure scrollHeight for the page-count badge. Defence in depth on
+            top of the escape-at-render + CSP in buildViewHtml.
+          */}
           <iframe
             ref={iframeRef}
             className="rv-preview-frame"
             srcDoc={previewHtml}
             title="Resume View preview"
+            sandbox="allow-same-origin"
           />
         </aside>
       </div>
