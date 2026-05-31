@@ -1,6 +1,31 @@
 import { describe, it, expect } from 'vitest'
-import { resolve, fmtDate, fmtRange, LOCALE_LABELS, detectLocalesInData, sortLocales } from '../src/lib/locales'
+import { resolve, fmtDate, fmtRange, fmtRelativeTime, LOCALE_LABELS, detectLocalesInData, sortLocales } from '../src/lib/locales'
 import { emptyStore, makeProject, makeWork } from './fixtures'
+
+describe('fmtRelativeTime()', () => {
+  const now = new Date('2026-05-31T12:00:00Z').getTime()
+
+  it('reports recent times as "just now"', () => {
+    expect(fmtRelativeTime('2026-05-31T11:59:40Z', now)).toBe('just now')
+  })
+
+  it('reports minutes and hours', () => {
+    expect(fmtRelativeTime('2026-05-31T11:30:00Z', now)).toBe('30 min ago')
+    expect(fmtRelativeTime('2026-05-31T10:00:00Z', now)).toBe('2 hours ago')
+    expect(fmtRelativeTime('2026-05-31T11:00:00Z', now)).toBe('1 hour ago')
+  })
+
+  it('falls back to an absolute date string beyond a day', () => {
+    const out = fmtRelativeTime('2026-05-28T12:00:00Z', now)
+    expect(out).not.toMatch(/ago|just now/)
+    expect(out.length).toBeGreaterThan(0)
+  })
+
+  it('handles future timestamps and invalid input gracefully', () => {
+    expect(fmtRelativeTime('2026-06-01T12:00:00Z', now)).toBe('just now')
+    expect(fmtRelativeTime('not-a-date', now)).toBe('')
+  })
+})
 
 describe('resolve()', () => {
   it('returns the requested locale when present', () => {

@@ -1,7 +1,27 @@
 import { Router, type Request, type Response } from 'express'
-import { getResume, saveResume, getLastSavedAt } from '../db.js'
+import { getResume, saveResume, getLastSavedAt, listSnapshots, getSnapshot } from '../db.js'
 
 const router = Router()
+
+/** GET /api/resume/snapshots — list restore points (metadata only). */
+router.get('/snapshots', (_req: Request, res: Response): void => {
+  res.json({ snapshots: listSnapshots() })
+})
+
+/** GET /api/resume/snapshots/:id — return one snapshot's full resume data. */
+router.get('/snapshots/:id', (req: Request, res: Response): void => {
+  const id = Number(req.params.id)
+  if (!Number.isInteger(id) || id < 1) {
+    res.status(400).json({ error: 'Invalid snapshot id' })
+    return
+  }
+  const data = getSnapshot(id)
+  if (!data) {
+    res.status(404).json({ error: 'Snapshot not found' })
+    return
+  }
+  res.json({ data })
+})
 
 /** GET /api/resume — return stored resume data, 404 if empty. */
 router.get('/', (_req: Request, res: Response): void => {

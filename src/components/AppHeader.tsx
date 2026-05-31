@@ -1,9 +1,10 @@
-import { useRef } from 'react'
-import { Download, Upload, Undo2, Redo2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Download, Upload, Undo2, Redo2, History } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useUndoRedo } from '../store/useUndoRedo'
 import { SaveStatus, type SaveState } from './layout/SaveStatus'
 import { LanguageSwitcher } from './layout/LanguageSwitcher'
+import { SnapshotHistory } from './SnapshotHistory'
 import { downloadBackup } from '../lib/backup'
 import type { SectionDef } from '../lib/sections'
 
@@ -25,9 +26,11 @@ interface AppHeaderProps {
 export function AppHeader({ section, saveState, cacheSavedAt, onRetry, onLoadFile }: AppHeaderProps) {
   const { undo, redo, canUndo, canRedo } = useUndoRedo()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showHistory, setShowHistory] = useState(false)
 
   return (
     <header className="app-header">
+      {showHistory && <SnapshotHistory onClose={() => setShowHistory(false)} />}
       <div className="ah-titles">
         <div className="ah-crumb">{section?.group}</div>
         <h1 className="ah-title">{section?.label}</h1>
@@ -55,6 +58,15 @@ export function AppHeader({ section, saveState, cacheSavedAt, onRetry, onLoadFil
           </button>
         </div>
         <LanguageSwitcher />
+
+        {/* Version history — server-side snapshots with restore */}
+        <button
+          className="ah-btn-secondary"
+          onClick={() => setShowHistory(true)}
+          title="Browse and restore earlier saved versions"
+        >
+          <History size={15} /> History
+        </button>
 
         {/* Load file — accepts backup JSON or CVpartner JSON */}
         <button

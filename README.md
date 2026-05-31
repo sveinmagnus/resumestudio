@@ -37,6 +37,12 @@ run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
 - **Dual-language side-by-side editing.** Every translatable field renders as
   two inputs at once — pick any two of your supported locales, swap with one
   click, hide the secondary column when you want focus.
+- **Translation assist.** Each secondary input gets a **Copy** button (seed it
+  from the primary text) and, if you point the server at a self-hosted
+  [LibreTranslate](https://libretranslate.com/) instance, a **Draft** button
+  that pre-fills a machine translation for you to review. Nothing leaves your
+  deployment — the browser talks only to your own server, which proxies the
+  request. Optional; off unless `LIBRETRANSLATE_URL` is set.
 - **Re-detect languages.** A refresh button in the language switcher scans
   the content and adds any new locale it finds to your supported list.
 - **Drag-and-drop reordering** on every section that has a sort order, with
@@ -52,13 +58,17 @@ run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
   edits flush to the server the moment it returns.
 - **Status visible in the header**: Saving / Saved / Save failed (with
   Retry) / Local only.
+- **Version history** — every save is snapshotted on the server (the last 50,
+  duplicates skipped). The header's **History** button lists them and restores
+  any version in one click; a restore is itself undoable.
 - **Portable JSON backup** — "Save to file" downloads a versioned backup;
   "Load file" restores from a backup *or* imports a CVpartner JSON export.
 
 ### Export
 - **Resume Views** — curated subsets of the master CV. Pick which sections
   to include, exclude individual items, toggle "starred only", add a custom
-  introduction.
+  introduction, with a **live preview pane** that re-renders as you tune the
+  view (and estimates the page count against your page limit).
 - **PDF** via the browser's print pipeline.
 - **DOCX** (.docx) via the [`docx`](https://docx.js.org/) library, lazy-loaded
   so it only downloads when you actually click Export.
@@ -89,12 +99,12 @@ src/
 ├── types/       single source of truth for the data model
 ├── store/       Zustand store + undo/redo hook
 ├── lib/         pure logic: importer, exporter, viewFilter, backup, locales,
-│                completeness, merge, localCache, api, sections
+│                completeness, merge, localCache, api, sections, translateClient
 ├── components/  React UI (layout, ui primitives, per-section editors)
 └── App.tsx      routes the active section to the right editor
 
-server/          Express API + SQLite persistence
-tests/           Vitest specs (179 tests, all green)
+server/          Express API + SQLite persistence (resume CRUD, snapshots, translate proxy)
+tests/           Vitest specs (238 tests, all green)
 ```
 
 ---
@@ -125,8 +135,11 @@ and PR.
 |---|---|---|
 | `RESUME_API_TOKEN` | empty | Bearer token required by the API. Empty = auth disabled (local dev). |
 | `PORT` | `3001` | Express listen port. |
+| `LIBRETRANSLATE_URL` | empty | Base URL of a self-hosted LibreTranslate instance. Empty = the Draft-translation button is hidden. |
+| `LIBRETRANSLATE_API_KEY` | empty | API key, if your LibreTranslate instance requires one. |
 
-The SQLite database lives at `data/resume.db` (gitignored). WAL mode is on.
+The SQLite database lives at `data/resume.db` (gitignored), holding the single
+resume row plus a `resume_snapshots` history table (last 50 saves). WAL mode is on.
 
 ---
 

@@ -3,6 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { authMiddleware } from './auth.js'
 import resumeRouter from './routes/resume.js'
+import translateRouter from './routes/translate.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT      = parseInt(process.env.PORT ?? '3001', 10)
@@ -35,6 +36,9 @@ app.get('/api/health', (_req, res) => {
 
 // ── Resume API (auth-gated) ────────────────────────────────────────────────
 app.use('/api/resume', authMiddleware, resumeRouter)
+
+// ── Translation proxy (auth-gated) — drafts via self-hosted LibreTranslate ──
+app.use('/api/translate', authMiddleware, translateRouter)
 
 // ── In production: serve the built frontend ────────────────────────────────
 if (IS_PROD) {

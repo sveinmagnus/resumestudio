@@ -24,9 +24,18 @@ What works today:
   local-only mode if the server is unreachable.
 - **Targeted exports via Resume Views** — pick sections, exclude items,
   starred-only filter, custom intro, then export PDF (browser print pipeline)
-  or DOCX (lazy-loaded docx lib).
+  or DOCX (lazy-loaded docx lib). A **live preview pane** in the view editor
+  re-renders the document as you tune it (iframe + page-count estimate).
 - **CVpartner JSON import** and **portable JSON backup** (export + load) with
   a versioned format and a migration scaffold.
+- **Translation assist** on every `DualField` secondary input: "Copy from
+  primary" (no network) plus an optional "Draft translation" that proxies
+  through the server to a self-hosted LibreTranslate instance (drafts are
+  review-required). The Draft button only appears when the server reports a
+  backend is configured (`LIBRETRANSLATE_URL`). See §8.
+- **Server-side snapshot history** — every save appends a snapshot
+  (deduped, last 50 kept); the header's **History** button restores any of
+  them. See §8.
 - **Undo / redo** (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z) with debounced history.
 - **Drag-and-drop reordering** (`@dnd-kit`) on every section that owns a
   `sort_order`; up/down arrow buttons kept for keyboard / accessibility.
@@ -87,23 +96,26 @@ src/
 ├── store/
 │   ├── useStore.ts             ← Zustand store + generic CRUD actions
 │   ├── useUndoRedo.ts          ← Undo/redo hook (Ctrl/Cmd+Z), subscribes to mutationCount
-│   └── useResumePersistence.ts ← Boot load + auto-save orchestration (effects + refs), submitToken, loadFile
+│   ├── useResumePersistence.ts ← Boot load + auto-save orchestration (effects + refs), submitToken, loadFile
+│   └── useTranslation.ts       ← useTranslationAvailable() — memoized "is translate configured?" probe
 ├── lib/
-│   ├── api.ts                  ← Server client (load, save with AbortSignal, token auth)
+│   ├── api.ts                  ← Server client (load/save, snapshots, translate; AbortSignal, token auth)
 │   ├── backup.ts               ← Portable JSON backup format + migrateBackup() scaffold
 │   ├── completeness.ts         ← PURE: translation completeness % + missing field paths per locale
 │   ├── exporter.ts             ← LAZY-LOADED .docx generation (Cartavio brand, A4)
 │   ├── importer.ts             ← CVpartner JSON → ResumeStore
 │   ├── localCache.ts           ← localStorage fallback (debounced via useResumePersistence)
-│   ├── locales.ts              ← LOCALE_LABELS, resolve(), fmt*(), detectLocalesInData(), sortLocales()
+│   ├── locales.ts              ← LOCALE_LABELS, resolve(), fmt*(), fmtRelativeTime(), detectLocalesInData(), sortLocales()
 │   ├── merge.ts                ← mergeSkills / mergeRoles + reference counts
 │   ├── sections.ts             ← Sidebar section definitions and groups
+│   ├── translateClient.ts      ← PURE: app→service locale map, canDraftBetween(), memoized availability probe
 │   └── viewFilter.ts           ← Apply a ResumeView (sections, exclusions, starred); buildViewHtml() for PDF
 ├── components/
 │   ├── ErrorBoundary.tsx       ← Wraps the editor; resets on activeSection change
 │   ├── ImportScreen.tsx        ← Landing screen (drop CVpartner JSON / backup, or Start Fresh)
 │   ├── AuthGate.tsx            ← Token-entry modal shown on 401 (onSubmit → persistence hook)
-│   ├── AppHeader.tsx           ← Editor top bar: SaveStatus, undo/redo (owns useUndoRedo), LanguageSwitcher, load/save-file
+│   ├── SnapshotHistory.tsx     ← Version-history modal: list snapshots, restore via replaceData
+│   ├── AppHeader.tsx           ← Editor top bar: SaveStatus, undo/redo, LanguageSwitcher, History, load/save-file
 │   ├── layout/
 │   │   ├── Sidebar.tsx         ← Section navigation
 │   │   ├── LanguageSwitcher.tsx ← Primary/secondary locale + "re-detect" button
@@ -125,19 +137,22 @@ src/
 └── index.css                   ← Design tokens + body/scrollbar/animations + .check-row utility
 
 server/                         ← Express API + SQLite persistence
-├── index.ts                    ← Express bootstrap, /api/health, /api/resume router
-├── auth.ts                     ← Bearer-token middleware (env: RESUME_API_TOKEN)
-├── db.ts                       ← better-sqlite3, single-row resume_store table
-└── routes/resume.ts            ← GET / PUT /api/resume
+├── index.ts                    ← Express bootstrap, security headers, /api/health, /api/resume + /api/translate routers
+├── auth.ts                     ← Bearer-token middleware (env: RESUME_API_TOKEN), constant-time compare
+├── db.ts                       ← better-sqlite3; single-row resume_store + resume_snapshots (last 50, deduped)
+├── translate.ts               ← LibreTranslate proxy: locale map, fetch w/ timeout (env: LIBRETRANSLATE_URL/_API_KEY)
+└── routes/
+    ├── resume.ts               ← GET / PUT /api/resume; GET /api/resume/snapshots(/:id)
+    └── translate.ts            ← GET /api/translate/status, POST /api/translate
 
-tests/                          ← Vitest specs (214 tests at last count)
+tests/                          ← Vitest specs (238 tests at last count)
 ├── fixtures.ts                 ← Shared makeProject() / makeRole() / ... factories
 ├── setup-rtl.ts                ← jest-dom matchers + afterEach(cleanup) for component tests
 ├── helpers/store-reset.ts      ← resetStore() — restores the singleton store between component tests
 ├── backup.test.ts, completeness.test.ts, exporter.test.ts,
 ├── importer.test.ts, localCache.test.ts, locales.test.ts,
-├── merge.test.ts, store.test.ts, viewFilter.test.ts
-└── components/                 ← RTL smoke tests: DualField, Overview, CoursesEditor (.test.tsx, jsdom)
+├── merge.test.ts, store.test.ts, translateClient.test.ts, viewFilter.test.ts
+└── components/                 ← RTL smoke tests: DualField, Overview, CoursesEditor, SnapshotHistory (.test.tsx, jsdom)
 ```
 
 ### Layered design — these layers must stay clean
@@ -196,6 +211,12 @@ The single most important UX requirement: **every translatable field renders as 
 - `useStore().primaryLocale` and `useStore().secondaryLocale` (the latter can be `null` to mean "single column mode").
 - The `DualField` component reads these directly and renders 1 or 2 inputs accordingly. Components calling `DualField` never need to know about locales — just pass the `LocalizedString` and a setter.
 - The secondary input gets a subtle cyan tint (CSS var `--secondary-tint`) to distinguish from the primary (which uses the Cartavio navy accent on focus).
+- The secondary column carries two **translation-assist** affordances:
+  **Copy** (fills the secondary with the primary text, no network) and, when a
+  LibreTranslate backend is configured, **Draft** (server-proxied machine
+  draft, marked "review required"). See §8 → *Translation assist*. Editing the
+  secondary input clears the draft annotation. Both are pure UX sugar on top of
+  the same `onChange` — nothing else needs to know about them.
 
 **Rule:** Every component that touches a `LocalizedString` must use `DualField`. Never render a single text input bound to one locale.
 
@@ -323,6 +344,35 @@ than calling `set()` directly. Return `null` from the updater for a no-op
 - `lib/backup.ts` defines `BackupV1` and `migrateBackup()`. The detector (`isBackupFormat`) is intentionally lenient — it accepts any envelope shape that smells like a backup, then `migrateBackup` decides if this build can read it (throws `UnsupportedBackupVersionError` with a user-meaningful message otherwise).
 - When you bump the format, add a `BackupV2` interface, extend `AnyBackup`, write a `migrateV1toV2(v1)` step, and chain it into `migrateBackup`. The existing scaffold + tests at `tests/backup.test.ts` show the shape.
 
+### Snapshot history (server-side)
+- `saveResume()` in `server/db.ts` runs in a transaction: it upserts the
+  single `resume_store` row **and** appends a row to `resume_snapshots`
+  (schema is additive — `CREATE TABLE IF NOT EXISTS`, no migration needed).
+- A snapshot identical to the most recent one is skipped (de-dup), and the log
+  is pruned to the newest **50** entries on every save.
+- Read endpoints (auth-gated, under `/api/resume`):
+  `GET /snapshots` → metadata only (`{id, saved_at, size}`, newest first);
+  `GET /snapshots/:id` → that snapshot's full resume data.
+- The **History** modal (`SnapshotHistory.tsx`, opened from `AppHeader`)
+  restores via **`replaceData`** (not `loadStore`) so a restore is itself a
+  user mutation: it lands in the undo stack and is re-saved. This is why
+  "restore" is reversible.
+
+### Translation assist (server-side proxy)
+- The client never calls the translation backend directly. `POST /api/translate`
+  (auth-gated) proxies to a self-hosted **LibreTranslate** instance configured
+  via `LIBRETRANSLATE_URL` (+ optional `LIBRETRANSLATE_API_KEY`). Rationale: the
+  URL/key stay server-side (the client reads no env vars — §2), CV text flows
+  server→server inside the deployment, and there's one auth perimeter.
+- `server/translate.ts` maps the app's locale codes to ISO codes the service
+  expects (`no→nb`, `se→sv`, `dk→da`; others pass through). A near-identical map
+  lives in `lib/translateClient.ts` for display gating — kept duplicated rather
+  than coupling the two build trees; both are tiny.
+- `GET /api/translate/status` reports `{configured}`; the client memoizes this
+  once (`getTranslationAvailability`) so N `DualField`s share one probe, and the
+  "Draft translation" button only renders when it's `true`. Drafts are always
+  framed as review-required.
+
 ---
 
 ## 9. Importer notes (CVpartner format)
@@ -356,7 +406,10 @@ npm run test:coverage     # v8 coverage in coverage/
 - **Test fixtures** — `tests/fixtures.ts` exports `emptyStore()` + `makeProject()`, `makeWork()`, etc. Use these instead of constructing entities inline so future shape changes are one-place fixes.
 
 ### What's NOT covered
-- The Express server — only manually verified end-to-end with curl during the session it was written.
+- The Express server — only manually verified end-to-end with curl (incl. the
+  snapshot save/dedup/list/get lifecycle and the translate status/validation
+  paths). See §12.5 for the gap. The pure client-side translate helpers
+  (`translateClient`) and the `SnapshotHistory` component *are* unit-tested.
 
 ### Component tests (RTL)
 - Default test env is `node`; component tests opt in with `// @vitest-environment jsdom` at the top.
@@ -395,8 +448,15 @@ After any significant change:
 
 ### Server / env
 - Copy `.env.example` to `.env` and set `RESUME_API_TOKEN` for a deployed instance. Leaving it empty disables auth — fine for local dev.
-- `data/resume.db` is the SQLite file; it's gitignored. WAL mode is on.
-- The single-row constraint (`CHECK (id = 1)`) is intentional: this is a single-resume-per-instance product.
+- `data/resume.db` is the SQLite file; it's gitignored. WAL mode is on. The
+  `resume_snapshots` table lives in the same file (additive, no migration).
+- The single-row constraint (`CHECK (id = 1)`) is intentional: this is a single-resume-per-instance product. (The snapshot table is *not* single-row — it's the history log.)
+- **Translation is optional.** Set `LIBRETRANSLATE_URL` (and optionally
+  `LIBRETRANSLATE_API_KEY`) to point at a self-hosted LibreTranslate instance —
+  e.g. `docker run -p 5000:5000 libretranslate/libretranslate`, then
+  `LIBRETRANSLATE_URL=http://localhost:5000`. Unset = the Draft button hides;
+  Copy still works. Nothing leaves the deployment: the browser only talks to
+  this server, which proxies to LibreTranslate.
 
 ### Known quirks
 - The Claude Code preview tool launches `npm run dev` with `PORT=5173` injected for the Vite hint, but Express reads `process.env.PORT` and tries to bind 5173 too — collides with Vite. Outside the preview tool, `npm run dev` works correctly. If you need to verify auto-save end-to-end inside the preview, run the server manually with `PORT=3001 npx tsx server/index.ts`.
@@ -417,30 +477,26 @@ After any significant change:
 
 Ordered loosely by recommended priority. Each is a self-contained chunk.
 
-### 12.1 Live preview pane in the Resume View editor
-The view editor lets you toggle sections, exclude items, and rewrite the introduction — but the only way to see the result today is to click Export PDF, which opens a new window via `window.print()` (`ResumeViewsEditor.tsx → handleExport`). That's a slow loop for the app's core workflow. `buildViewHtml()` in `lib/viewFilter.ts` is already pure and produces print-ready HTML; render it into an `<iframe srcDoc={...}>` next to the editor and refresh on each view-config change. Bonus once it's there: surface a "your view spans N pages" indicator using the iframe's measured height vs. `view.page_limit`. Cheapest user-visible win available.
+> **Recently shipped** (don't re-propose): live preview pane in the Resume View
+> editor, field-level translation assist (Copy + LibreTranslate-proxied Draft),
+> and server-side snapshot history. See §1 and §8.
 
-### 12.2 Export templates
-`ResumeView.template_id` is already on the type (see `types/index.ts`) and called out as "reserved" in `lib/exporter.ts`, but nothing reads it. Two or three named templates (compact technical / formal management / minimal one-pager) would make views visually differentiated — currently a Board CV and a Technical CV produce the same-looking document. Touches both `buildViewHtml` (HTML/CSS path) and `exporter.ts` (DOCX path); each template is a styling delta, not a fork of the render logic. Pairs naturally with 12.1 — the preview pane is what makes template choice tunable.
+### 12.1 Export templates
+`ResumeView.template_id` is already on the type (see `types/index.ts`) and called out as "reserved" in `lib/exporter.ts`, but nothing reads it. Two or three named templates (compact technical / formal management / minimal one-pager) would make views visually differentiated — currently a Board CV and a Technical CV produce the same-looking document. Touches both `buildViewHtml` (HTML/CSS path) and `exporter.ts` (DOCX path); each template is a styling delta, not a fork of the render logic. Pairs naturally with the (now shipped) live preview pane — that's what makes template choice tunable without an export round-trip.
 
-### 12.3 Field-level translation assist
-The Overview's translation drill-down (`Overview.tsx`) tells you which fields are missing per locale, but the next click is still "type the translation by hand". Two tiers worth considering:
-- Cheap, no network: a "copy primary → here" button on `DualField`'s secondary input, so the user has a starting point to revise.
-- Real feature: a "draft translation" button that calls an external API and pre-fills. Scope question — the rest of the app is self-hosted single-instance with no outbound calls; adding one means wiring an API key into `.env` and being explicit that drafts are review-required.
-
-### 12.4 Server-side snapshot history
-Undo is in-memory only (`useUndoRedo.ts`, stack capped at 100). A destructive edit + close-browser loses unbounded work — the app's "never lose work" promise really only spans the current session. Snapshot the single resume row on each save (e.g. keep last 50, indexed by `saved_at`) and add a "Restore from…" picker. Schema change is additive (a `resume_snapshots` table); the Zustand store doesn't need to know. Defensive, not glamorous — but closes the one real durability gap.
-
-### 12.5 Generic mergeRegistry
+### 12.2 Generic mergeRegistry
 `mergeSkills` and `mergeRoles` are near-identical. If a third registry kind ever appears (e.g. mergeable industries), refactor to a descriptor-table `mergeRegistry(store, kind, source, target)`. Not worth doing for two kinds today.
 
-### 12.6 Section catalog refactor
+### 12.3 Section catalog refactor
 Three switches enumerate the 13 content sections: `viewFilter.getItemTitle/getItemSubtitle`, `viewFilter.renderItem`, `exporter.renderSection`. A section-descriptor registry (one place per section declaring `{titleField, subtitleField, dateField, render}`) would collapse them. The CLAUDE.md "Adding a new section" step would shrink from 7 items to 3. Don't do this if new sections are rare — the duplication is bounded.
 
-### 12.7 Extend React Testing Library coverage
-RTL is set up (`tests/setup-rtl.ts`, `tests/helpers/store-reset.ts`) and there are smoke tests for `DualField`, `Overview` drill-down, and `CoursesEditor` as templates. Extend by adding `tests/components/<Name>.test.tsx` for the remaining editors — they're all the same shape (render → click → assert against `useStore.getState()`).
+### 12.4 Extend React Testing Library coverage
+RTL is set up (`tests/setup-rtl.ts`, `tests/helpers/store-reset.ts`) and there are smoke tests for `DualField`, `Overview` drill-down, `CoursesEditor`, and `SnapshotHistory` as templates. Extend by adding `tests/components/<Name>.test.tsx` for the remaining editors — they're all the same shape (render → click → assert against `useStore.getState()`).
 
-### 12.8 Multi-resume support
+### 12.5 Server-side tests for the API
+The Express server (auth, resume CRUD, snapshots, translate proxy) is only curl-verified today. A supertest (or fetch-against-an-ephemeral-listen) suite over `server/routes/*` would lock in the snapshot dedup/prune logic and the translate input-validation, which currently have no automated coverage.
+
+### 12.6 Multi-resume support
 The DB schema enforces single-tenant via `CHECK (id = 1)`. Multi-resume would mean: drop the constraint, add a `current_resume_id` setting, wire a resume-switcher into the sidebar. The Zustand store wouldn't need to change shape, only what gets loaded into it.
 
 ---

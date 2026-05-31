@@ -34,6 +34,24 @@ export function fmtRange(start: { year: number; month: number | null } | null, e
   return `${s} – ${e}`
 }
 
+/**
+ * Human-friendly "time ago" for snapshot timestamps. `now` is injectable so
+ * the formatting is deterministic in tests. Falls back to a locale date/time
+ * string for anything older than a day.
+ */
+export function fmtRelativeTime(iso: string, now: number = Date.now()): string {
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return ''
+  const secs = Math.round((now - then) / 1000)
+  if (secs < 0) return 'just now'
+  if (secs < 45) return 'just now'
+  const mins = Math.round(secs / 60)
+  if (mins < 60) return `${mins} min ago`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`
+  return new Date(iso).toLocaleString()
+}
+
 // ─── Detection ────────────────────────────────────────────────────────────────
 
 /**

@@ -1,15 +1,21 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DualField } from '../../src/components/ui/DualField'
 import { useStore } from '../../src/store/useStore'
 import { resetStore } from '../helpers/store-reset'
+import { api } from '../../src/lib/api'
+import { resetTranslationAvailability } from '../../src/lib/translateClient'
 
 describe('<DualField>', () => {
-  beforeEach(() => resetStore())
+  beforeEach(() => {
+    resetStore()
+    resetTranslationAvailability()
+  })
+  afterEach(() => vi.restoreAllMocks())
 
   it('renders a single input when no secondary locale is selected', () => {
     useStore.setState({ primaryLocale: 'en', secondaryLocale: null })
@@ -54,5 +60,46 @@ describe('<DualField>', () => {
     await userEvent.clear(primary)
     // Clearing removes the key — keeps the store free of empty strings.
     expect(onChange).toHaveBeenLastCalledWith({ no: 'b' })
+  })
+
+  // ── Translation assist ──────────────────────────────────────────────────
+
+  it('copies the primary value into the secondary locale on "Copy"', async () => {
+    useStore.setState({ primaryLocale: 'en', secondaryLocale: 'no' })
+    const onChange = vi.fn()
+    render(<DualField label="Title" value={{ en: 'hello' }} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /copy/i }))
+    expect(onChange).toHaveBeenLastCalledWith({ en: 'hello', no: 'hello' })
+  })
+
+  it('disables "Copy" when the primary value is empty', () => {
+    useStore.setState({ primaryLocale: 'en', secondaryLocale: 'no' })
+    render(<DualField label="Title" value={{ no: 'hei' }} onChange={() => {}} />)
+    expect(screen.getByRole('button', { name: /copy/i })).toBeDisabled()
+  })
+
+  it('shows a Draft button only when translation is configured, and fills a draft', async () => {
+    vi.spyOn(api, 'translateStatus').mockResolvedValue(true)
+    const translateSpy = vi.spyOn(api, 'translate').mockResolvedValue('hei oversatt')
+    useStore.setState({ primaryLocale: 'en', secondaryLocale: 'no' })
+    const onChange = vi.fn()
+    render(<DualField label="Title" value={{ en: 'hello' }} onChange={onChange} />)
+
+    // Appears asynchronously once the availability probe resolves.
+    const draft = await screen.findByRole('button', { name: /draft/i })
+    await userEvent.click(draft)
+
+    expect(translateSpy).toHaveBeenCalledWith('hello', 'en', 'no')
+    expect(onChange).toHaveBeenLastCalledWith({ en: 'hello', no: 'hei oversatt' })
+    expect(await screen.findByText(/please review/i)).toBeInTheDocument()
+  })
+
+  it('hides the Draft button when translation is not configured', async () => {
+    vi.spyOn(api, 'translateStatus').mockResolvedValue(false)
+    useStore.setState({ primaryLocale: 'en', secondaryLocale: 'no' })
+    render(<DualField label="Title" value={{ en: 'hello' }} onChange={() => {}} />)
+    // Copy is always present; give the probe a tick to resolve, then assert no Draft.
+    expect(await screen.findByRole('button', { name: /copy/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /draft/i })).not.toBeInTheDocument()
   })
 })

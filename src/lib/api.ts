@@ -108,4 +108,66 @@ export const api = {
     const res = await request('PUT', '/api/resume', data, signal)
     if (!res.ok) throw new ServerError(res.status, `Save failed: ${res.statusText}`)
   },
+
+  // ── Snapshot history ────────────────────────────────────────────────────
+
+  /**
+   * List saved snapshots (newest first), metadata only — no resume payloads.
+   * Throws UnauthorizedError on 401, ServerError otherwise.
+   */
+  async listSnapshots(): Promise<SnapshotMeta[]> {
+    const res = await request('GET', '/api/resume/snapshots')
+    if (!res.ok) throw new ServerError(res.status, `Could not list snapshots: ${res.statusText}`)
+    const json = await res.json() as { snapshots: SnapshotMeta[] }
+    return json.snapshots
+  },
+
+  /** Fetch one snapshot's full resume data by id. */
+  async getSnapshot(id: number): Promise<ResumeStore> {
+    const res = await request('GET', `/api/resume/snapshots/${id}`)
+    if (!res.ok) throw new ServerError(res.status, `Could not load snapshot: ${res.statusText}`)
+    const json = await res.json() as { data: ResumeStore }
+    return json.data
+  },
+
+  // ── Translation assist ──────────────────────────────────────────────────
+
+  /**
+   * Whether the server has a LibreTranslate instance configured. Never
+   * throws — returns false on any error so the UI just hides the feature.
+   */
+  async translateStatus(): Promise<boolean> {
+    try {
+      const res = await request('GET', '/api/translate/status')
+      if (!res.ok) return false
+      const json = await res.json() as { configured?: boolean }
+      return json.configured === true
+    } catch {
+      return false
+    }
+  },
+
+  /**
+   * Draft-translate a single field. `source`/`target` are app locale codes
+   * (e.g. 'en', 'no'). Throws ServerError with a user-safe message on failure.
+   */
+  async translate(text: string, source: string, target: string): Promise<string> {
+    const res = await request('POST', '/api/translate', { text, source, target })
+    if (!res.ok) {
+      let message = `Translation failed (${res.status})`
+      try {
+        const json = await res.json() as { error?: string }
+        if (json.error) message = json.error
+      } catch { /* keep default */ }
+      throw new ServerError(res.status, message)
+    }
+    const json = await res.json() as { translation: string }
+    return json.translation
+  },
+}
+
+export interface SnapshotMeta {
+  id: number
+  saved_at: string
+  size: number
 }
