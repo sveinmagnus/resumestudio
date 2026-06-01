@@ -1,0 +1,35 @@
+# Optional LibreTranslate service for the "Draft translation" feature.
+#
+# This is NOT started by `npm run dev` — translation is opt-in. Bring it up
+# with `npm run dev:translate` (or `docker compose up -d libretranslate`), then
+# add `LIBRETRANSLATE_URL=http://localhost:5000` to your .env and restart the
+# Express server so it picks the URL up.
+#
+# First boot downloads the language models for the locales below (a few hundred
+# MB) into a named volume, so subsequent starts are fast. CV text only ever
+# travels browser → this app's server → this container; nothing leaves the host.
+services:
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    container_name: resumestudio-libretranslate
+    ports:
+      - "5000:5000"
+    environment:
+      # Restrict to the locales the app actually uses (en + Norwegian Bokmål,
+      # Swedish, Danish). Add codes here to support more language pairs.
+      LT_LOAD_ONLY: "en,nb,sv,da"
+      # No public-facing web UI is needed — the app talks to the API directly.
+      LT_DISABLE_WEB_UI: "true"
+    # Persist downloaded Argos models so they aren't re-fetched on every restart.
+    volumes:
+      - libretranslate_models:/home/libretranslate/.local/share/argos-translate
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/languages').getcode()==200 else 1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+
+volumes:
+  libretranslate_models:

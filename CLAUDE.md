@@ -451,12 +451,14 @@ After any significant change:
 - `data/resume.db` is the SQLite file; it's gitignored. WAL mode is on. The
   `resume_snapshots` table lives in the same file (additive, no migration).
 - The single-row constraint (`CHECK (id = 1)`) is intentional: this is a single-resume-per-instance product. (The snapshot table is *not* single-row — it's the history log.)
-- **Translation is optional.** Set `LIBRETRANSLATE_URL` (and optionally
-  `LIBRETRANSLATE_API_KEY`) to point at a self-hosted LibreTranslate instance —
-  e.g. `docker run -p 5000:5000 libretranslate/libretranslate`, then
-  `LIBRETRANSLATE_URL=http://localhost:5000`. Unset = the Draft button hides;
-  Copy still works. Nothing leaves the deployment: the browser only talks to
-  this server, which proxies to LibreTranslate.
+- **Translation is optional.** A bundled `docker-compose.yml` runs a
+  LibreTranslate service (locales limited to `en,nb,sv,da`, models persisted in
+  a named volume). Bring it up with **`npm run dev:translate`**
+  (`translate:down` to stop), then set `LIBRETRANSLATE_URL=http://localhost:5000`
+  in `.env` and restart the server. It is intentionally *not* part of
+  `npm run dev` — first boot pulls a multi-GB image + models. Unset = the Draft
+  button hides; Copy still works. Nothing leaves the deployment: the browser
+  only talks to this server, which proxies to LibreTranslate.
 
 ### Known quirks
 - The Claude Code preview tool launches `npm run dev` with `PORT=5173` injected for the Vite hint, but Express reads `process.env.PORT` and tries to bind 5173 too — collides with Vite. Outside the preview tool, `npm run dev` works correctly. If you need to verify auto-save end-to-end inside the preview, run the server manually with `PORT=3001 npx tsx server/index.ts`.

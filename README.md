@@ -141,6 +141,26 @@ and PR.
 The SQLite database lives at `data/resume.db` (gitignored), holding the single
 resume row plus a `resume_snapshots` history table (last 50 saves). WAL mode is on.
 
+### Enabling draft translations (optional)
+
+The "Draft translation" button is powered by a self-hosted
+[LibreTranslate](https://libretranslate.com/) instance. A `docker-compose.yml`
+is bundled to run it alongside the app:
+
+```bash
+npm run dev:translate     # docker compose up -d libretranslate (first boot pulls models)
+# then in .env:
+#   LIBRETRANSLATE_URL=http://localhost:5000
+npm run dev               # restart so the server reads the URL
+npm run translate:down    # stop the service when you're done
+```
+
+It loads only the `en, nb, sv, da` models (English + Norwegian/Swedish/Danish)
+to stay light, and caches them in a named Docker volume. Translation is
+entirely optional — without it, "Copy from primary" still works and the Draft
+button stays hidden. CV text only travels browser → app server → this
+container; nothing leaves the host.
+
 ---
 
 ## Working with the codebase
