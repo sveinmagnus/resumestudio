@@ -4,6 +4,7 @@ import type {
   TechnologyCategory, Position, Presentation, Publication, HonorAward,
   Reference, Resume,
 } from '../src/types'
+import { DEFAULT_VIEW_STYLE } from '../src/lib/viewStyle'
 
 export function emptyStore(): ResumeStore {
   return {
@@ -317,6 +318,7 @@ export function makeView(over: Partial<ResumeView> = {}): ResumeView {
     starred_only: false,
     page_limit: null,
     template_id: null,
+    style: { ...DEFAULT_VIEW_STYLE },
     last_exported_at: null,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',

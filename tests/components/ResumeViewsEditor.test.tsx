@@ -46,19 +46,46 @@ describe('<ResumeViewsEditor>', () => {
     expect(useStore.getState().data.views[0].name).toBe('Board CV')
   })
 
-  it('toggles a section off for the view', async () => {
+  it('switches a section to off via the detail toggle', async () => {
     seed()
     render(<ResumeViewsEditor />)
     await userEvent.click(screen.getByRole('button', { name: /new view/i }))
 
     const total = useStore.getState().data.views[0].sections.length
-    const enabledBefore = useStore.getState().data.views[0].sections.filter((s) => s.enabled).length
-    expect(enabledBefore).toBe(total) // all on by default
+    const fullBefore = useStore.getState().data.views[0].sections.filter((s) => s.detail === 'full').length
+    expect(fullBefore).toBe(total) // all 'full' by default
 
-    await userEvent.click(screen.getAllByTitle('Hide section')[0])
+    // Click the first section's "off" radio button.
+    const offBtns = screen.getAllByRole('radio', { name: /^off$/i })
+    await userEvent.click(offBtns[0])
 
-    const enabledAfter = useStore.getState().data.views[0].sections.filter((s) => s.enabled).length
-    expect(enabledAfter).toBe(total - 1)
+    const fullAfter = useStore.getState().data.views[0].sections.filter((s) => s.detail === 'full').length
+    const offAfter  = useStore.getState().data.views[0].sections.filter((s) => s.detail === 'off').length
+    expect(fullAfter).toBe(total - 1)
+    expect(offAfter).toBe(1)
+  })
+
+  it('switches a section to summary via the detail toggle', async () => {
+    seed()
+    render(<ResumeViewsEditor />)
+    await userEvent.click(screen.getByRole('button', { name: /new view/i }))
+
+    const summaryBtns = screen.getAllByRole('radio', { name: /^summary$/i })
+    await userEvent.click(summaryBtns[0])
+
+    const summaryCount = useStore.getState().data.views[0].sections.filter((s) => s.detail === 'summary').length
+    expect(summaryCount).toBe(1)
+  })
+
+  it('changes view-level density via the styling controls', async () => {
+    seed()
+    render(<ResumeViewsEditor />)
+    await userEvent.click(screen.getByRole('button', { name: /new view/i }))
+
+    const densitySelect = screen.getByLabelText(/density/i)
+    await userEvent.selectOptions(densitySelect, 'compact')
+
+    expect(useStore.getState().data.views[0].style.density).toBe('compact')
   })
 
   it('edits the introduction text', async () => {

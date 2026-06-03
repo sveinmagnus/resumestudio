@@ -7,10 +7,15 @@ import {
   buildViewSections, reorderViewSections,
   getItemTitle, getItemSubtitle, buildViewHtml,
 } from '../../lib/viewFilter'
-import type { ResumeView, ViewSection } from '../../types'
+import { DEFAULT_VIEW_STYLE } from '../../lib/viewStyle'
+import type {
+  ResumeView, ViewStyle, SectionStyle, SectionDetail,
+  Density, BodySize, HeadingFont, PageMargin, TagStyle,
+} from '../../types'
 import {
   Plus, Pencil, Trash2, ChevronUp, ChevronDown,
-  ArrowLeft, LayoutList, Eye, EyeOff, Star, FileText, FileDown,
+  ArrowLeft, LayoutList, Star, FileText, FileDown,
+  Sliders, RotateCcw,
 } from 'lucide-react'
 
 // ─── Content sections (excludes non-content like overview, header, views) ─────
@@ -36,6 +41,7 @@ export function ResumeViewsEditor() {
       starred_only: false,
       page_limit: null,
       template_id: null,
+      style: { ...DEFAULT_VIEW_STYLE },
       last_exported_at: null,
       created_at: now,
       updated_at: now,
@@ -96,8 +102,8 @@ function ViewList({ views, onCreate, onEdit, onDelete }: {
       ) : (
         <div className="rv-cards">
           {views.map((v) => {
-            const enabled = v.sections.filter((s) => s.enabled).length
-            const total = v.sections.length
+            const full = v.sections.filter((s) => s.detail === 'full').length
+            const summary = v.sections.filter((s) => s.detail === 'summary').length
             const hidden = v.excluded_item_ids.length
             return (
               <div key={v.id} className="rv-card">
@@ -105,7 +111,8 @@ function ViewList({ views, onCreate, onEdit, onDelete }: {
                 <div className="rv-card-body">
                   <div className="rv-card-name">{v.name}</div>
                   <div className="rv-card-meta">
-                    {enabled}/{total} sections
+                    {full} full
+                    {summary > 0 ? ` · ${summary} summary` : ''}
                     {hidden > 0 ? ` · ${hidden} item${hidden !== 1 ? 's' : ''} hidden` : ''}
                     {v.starred_only ? ' · starred only' : ''}
                   </div>
@@ -182,11 +189,25 @@ function ViewEditor({ view, onBack, onDelete, onUpdate }: {
 
   const sections = [...view.sections].sort((a, b) => a.sort_order - b.sort_order)
 
-  const toggleSection = (key: string) => {
+  const setSectionDetail = (key: string, detail: SectionDetail) => {
     onUpdate({
       sections: view.sections.map((s) =>
-        s.key === key ? { ...s, enabled: !s.enabled } : s
+        s.key === key ? { ...s, detail } : s
       ),
+    })
+  }
+
+  const setSectionStyle = (key: string, patch: SectionStyle | null) => {
+    onUpdate({
+      sections: view.sections.map((s) => {
+        if (s.key !== key) return s
+        if (patch === null) {
+          const { style: _drop, ...rest } = s
+          void _drop
+          return rest
+        }
+        return { ...s, style: { ...(s.style ?? {}), ...patch } }
+      }),
     })
   }
 
@@ -198,6 +219,11 @@ function ViewEditor({ view, onBack, onDelete, onUpdate }: {
     const ex = view.excluded_item_ids
     const next = ex.includes(itemId) ? ex.filter((id) => id !== itemId) : [...ex, itemId]
     onUpdate({ excluded_item_ids: next })
+  }
+
+  const viewStyle: ViewStyle = view.style ?? DEFAULT_VIEW_STYLE
+  const updateViewStyle = (patch: Partial<ViewStyle>) => {
+    onUpdate({ style: { ...viewStyle, ...patch } })
   }
 
   const [docxBusy, setDocxBusy] = useState(false)
@@ -230,7 +256,8 @@ function ViewEditor({ view, onBack, onDelete, onUpdate }: {
   const totalItems = CONTENT_SECTIONS.reduce((acc, s) => {
     if (!s.storeKey) return acc
     const vs = view.sections.find((v) => v.key === s.key)
-    if (!vs?.enabled) return acc
+    const detail = vs?.detail ?? 'full'
+    if (detail === 'off') return acc
     return acc + (data[s.storeKey] as unknown[]).filter(
       (it) => !(it as { disabled?: boolean }).disabled
     ).length
@@ -278,10 +305,24 @@ function ViewEditor({ view, onBack, onDelete, onUpdate }: {
         />
       </div>
 
+      {/* ── Styling ── */}
+      <div className="rv-section-block">
+        <div className="rv-block-heading">View styling</div>
+        <p className="rv-block-desc">
+          Visual personality for the whole exported document. Per-section
+          overrides live on each section below.
+        </p>
+        <ViewStyleControls style={viewStyle} onChange={updateViewStyle} />
+      </div>
+
       {/* ── Sections ── */}
       <div className="rv-section-block">
         <div className="rv-block-heading">Sections</div>
-        <p className="rv-block-desc">Toggle sections on/off and reorder them for this view.</p>
+        <p className="rv-block-desc">
+          Pick a detail level per section. <strong>Off</strong> omits the section,
+          <strong> Summary</strong> shows one line per item (no descriptions),
+          <strong> Full</strong> renders every field.
+        </p>
 
         <div className="rv-section-list">
           {sections.map((vs, idx) => {
@@ -290,8 +331,11 @@ function ViewEditor({ view, onBack, onDelete, onUpdate }: {
             const storeItems = (data[def.storeKey] as Array<{ id: string; disabled?: boolean; starred?: boolean }>)
               .filter((it) => !it.disabled)
 
+            const off = vs.detail === 'off'
+            const hasStyle = !!vs.style && Object.keys(vs.style).length > 0
+
             return (
-              <div key={vs.key} className={`rv-sec-row ${vs.enabled ? 'rv-sec-on' : 'rv-sec-off'}`}>
+              <div key={vs.key} className={`rv-sec-row ${off ? 'rv-sec-off' : 'rv-sec-on'}`}>
                 <div className="rv-sec-controls">
                   <button className="rv-ord-btn" onClick={() => moveSection(vs.key, 'up')} disabled={idx === 0}>
                     <ChevronUp size={14} />
@@ -301,25 +345,33 @@ function ViewEditor({ view, onBack, onDelete, onUpdate }: {
                   </button>
                 </div>
 
-                <button
-                  className={`rv-sec-toggle ${vs.enabled ? 'rv-tog-on' : 'rv-tog-off'}`}
-                  onClick={() => toggleSection(vs.key)}
-                  title={vs.enabled ? 'Hide section' : 'Show section'}
-                >
-                  {vs.enabled ? <Eye size={14} /> : <EyeOff size={14} />}
-                </button>
-
                 <div className="rv-sec-content">
-                  <div className="rv-sec-title">
-                    {def.label}
-                    <span className="rv-sec-count">
-                      {vs.enabled
-                        ? `${storeItems.filter((it) => !view.excluded_item_ids.includes(it.id)).length}/${storeItems.length}`
-                        : 'hidden'}
-                    </span>
+                  <div className="rv-sec-top">
+                    <div className="rv-sec-title-line">
+                      <span className="rv-sec-title">{def.label}</span>
+                      <span className="rv-sec-count">
+                        {off
+                          ? 'omitted'
+                          : `${storeItems.filter((it) => !view.excluded_item_ids.includes(it.id)).length}/${storeItems.length}`}
+                      </span>
+                    </div>
+                    <DetailToggle
+                      value={vs.detail}
+                      onChange={(d) => setSectionDetail(vs.key, d)}
+                    />
                   </div>
 
-                  {vs.enabled && storeItems.length > 0 && (
+                  {!off && (
+                    <SectionStylePanel
+                      sectionKey={vs.key}
+                      style={vs.style}
+                      onChange={(patch) => setSectionStyle(vs.key, patch)}
+                      onReset={() => setSectionStyle(vs.key, null)}
+                      hasStyle={hasStyle}
+                    />
+                  )}
+
+                  {!off && vs.detail === 'full' && storeItems.length > 0 && (
                     <div className="rv-item-list">
                       {storeItems.map((item) => {
                         const excluded = view.excluded_item_ids.includes(item.id)
@@ -344,7 +396,7 @@ function ViewEditor({ view, onBack, onDelete, onUpdate }: {
                     </div>
                   )}
 
-                  {vs.enabled && storeItems.length === 0 && (
+                  {!off && storeItems.length === 0 && (
                     <div className="rv-item-empty">No items in master CV</div>
                   )}
                 </div>
@@ -565,25 +617,103 @@ function Styles() {
       .rv-ord-btn:hover:not(:disabled) { background: var(--paper-sunken); color: var(--ink); }
       .rv-ord-btn:disabled { opacity: .25; cursor: default; }
 
-      .rv-sec-toggle {
-        flex-shrink: 0; width: 30px; height: 30px; border-radius: var(--r-sm);
-        display: flex; align-items: center; justify-content: center;
-        transition: all .13s; margin-top: 1px;
-      }
-      .rv-tog-on { background: var(--accent-wash); color: var(--accent); }
-      .rv-tog-off { background: var(--paper-sunken); color: var(--ink-faint); }
-      .rv-tog-on:hover { background: var(--accent); color: #fff; }
-      .rv-tog-off:hover { background: var(--line); color: var(--ink); }
-
       .rv-sec-content { flex: 1; min-width: 0; }
-      .rv-sec-title {
-        display: flex; align-items: center; gap: 8px;
-        font-weight: 600; font-size: 14px; padding-top: 6px;
+      .rv-sec-top {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; flex-wrap: wrap;
       }
+      .rv-sec-title-line { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+      .rv-sec-title { font-weight: 600; font-size: 14px; }
       .rv-sec-count {
         font-size: 11px; font-weight: 500; padding: 1px 7px;
         background: var(--paper-sunken); color: var(--ink-faint); border-radius: 10px;
       }
+
+      /* ── Detail segmented control ── */
+      .rv-detail-toggle {
+        display: inline-flex; align-items: stretch; background: var(--paper-sunken);
+        border: 1px solid var(--line); border-radius: var(--r-sm); padding: 2px;
+        gap: 1px;
+      }
+      .rv-detail-opt {
+        padding: 4px 10px; font-size: 11px; font-weight: 600; letter-spacing: .04em;
+        text-transform: uppercase; color: var(--ink-faint);
+        border-radius: 3px; transition: all .13s; min-width: 56px; text-align: center;
+      }
+      .rv-detail-opt:hover { color: var(--accent); }
+      .rv-detail-opt.is-active {
+        background: var(--accent); color: #fff;
+      }
+      .rv-detail-opt.is-active:hover { color: #fff; }
+
+      /* ── Section style panel ── */
+      .rv-secstyle {
+        margin-top: 8px; padding: 9px 11px;
+        background: var(--paper-sunken); border-radius: var(--r-sm);
+      }
+      .rv-secstyle-summary {
+        display: flex; align-items: center; gap: 7px; cursor: pointer;
+        font-size: 11px; font-weight: 600; color: var(--ink-soft);
+        letter-spacing: .04em; text-transform: uppercase;
+        list-style: none; user-select: none;
+      }
+      .rv-secstyle-summary::-webkit-details-marker { display: none; }
+      .rv-secstyle-summary:hover { color: var(--accent); }
+      .rv-secstyle-summary .rv-secstyle-badge {
+        font-size: 9px; padding: 1px 6px; border-radius: 9px;
+        background: var(--accent-wash); color: var(--accent); font-weight: 700;
+        letter-spacing: .04em;
+      }
+      .rv-secstyle-summary .rv-secstyle-reset {
+        margin-left: auto; padding: 2px 6px; border-radius: var(--r-sm);
+        color: var(--ink-faint); display: inline-flex; align-items: center; gap: 3px;
+        font-size: 10px; font-weight: 600;
+      }
+      .rv-secstyle-summary .rv-secstyle-reset:hover { color: var(--accent); background: var(--paper); }
+      .rv-secstyle-body { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-top: 10px; }
+      .rv-secstyle-row {
+        display: flex; align-items: center; justify-content: space-between; gap: 6px;
+        font-size: 12px; color: var(--ink-soft);
+      }
+      .rv-secstyle-row select, .rv-secstyle-row input[type=checkbox] {
+        font-size: 12px;
+      }
+      .rv-secstyle-row select {
+        padding: 3px 6px; border: 1px solid var(--line); border-radius: var(--r-sm);
+        background: var(--paper); min-width: 90px;
+      }
+
+      /* ── View styling block ── */
+      .rv-vs-grid {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+      }
+      .rv-vs-field { display: flex; flex-direction: column; gap: 5px; }
+      .rv-vs-label {
+        font-size: 10px; font-weight: 700; letter-spacing: .08em;
+        text-transform: uppercase; color: var(--ink-faint);
+      }
+      .rv-vs-select, .rv-vs-color {
+        padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--r-sm);
+        background: var(--paper-raised); font-size: 14px;
+      }
+      .rv-vs-select:focus, .rv-vs-color:focus {
+        outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash);
+      }
+      .rv-vs-color-row { display: flex; align-items: center; gap: 8px; }
+      .rv-vs-color { padding: 4px; width: 44px; height: 32px; cursor: pointer; }
+      .rv-vs-hex {
+        padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--r-sm);
+        background: var(--paper-raised); font-family: monospace; font-size: 13px;
+        width: 96px;
+      }
+      .rv-vs-reset {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 7px 12px; border-radius: var(--r-sm);
+        background: var(--paper-sunken); color: var(--ink-soft);
+        font-size: 12px; font-weight: 600; transition: all .13s; margin-top: 10px;
+      }
+      .rv-vs-reset:hover { color: var(--accent); background: var(--accent-wash); }
 
       /* ── Item list ── */
       .rv-item-list { display: flex; flex-direction: column; gap: 1px; margin-top: 10px; }
@@ -679,5 +809,216 @@ function Styles() {
         .rv-preview-pane { display: none; }
       }
     `}</style>
+  )
+}
+
+// ─── Detail toggle ──────────────────────────────────────────────────────────
+
+function DetailToggle({ value, onChange }: { value: SectionDetail; onChange: (d: SectionDetail) => void }) {
+  const opts: SectionDetail[] = ['off', 'summary', 'full']
+  return (
+    <div className="rv-detail-toggle" role="radiogroup" aria-label="Section detail level">
+      {opts.map((opt) => (
+        <button
+          key={opt}
+          type="button"
+          role="radio"
+          aria-checked={value === opt}
+          className={`rv-detail-opt ${value === opt ? 'is-active' : ''}`}
+          onClick={() => onChange(opt)}
+        >
+          {opt}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── View styling controls ──────────────────────────────────────────────────
+
+function ViewStyleControls({ style, onChange }: { style: ViewStyle; onChange: (patch: Partial<ViewStyle>) => void }) {
+  const resetAll = () => onChange({ ...DEFAULT_VIEW_STYLE })
+  return (
+    <>
+      <div className="rv-vs-grid">
+        <Select<Density>
+          label="Density"
+          value={style.density}
+          options={[
+            ['compact',  'Compact'],
+            ['normal',   'Normal'],
+            ['spacious', 'Spacious'],
+          ]}
+          onChange={(density) => onChange({ density })}
+        />
+        <Select<BodySize>
+          label="Body size"
+          value={style.body_size}
+          options={[
+            ['small',  'Small (9pt)'],
+            ['normal', 'Normal (11pt)'],
+            ['large',  'Large (12pt)'],
+          ]}
+          onChange={(body_size) => onChange({ body_size })}
+        />
+        <Select<HeadingFont>
+          label="Heading font"
+          value={style.heading_font}
+          options={[
+            ['condensed', 'Condensed (Cartavio)'],
+            ['sans',      'Sans (Ubuntu)'],
+            ['serif',     'Serif (Georgia)'],
+          ]}
+          onChange={(heading_font) => onChange({ heading_font })}
+        />
+        <Select<PageMargin>
+          label="Page margins"
+          value={style.page_margin}
+          options={[
+            ['tight',    'Tight'],
+            ['normal',   'Normal'],
+            ['generous', 'Generous'],
+          ]}
+          onChange={(page_margin) => onChange({ page_margin })}
+        />
+        <Select<TagStyle>
+          label="Skill tags"
+          value={style.tag_style}
+          options={[
+            ['chips',  'Chips'],
+            ['inline', 'Inline list'],
+          ]}
+          onChange={(tag_style) => onChange({ tag_style })}
+        />
+        <div className="rv-vs-field">
+          <span className="rv-vs-label">Accent colour</span>
+          <div className="rv-vs-color-row">
+            <input
+              type="color"
+              className="rv-vs-color"
+              value={style.accent_color}
+              onChange={(e) => onChange({ accent_color: e.target.value })}
+            />
+            <input
+              type="text"
+              className="rv-vs-hex"
+              value={style.accent_color}
+              onChange={(e) => {
+                const v = e.target.value.trim()
+                if (/^#[0-9a-fA-F]{6}$/.test(v)) onChange({ accent_color: v })
+              }}
+            />
+          </div>
+        </div>
+      </div>
+      <button type="button" className="rv-vs-reset" onClick={resetAll}>
+        <RotateCcw size={12} /> Reset to defaults
+      </button>
+    </>
+  )
+}
+
+function Select<T extends string>({
+  label, value, options, onChange,
+}: {
+  label: string
+  value: T
+  options: Array<[T, string]>
+  onChange: (v: T) => void
+}) {
+  return (
+    <label className="rv-vs-field">
+      <span className="rv-vs-label">{label}</span>
+      <select className="rv-vs-select" value={value} onChange={(e) => onChange(e.target.value as T)}>
+        {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+    </label>
+  )
+}
+
+// ─── Per-section style panel (collapsed by default) ─────────────────────────
+
+interface SectionStylePanelProps {
+  sectionKey: string
+  style: SectionStyle | undefined
+  onChange: (patch: SectionStyle) => void
+  onReset: () => void
+  hasStyle: boolean
+}
+
+function SectionStylePanel({ style, onChange, onReset, hasStyle }: SectionStylePanelProps) {
+  const s: SectionStyle = style ?? {}
+  return (
+    <details className="rv-secstyle">
+      <summary className="rv-secstyle-summary">
+        <Sliders size={11} /> Style overrides
+        {hasStyle && <span className="rv-secstyle-badge">custom</span>}
+        {hasStyle && (
+          <button
+            type="button"
+            className="rv-secstyle-reset"
+            onClick={(e) => { e.preventDefault(); onReset() }}
+            title="Use view defaults for this section"
+          >
+            <RotateCcw size={10} /> Reset
+          </button>
+        )}
+      </summary>
+      <div className="rv-secstyle-body">
+        <div className="rv-secstyle-row">
+          <span>Density</span>
+          <select
+            value={s.density ?? ''}
+            onChange={(e) => onChange({ density: (e.target.value || undefined) as Density | undefined })}
+          >
+            <option value="">— view default —</option>
+            <option value="compact">Compact</option>
+            <option value="normal">Normal</option>
+            <option value="spacious">Spacious</option>
+          </select>
+        </div>
+        <div className="rv-secstyle-row">
+          <span>Tag style</span>
+          <select
+            value={s.tag_style ?? ''}
+            onChange={(e) => onChange({ tag_style: (e.target.value || undefined) as TagStyle | undefined })}
+          >
+            <option value="">— view default —</option>
+            <option value="chips">Chips</option>
+            <option value="inline">Inline list</option>
+          </select>
+        </div>
+        <label className="rv-secstyle-row">
+          <span>Hide section heading</span>
+          <input
+            type="checkbox"
+            checked={!!s.hide_heading}
+            onChange={(e) => onChange({ hide_heading: e.target.checked || undefined })}
+          />
+        </label>
+        <label className="rv-secstyle-row">
+          <span>Hide dates</span>
+          <input
+            type="checkbox"
+            checked={!!s.hide_dates}
+            onChange={(e) => onChange({ hide_dates: e.target.checked || undefined })}
+          />
+        </label>
+        <label className="rv-secstyle-row">
+          <span>Item dividers</span>
+          <select
+            value={s.item_divider === undefined ? '' : s.item_divider ? 'on' : 'off'}
+            onChange={(e) => {
+              const v = e.target.value
+              onChange({ item_divider: v === '' ? undefined : v === 'on' })
+            }}
+          >
+            <option value="">— view default —</option>
+            <option value="on">Show</option>
+            <option value="off">Hide</option>
+          </select>
+        </label>
+      </div>
+    </details>
   )
 }

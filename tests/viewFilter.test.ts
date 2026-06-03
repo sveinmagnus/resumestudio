@@ -16,7 +16,7 @@ describe('buildViewSections()', () => {
     const sections = buildViewSections()
     const contentSections = SECTIONS.filter((s) => s.storeKey && s.key !== 'views')
     expect(sections).toHaveLength(contentSections.length)
-    expect(sections.every((s) => s.enabled)).toBe(true)
+    expect(sections.every((s) => s.detail === 'full')).toBe(true)
   })
 
   it('does not include the "views" section', () => {
@@ -36,9 +36,9 @@ describe('buildViewSections()', () => {
 describe('reorderViewSections()', () => {
   it('swaps a section up with its neighbour', () => {
     const sections = [
-      { key: 'a', enabled: true, sort_order: 0 },
-      { key: 'b', enabled: true, sort_order: 1 },
-      { key: 'c', enabled: true, sort_order: 2 },
+      { key: 'a', detail: 'full' as const, sort_order: 0 },
+      { key: 'b', detail: 'full' as const, sort_order: 1 },
+      { key: 'c', detail: 'full' as const, sort_order: 2 },
     ]
     const next = reorderViewSections(sections, 'b', 'up')
     expect(next.map((s) => s.key)).toEqual(['b', 'a', 'c'])
@@ -47,8 +47,8 @@ describe('reorderViewSections()', () => {
 
   it('swaps a section down with its neighbour', () => {
     const sections = [
-      { key: 'a', enabled: true, sort_order: 0 },
-      { key: 'b', enabled: true, sort_order: 1 },
+      { key: 'a', detail: 'full' as const, sort_order: 0 },
+      { key: 'b', detail: 'full' as const, sort_order: 1 },
     ]
     const next = reorderViewSections(sections, 'a', 'down')
     expect(next.map((s) => s.key)).toEqual(['b', 'a'])
@@ -56,30 +56,30 @@ describe('reorderViewSections()', () => {
 
   it('returns input unchanged when trying to move first up', () => {
     const sections = [
-      { key: 'a', enabled: true, sort_order: 0 },
-      { key: 'b', enabled: true, sort_order: 1 },
+      { key: 'a', detail: 'full' as const, sort_order: 0 },
+      { key: 'b', detail: 'full' as const, sort_order: 1 },
     ]
     expect(reorderViewSections(sections, 'a', 'up')).toBe(sections)
   })
 
   it('returns input unchanged when trying to move last down', () => {
     const sections = [
-      { key: 'a', enabled: true, sort_order: 0 },
-      { key: 'b', enabled: true, sort_order: 1 },
+      { key: 'a', detail: 'full' as const, sort_order: 0 },
+      { key: 'b', detail: 'full' as const, sort_order: 1 },
     ]
     expect(reorderViewSections(sections, 'b', 'down')).toBe(sections)
   })
 
   it('returns input unchanged when key is not found', () => {
-    const sections = [{ key: 'a', enabled: true, sort_order: 0 }]
+    const sections = [{ key: 'a', detail: 'full' as const, sort_order: 0 }]
     expect(reorderViewSections(sections, 'missing', 'up')).toBe(sections)
   })
 
   it('renormalises sort_order even if input was non-contiguous', () => {
     const sections = [
-      { key: 'a', enabled: true, sort_order: 10 },
-      { key: 'b', enabled: true, sort_order: 20 },
-      { key: 'c', enabled: true, sort_order: 30 },
+      { key: 'a', detail: 'full' as const, sort_order: 10 },
+      { key: 'b', detail: 'full' as const, sort_order: 20 },
+      { key: 'c', detail: 'full' as const, sort_order: 30 },
     ]
     const next = reorderViewSections(sections, 'b', 'up')
     expect(next.map((s) => s.sort_order)).toEqual([0, 1, 2])
@@ -89,14 +89,14 @@ describe('reorderViewSections()', () => {
 // ─── applyView ────────────────────────────────────────────────────────────────
 
 describe('applyView()', () => {
-  it('returns enabled sections and drops disabled ones', () => {
+  it('keeps sections with detail=full and empties detail=off ones', () => {
     const store = emptyStore()
     store.projects.push(makeProject({ id: 'p1' }))
     store.work_experiences.push(makeWork({ id: 'w1' }))
     const view = makeView({
       sections: [
-        { key: 'projects', enabled: true, sort_order: 0 },
-        { key: 'work_experiences', enabled: false, sort_order: 1 },
+        { key: 'projects', detail: 'full' as const, sort_order: 0 },
+        { key: 'work_experiences', detail: 'off' as const, sort_order: 1 },
       ],
     })
     const filtered = applyView(store, view)
@@ -109,7 +109,7 @@ describe('applyView()', () => {
     store.projects.push(makeProject({ id: 'keep' }))
     store.projects.push(makeProject({ id: 'drop' }))
     const view = makeView({
-      sections: [{ key: 'projects', enabled: true, sort_order: 0 }],
+      sections: [{ key: 'projects', detail: 'full' as const, sort_order: 0 }],
       excluded_item_ids: ['drop'],
     })
     const filtered = applyView(store, view)
@@ -120,7 +120,7 @@ describe('applyView()', () => {
     const store = emptyStore()
     store.projects.push(makeProject({ id: 'live' }))
     store.projects.push(makeProject({ id: 'soft-deleted', disabled: true }))
-    const view = makeView({ sections: [{ key: 'projects', enabled: true, sort_order: 0 }] })
+    const view = makeView({ sections: [{ key: 'projects', detail: 'full' as const, sort_order: 0 }] })
     const filtered = applyView(store, view)
     expect(filtered.projects.map((p) => p.id)).toEqual(['live'])
   })
@@ -130,17 +130,27 @@ describe('applyView()', () => {
     store.projects.push(makeProject({ id: 'p1', starred: false }))
     store.projects.push(makeProject({ id: 'p2', starred: true }))
     const view = makeView({
-      sections: [{ key: 'projects', enabled: true, sort_order: 0 }],
+      sections: [{ key: 'projects', detail: 'full' as const, sort_order: 0 }],
       starred_only: true,
     })
     const filtered = applyView(store, view)
     expect(filtered.projects.map((p) => p.id)).toEqual(['p2'])
   })
 
-  it('defaults to enabled when a view has no entry for a section', () => {
+  it('defaults to full when a view has no entry for a section', () => {
     const store = emptyStore()
     store.projects.push(makeProject({ id: 'p1' }))
     const view = makeView({ sections: [] }) // no entries at all
+    const filtered = applyView(store, view)
+    expect(filtered.projects).toHaveLength(1)
+  })
+
+  it('keeps items when detail=summary (renderer decides what to show)', () => {
+    const store = emptyStore()
+    store.projects.push(makeProject({ id: 'p1' }))
+    const view = makeView({
+      sections: [{ key: 'projects', detail: 'summary' as const, sort_order: 0 }],
+    })
     const filtered = applyView(store, view)
     expect(filtered.projects).toHaveLength(1)
   })
@@ -157,7 +167,7 @@ describe('applyView()', () => {
     store.projects.push(makeProject({ id: 'p1' }))
     const originalProjects = store.projects
     const view = makeView({
-      sections: [{ key: 'projects', enabled: false, sort_order: 0 }],
+      sections: [{ key: 'projects', detail: 'off' as const, sort_order: 0 }],
     })
     applyView(store, view)
     expect(store.projects).toBe(originalProjects)
@@ -353,6 +363,130 @@ describe('buildViewHtml()', () => {
       const html = buildViewHtml(store, makeView({ sections: buildViewSections() }), 'en')
       expect(html).toMatch(/<meta http-equiv="Content-Security-Policy"/)
       expect(html).toContain("default-src 'none'")
+    })
+  })
+
+  // ─── Per-section detail levels ──────────────────────────────────────────
+
+  describe('section detail levels', () => {
+    it('summary mode hides project long_description but keeps the customer name', () => {
+      const store = emptyStore()
+      store.projects.push(makeProject({
+        id: 'p1',
+        customer: { en: 'AcmeCo' },
+        long_description: { en: 'DETAIL_TEXT_THAT_SHOULD_NOT_APPEAR' },
+      }))
+      const sections = buildViewSections().map((s) =>
+        s.key === 'projects' ? { ...s, detail: 'summary' as const } : s
+      )
+      const html = buildViewHtml(store, makeView({ sections }), 'en')
+      expect(html).toContain('AcmeCo')
+      expect(html).not.toContain('DETAIL_TEXT_THAT_SHOULD_NOT_APPEAR')
+      // Summary items use the .ve-item-line class.
+      expect(html).toContain('ve-item-line')
+    })
+
+    it('off mode entirely omits the section heading and items', () => {
+      const store = emptyStore()
+      store.work_experiences.push(makeWork({ employer: { en: 'UNIQUE_EMPLOYER' } }))
+      const sections = buildViewSections().map((s) =>
+        s.key === 'work_experiences' ? { ...s, detail: 'off' as const } : s
+      )
+      const html = buildViewHtml(store, makeView({ sections }), 'en')
+      expect(html).not.toContain('UNIQUE_EMPLOYER')
+      expect(html).not.toContain('ve-sec-work_experiences')
+    })
+
+    it('full mode preserves descriptions', () => {
+      const store = emptyStore()
+      store.projects.push(makeProject({
+        customer: { en: 'AcmeCo' },
+        long_description: { en: 'FULL_DESCRIPTION_TEXT' },
+      }))
+      const html = buildViewHtml(store, makeView({ sections: buildViewSections() }), 'en')
+      expect(html).toContain('FULL_DESCRIPTION_TEXT')
+    })
+  })
+
+  // ─── Styling ────────────────────────────────────────────────────────────
+
+  describe('view styling', () => {
+    it('injects the accent color into the document CSS', () => {
+      const store = emptyStore()
+      const view = makeView({
+        sections: buildViewSections(),
+        style: {
+          density: 'normal', body_size: 'normal', heading_font: 'condensed',
+          accent_color: '#FF00AA', page_margin: 'normal', tag_style: 'chips',
+        },
+      })
+      const html = buildViewHtml(store, view, 'en')
+      // Case-insensitive — derived tokens uppercase the hex.
+      expect(html.toLowerCase()).toContain('#ff00aa')
+    })
+
+    it('changes the body font size based on body_size', () => {
+      const store = emptyStore()
+      const view = makeView({
+        sections: buildViewSections(),
+        style: {
+          density: 'normal', body_size: 'small', heading_font: 'condensed',
+          accent_color: '#002E6E', page_margin: 'normal', tag_style: 'chips',
+        },
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).toMatch(/font-size:\s*9pt/)
+    })
+
+    it('renders skill tags as an inline list when tag_style=inline', () => {
+      const store = emptyStore()
+      store.projects.push(makeProject({
+        customer: { en: 'TagTest' },
+        skills: [
+          { id: 's1', skill_id: '', name: { en: 'TypeScript' }, duration_in_years: 0, offset_in_years: 0, total_duration_in_years: 0, sort_order: 0 },
+          { id: 's2', skill_id: '', name: { en: 'React' }, duration_in_years: 0, offset_in_years: 0, total_duration_in_years: 0, sort_order: 1 },
+        ],
+      }))
+      const view = makeView({
+        sections: buildViewSections(),
+        style: {
+          density: 'normal', body_size: 'normal', heading_font: 'condensed',
+          accent_color: '#002E6E', page_margin: 'normal', tag_style: 'inline',
+        },
+      })
+      const html = buildViewHtml(store, view, 'en')
+      // Inline list path produces .ve-tags-inline rather than chip spans.
+      expect(html).toContain('ve-tags-inline')
+      expect(html).not.toMatch(/<span class="ve-tag">TypeScript<\/span>/)
+    })
+
+    it('honours per-section hide_heading override', () => {
+      const store = emptyStore()
+      store.projects.push(makeProject({ customer: { en: 'NoHeading' } }))
+      const sections = buildViewSections().map((s) =>
+        s.key === 'projects' ? { ...s, style: { hide_heading: true } } : s
+      )
+      const html = buildViewHtml(store, makeView({ sections }), 'en')
+      // Section content is still there.
+      expect(html).toContain('NoHeading')
+      // But no <h2>Projects</h2> heading for that section.
+      expect(html).not.toMatch(/<h2>\s*Projects\s*<\/h2>/)
+    })
+
+    it('honours per-section hide_dates override', () => {
+      const store = emptyStore()
+      store.projects.push(makeProject({
+        customer: { en: 'DateHidden' },
+        start: { year: 2020, month: 1 },
+        end: { year: 2021, month: 6 },
+      }))
+      const sections = buildViewSections().map((s) =>
+        s.key === 'projects' ? { ...s, style: { hide_dates: true } } : s
+      )
+      const html = buildViewHtml(store, makeView({ sections }), 'en')
+      expect(html).toContain('DateHidden')
+      expect(html).not.toContain('Jan 2020')
+      expect(html).not.toContain('Jun 2021')
     })
   })
 })

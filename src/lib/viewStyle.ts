@@ -1,0 +1,179 @@
+/**
+ * Style derivation for Resume Views.
+ *
+ * The editor stores high-level choices (density, body size, accent, etc.) on
+ * a ViewStyle. The HTML and DOCX renderers need concrete values (pt sizes,
+ * twip spacing, hex colors) — this module is the single place that maps the
+ * choices to those concrete values.
+ *
+ * Per-section overrides are resolved here too: `resolveSectionStyle(view,
+ * section)` returns a fully-populated style for that one section. The
+ * renderers only consume resolved styles.
+ *
+ * Pure module — no React, no DOM. Used by both viewFilter (HTML/PDF) and
+ * exporter (DOCX).
+ */
+
+import type {
+  ViewStyle, SectionStyle, Density, BodySize, HeadingFont, PageMargin, TagStyle,
+} from '../types'
+
+// ─── Defaults ───────────────────────────────────────────────────────────────
+
+/**
+ * Cartavio brand defaults — what every view inherits unless the user changed
+ * something. Match the original hardcoded styling so a fresh view looks
+ * identical to the pre-styling-options output.
+ */
+export const DEFAULT_VIEW_STYLE: ViewStyle = {
+  density: 'normal',
+  body_size: 'normal',
+  heading_font: 'condensed',
+  accent_color: '#002E6E',
+  page_margin: 'normal',
+  tag_style: 'chips',
+}
+
+/**
+ * Merge a possibly-undefined ViewStyle with defaults. Used at the boundary
+ * (e.g. loading legacy data, defensive renderers) so the rest of the code
+ * sees a populated style.
+ */
+export function withDefaults(style: Partial<ViewStyle> | undefined): ViewStyle {
+  return { ...DEFAULT_VIEW_STYLE, ...(style ?? {}) }
+}
+
+// ─── Concrete style tokens ──────────────────────────────────────────────────
+
+/**
+ * The values the renderers actually consume. The mapping from the user's
+ * high-level ViewStyle to these tokens lives in `deriveTokens` below.
+ */
+export interface StyleTokens {
+  // Typography (HTML uses pt strings; DOCX uses half-points (number) so we
+  // expose both so each path picks the form it wants).
+  bodyFontSizePt: number          // e.g. 11
+  smallFontSizePt: number         // dates, meta — usually bodyFontSizePt - 1
+  metaFontSizePt: number          // body - 2 (e.g. ve-meta, tag chip)
+  h1Pt: number                    // resume name
+  h2Pt: number                    // section heading
+  h3Pt: number                    // item heading
+  lineHeight: number              // 1.35 .. 1.6
+  // CSS family strings (HTML path)
+  headingFontCss: string
+  bodyFontCss: string
+  // DOCX font names (the docx package expects bare names)
+  headingFontDocx: string
+  bodyFontDocx: string
+  // Spacing
+  /** Vertical gap between top-level items in the section (CSS px, DOCX twips). */
+  itemGapPx: number
+  itemGapTwips: number
+  /** Bottom margin under section headings. */
+  sectionHeadingAfterPx: number
+  sectionHeadingAfterTwips: number
+  /** Page padding (HTML body padding / DOCX margins). DOCX uses twips, HTML uses px. */
+  pagePadCss: string              // e.g. "32px 48px"
+  pageMarginTwips: { top: number; bottom: number; left: number; right: number }
+  // Colors
+  accentHex: string               // 'RRGGBB' (no '#') — DOCX format
+  accentCss: string               // '#RRGGBB' — HTML format
+  // Tag rendering
+  tagStyle: TagStyle
+}
+
+const DENSITY_SCALE: Record<Density, { lineHeight: number; itemGapPx: number; itemGapTwips: number; sectionGapPx: number; sectionGapTwips: number }> = {
+  compact:  { lineHeight: 1.35, itemGapPx:  9, itemGapTwips:  90, sectionGapPx:  6, sectionGapTwips:  80 },
+  normal:   { lineHeight: 1.55, itemGapPx: 14, itemGapTwips: 140, sectionGapPx: 10, sectionGapTwips: 120 },
+  spacious: { lineHeight: 1.75, itemGapPx: 20, itemGapTwips: 200, sectionGapPx: 16, sectionGapTwips: 180 },
+}
+
+const BODY_SCALE: Record<BodySize, { bodyPt: number; h1Pt: number; h2Pt: number; h3Pt: number }> = {
+  small:  { bodyPt:  9, h1Pt: 24, h2Pt: 13, h3Pt: 10 },
+  normal: { bodyPt: 11, h1Pt: 30, h2Pt: 15, h3Pt: 11 },
+  large:  { bodyPt: 12, h1Pt: 34, h2Pt: 17, h3Pt: 12 },
+}
+
+const HEADING_FONT_MAP: Record<HeadingFont, { css: string; docx: string }> = {
+  condensed: { css: `'Open Sans Condensed', sans-serif`, docx: 'Open Sans Condensed' },
+  sans:      { css: `'Ubuntu', sans-serif`, docx: 'Ubuntu' },
+  serif:     { css: `Georgia, 'Times New Roman', serif`, docx: 'Georgia' },
+}
+
+const PAGE_MARGIN_MAP: Record<PageMargin, {
+  cssPadding: string
+  // twips for DOCX (1 inch = 1440 twips)
+  marginTwips: { top: number; bottom: number; left: number; right: number }
+}> = {
+  tight:    { cssPadding: '20px 36px', marginTwips: { top:  720, bottom:  720, left:  864, right:  864 } },  // 0.5", 0.6"
+  normal:   { cssPadding: '32px 48px', marginTwips: { top: 1080, bottom: 1080, left: 1224, right: 1224 } },  // 0.75", 0.85"
+  generous: { cssPadding: '48px 72px', marginTwips: { top: 1440, bottom: 1440, left: 1584, right: 1584 } },  // 1", 1.1"
+}
+
+const BODY_FONT_CSS = `Ubuntu, sans-serif`
+const BODY_FONT_DOCX = 'Ubuntu'
+
+/**
+ * Resolve a ViewStyle (or section override merged with view) to the concrete
+ * tokens that renderers consume. Pure — same input gives the same tokens.
+ */
+export function deriveTokens(style: ViewStyle): StyleTokens {
+  const density = DENSITY_SCALE[style.density]
+  const sizes = BODY_SCALE[style.body_size]
+  const headingFont = HEADING_FONT_MAP[style.heading_font]
+  const pageMargin = PAGE_MARGIN_MAP[style.page_margin]
+  const accentHex = style.accent_color.replace(/^#/, '').toUpperCase()
+  return {
+    bodyFontSizePt: sizes.bodyPt,
+    smallFontSizePt: Math.max(7, sizes.bodyPt - 1),
+    metaFontSizePt: Math.max(7, sizes.bodyPt - 2),
+    h1Pt: sizes.h1Pt,
+    h2Pt: sizes.h2Pt,
+    h3Pt: sizes.h3Pt,
+    lineHeight: density.lineHeight,
+    headingFontCss: headingFont.css,
+    bodyFontCss: BODY_FONT_CSS,
+    headingFontDocx: headingFont.docx,
+    bodyFontDocx: BODY_FONT_DOCX,
+    itemGapPx: density.itemGapPx,
+    itemGapTwips: density.itemGapTwips,
+    sectionHeadingAfterPx: density.sectionGapPx,
+    sectionHeadingAfterTwips: density.sectionGapTwips,
+    pagePadCss: pageMargin.cssPadding,
+    pageMarginTwips: pageMargin.marginTwips,
+    accentHex,
+    accentCss: `#${accentHex}`,
+    tagStyle: style.tag_style,
+  }
+}
+
+/**
+ * Resolve a per-section style by merging the section override into the view
+ * default. Result is a fully populated ViewStyle plus the section-only flags
+ * (hide_heading, hide_dates, item_divider).
+ */
+export interface ResolvedSectionStyle extends ViewStyle {
+  hide_heading: boolean
+  hide_dates: boolean
+  item_divider: boolean | null   // null = use detail-mode default
+}
+
+export function resolveSectionStyle(
+  view: ViewStyle,
+  section: SectionStyle | undefined,
+): ResolvedSectionStyle {
+  const merged: ViewStyle = {
+    density: section?.density ?? view.density,
+    body_size: view.body_size,
+    heading_font: view.heading_font,
+    accent_color: view.accent_color,
+    page_margin: view.page_margin,
+    tag_style: section?.tag_style ?? view.tag_style,
+  }
+  return {
+    ...merged,
+    hide_heading: section?.hide_heading ?? false,
+    hide_dates: section?.hide_dates ?? false,
+    item_divider: section?.item_divider ?? null,
+  }
+}

@@ -285,10 +285,67 @@ export interface Reference {
   internal_notes: string | null
 }
 
+/**
+ * How much of a section's content the view renders.
+ *  - 'off'     — omit the section entirely (sidebar shows it but greyed)
+ *  - 'summary' — identifiers + dates only, one line per item, no descriptions
+ *  - 'full'    — every field that section's renderer knows about
+ */
+export type SectionDetail = 'off' | 'summary' | 'full'
+
+/** Visual density preset that scales line-height and inter-item spacing. */
+export type Density = 'compact' | 'normal' | 'spacious'
+
+/** Body text size preset — drives both HTML pt sizes and DOCX half-points. */
+export type BodySize = 'small' | 'normal' | 'large'
+
+/**
+ * Heading typeface family. 'condensed' is the Cartavio default (Open Sans
+ * Condensed). 'sans' and 'serif' are fallback choices for variation across
+ * views without a full template system.
+ */
+export type HeadingFont = 'condensed' | 'sans' | 'serif'
+
+/** Page padding preset. */
+export type PageMargin = 'tight' | 'normal' | 'generous'
+
+/** Skill / tag rendering: chip pills vs. inline comma-separated list. */
+export type TagStyle = 'chips' | 'inline'
+
+/** View-wide styling defaults — applied unless a section overrides. */
+export interface ViewStyle {
+  density: Density
+  body_size: BodySize
+  heading_font: HeadingFont
+  /** CSS hex color (with leading '#') for accent — defaults to Cartavio navy. */
+  accent_color: string
+  page_margin: PageMargin
+  tag_style: TagStyle
+}
+
+/**
+ * Per-section style overrides. All optional — anything left undefined falls
+ * back to the parent ViewStyle. Keep this set small and high-value; the
+ * editor needs to expose every field.
+ */
+export interface SectionStyle {
+  density?: Density
+  /** Suppress the section heading entirely (renders items only). */
+  hide_heading?: boolean
+  /** Hide dates on items in this section. */
+  hide_dates?: boolean
+  /** Override the global tag chip / inline choice for projects + tech cats. */
+  tag_style?: TagStyle
+  /** Draw a hairline divider between items in this section (default: yes for full, no for summary). */
+  item_divider?: boolean
+}
+
 export interface ViewSection {
   key: string
-  enabled: boolean
+  detail: SectionDetail
   sort_order: number
+  /** Optional per-section styling override. Sparse — only set fields override the view default. */
+  style?: SectionStyle
 }
 
 export interface ResumeView {
@@ -301,6 +358,8 @@ export interface ResumeView {
   starred_only: boolean
   page_limit: number | null
   template_id: string | null
+  /** View-wide styling. Required on new views — older builds may not set it; consumers must tolerate undefined and use DEFAULT_VIEW_STYLE. */
+  style: ViewStyle
   last_exported_at: string | null
   created_at: string
   updated_at: string

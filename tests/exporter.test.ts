@@ -175,4 +175,67 @@ describe('exportDocx()', () => {
     await exportDocx(store, withIntro, 'en')
     expect(lastBlob!.size).toBeGreaterThan(baseline)
   })
+
+  // ─── Detail levels ────────────────────────────────────────────────────────
+
+  it('summary detail produces a smaller doc than full detail for the same content', async () => {
+    const store = emptyStore()
+    // Several projects with long descriptions — should compress to one line each.
+    for (let i = 0; i < 5; i++) {
+      store.projects.push(makeProject({
+        customer: { en: `Customer ${i}` },
+        long_description: { en: 'A long descriptive paragraph that summary mode is meant to skip entirely. '.repeat(8) },
+      }))
+    }
+    const sectionsFull = buildViewSections()
+    const sectionsSummary = sectionsFull.map((s) =>
+      s.key === 'projects' ? { ...s, detail: 'summary' as const } : s
+    )
+    await exportDocx(store, makeView({ sections: sectionsFull }), 'en')
+    const fullSize = lastBlob!.size
+    await exportDocx(store, makeView({ sections: sectionsSummary }), 'en')
+    const summarySize = lastBlob!.size
+    expect(summarySize).toBeLessThan(fullSize)
+  })
+
+  it('off detail produces a smaller doc than full when the section has content', async () => {
+    const store = emptyStore()
+    store.work_experiences.push(makeWork({ employer: { en: 'BigCo' }, long_description: { en: 'lots of detail here repeated ' .repeat(20) } }))
+    const sectionsFull = buildViewSections()
+    const sectionsOff = sectionsFull.map((s) =>
+      s.key === 'work_experiences' ? { ...s, detail: 'off' as const } : s
+    )
+    await exportDocx(store, makeView({ sections: sectionsFull }), 'en')
+    const fullSize = lastBlob!.size
+    await exportDocx(store, makeView({ sections: sectionsOff }), 'en')
+    const offSize = lastBlob!.size
+    expect(offSize).toBeLessThan(fullSize)
+  })
+
+  // ─── Styling ──────────────────────────────────────────────────────────────
+
+  it('changes output when view.style.body_size changes', async () => {
+    const store = emptyStore()
+    store.projects.push(makeProject({ long_description: { en: 'Some text content here.' } }))
+    const small = makeView({
+      sections: buildViewSections(),
+      style: {
+        density: 'normal', body_size: 'small', heading_font: 'condensed',
+        accent_color: '#002E6E', page_margin: 'normal', tag_style: 'chips',
+      },
+    })
+    const large = makeView({
+      sections: buildViewSections(),
+      style: {
+        density: 'normal', body_size: 'large', heading_font: 'condensed',
+        accent_color: '#002E6E', page_margin: 'normal', tag_style: 'chips',
+      },
+    })
+    await exportDocx(store, small, 'en')
+    const smallBytes = new Uint8Array(await lastBlob!.arrayBuffer())
+    await exportDocx(store, large, 'en')
+    const largeBytes = new Uint8Array(await lastBlob!.arrayBuffer())
+    // Different font sizes serialise to different XML payloads — sizes differ.
+    expect(smallBytes.length).not.toBe(largeBytes.length)
+  })
 })
