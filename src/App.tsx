@@ -17,6 +17,7 @@ import {
 } from './components/editor/SimpleEditors'
 import { SkillsEditor, RolesEditor, ReferencesEditor, TechCategoriesEditor } from './components/editor/RegistryEditors'
 import { ResumeViewsEditor } from './components/editor/ResumeViewsEditor'
+import { ConflictModal } from './components/ConflictModal'
 import { useRoute, navigate, Link } from './lib/router'
 import { dropLegacyCache } from './lib/localCache'
 import { api, setStoredToken, UnauthorizedError, clearStoredToken } from './lib/api'
@@ -68,7 +69,13 @@ export default function App() {
 function EditorRoute({ resumeId, onUnauthorized }: { resumeId: string; onUnauthorized: () => void }) {
   const activeSection = useStore((s) => s.activeSection)
   const hasData = useStore((s) => s.hasData)
-  const { loadState, saveState, cacheSavedAt, retry } = useResumePersistence(resumeId)
+  const data = useStore((s) => s.data)
+  const { loadState, saveState, cacheSavedAt, conflict, resolveConflict, retry } = useResumePersistence(resumeId)
+
+  // The conflict modal can be dismissed (keep editing); the SaveStatus badge
+  // re-opens it. A fresh conflict re-opens automatically.
+  const [conflictDismissed, setConflictDismissed] = useState(false)
+  useEffect(() => { if (conflict) setConflictDismissed(false) }, [conflict])
 
   // Bubble up auth state — the parent shows the modal.
   useEffect(() => {
@@ -116,7 +123,17 @@ function EditorRoute({ resumeId, onUnauthorized }: { resumeId: string; onUnautho
           cacheSavedAt={cacheSavedAt}
           onRetry={retry}
           onUnauthorized={onUnauthorized}
+          onResolveConflict={() => setConflictDismissed(false)}
         />
+
+        {conflict && !conflictDismissed && (
+          <ConflictModal
+            mine={data}
+            theirs={conflict.data}
+            onResolve={resolveConflict}
+            onClose={() => setConflictDismissed(true)}
+          />
+        )}
 
         <div className="app-content">
           {/* Reset boundary on section change so a crashed view never traps the user. */}

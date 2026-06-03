@@ -353,11 +353,14 @@ than calling `set()` directly. Return `null` from the updater for a no-op
 ### Architecture
 - **Source of truth**: SQLite via the Express server (`server/db.ts`).
   Two tables: `resumes` (one row per CV — id, name, data, primary_locale,
-  secondary_locale, saved_at, created_at) and `resume_snapshots` (FK
-  `resume_id` with `ON DELETE CASCADE`, indexed by `(resume_id, id DESC)`).
-- **Cache**: localStorage (`lib/localCache.ts`), keyed
-  `resumestudio:store-cache:v1:<resume_id>` — one slot per resume so the
-  fallback doesn't blur boundaries when the user switches.
+  secondary_locale, saved_at, created_at, **version**) and `resume_snapshots`
+  (FK `resume_id` with `ON DELETE CASCADE`, indexed by `(resume_id, id DESC)`).
+  `version` is an optimistic-concurrency token — see *Offline editing* below.
+- **Outbound queue / cache**: localStorage (`lib/localCache.ts`), keyed
+  `resumestudio:store-cache:v1:<resume_id>` — one `PendingRecord` per resume
+  (`{data, locales, base_version, dirty, dirty_since, saved_at}`). A dirty
+  record is an unsynced edit awaiting a flush; it's both the offline fallback
+  and the reconnect outbox.
 - **In-memory**: the Zustand store holds one resume at a time;
   `currentResumeId` tracks which one.
 
@@ -366,32 +369,55 @@ than calling `set()` directly. Return `null` from the updater for a no-op
 |---|---|---|
 | `GET` | `/api/resumes` | Metadata list, newest `saved_at` first. Returns `{resumes: []}` (never 404) — empty list is the "fresh install" signal. |
 | `POST` | `/api/resumes` | Body `{name, data?, primary_locale?, secondary_locale?}` → 201 with `{resume: ResumeMeta}`. |
-| `GET` | `/api/resumes/:id` | `{data, meta}` or 404. |
-| `PUT` | `/api/resumes/:id` | Body `{data, primary_locale?, secondary_locale?}` — locales are optional but **must come in pairs** (400 if only one). 404 if id unknown. |
+| `GET` | `/api/resumes/:id` | `{data, meta}` (meta incl. `version`) or 404. Sets `ETag: "<version>"`. |
+| `PUT` | `/api/resumes/:id` | Body `{data, primary_locale?, secondary_locale?, base_version?}` — locales optional but **must come in pairs** (400 if only one); `base_version` optional (non-neg int). 404 if id unknown; **409** `{error, current:{data,meta}}` if `base_version` is stale; else `{ok, saved_at, version}` + ETag. |
 | `PATCH` | `/api/resumes/:id` | Rename only (`{name}`) — avoids re-sending the CV blob. |
 | `DELETE` | `/api/resumes/:id` | Hard delete; snapshots cascade. 404 if already gone. |
 | `GET` | `/api/resumes/:id/snapshots` | Metadata list (newest first). 404 if resume unknown. |
 | `GET` | `/api/resumes/:id/snapshots/:sid` | One snapshot's full data. |
 
 ### Boot sequence — per active resume (`useResumePersistence(resumeId)`)
-1. `api.loadResume(id)` — try the server. On hit, load it and seed
-   primary/secondary locale from the row.
-2. On 404 with server reachable, set `loadState='not-found'` — the editor
-   redirects to `/`. **No cache fallback** for unknown ids; that would
-   resurrect ghost data.
-3. On server unreachable, restore from `loadCache(id)`. If a cache exists,
-   `saveState='offline'` and the user keeps editing.
-4. On 401, set `loadState='auth'`; App shows the modal.
+1. `api.loadResume(id)` — try the server. On hit, seed the base `version` +
+   locales.
+2. If a **dirty `PendingRecord`** also exists, trust *it* over the server copy:
+   load the local data and flush it with its stored `base_version` (a clean
+   push syncs; a stale base raises the non-blocking conflict). Otherwise load
+   the server copy and drop any clean local record.
+3. On 404 with server reachable, set `loadState='not-found'` — the editor
+   redirects to `/`. **No cache fallback** for unknown ids.
+4. On server unreachable, restore from `loadPending(id)` (+ its `base_version`),
+   `saveState='offline'`, and kick a connectivity recheck.
+5. On 401, set `loadState='auth'`; App shows the modal.
 
 ### Save sequence — per mutation (1s debounce)
-1. Cache write debounced 250 ms (cheap, per-id) via `saveCache(id, data)`.
+1. Queue write debounced 250 ms via `savePending(id, {…, dirty:true})` — a
+   durable copy with the current `base_version`.
 2. Server `PUT /api/resumes/:id` debounced 1 s, body carries `{data,
-   primary_locale, secondary_locale}` together (decision 10 in
-   `plans/multi-resume.md`). Locale-only changes ride along on the same
-   PUT because the locale setters in the store go through `mutate()`.
+   primary_locale, secondary_locale, base_version}` together. Locale-only
+   changes ride along because the locale setters go through `mutate()`.
 3. AbortController so a newer mutation supersedes an in-flight save.
-4. On 404 mid-save (the resume was deleted server-side), redirect to `/`.
-5. On 401, surface the auth modal.
+4. On success → `clearPending(id)` (synced), advance the base `version`.
+5. On 404 mid-save → redirect to `/`. On 401 → auth modal. On **409** → keep
+   the local edits, pause auto-save, raise the `conflict` state. On a network
+   failure (not a 5xx) → `saveState='offline'`, the edit stays queued.
+
+### Offline editing & conflict safety
+- **Connectivity** (`lib/connectivity.ts`): `navigator.onLine` + `online`/
+  `offline` events, but recovery is confirmed by polling `api.health()` (the
+  NIC being up ≠ the server answering). `subscribeOnline()` drives the drain.
+- **Reconnect drain**: on a real offline→online transition the hook re-flushes
+  the active resume's dirty record. Other dirty resumes drain on next open
+  (decision: non-blocking; no background fan-out).
+- **Conflict** = a 409 from a stale `base_version`. The hook holds the server's
+  `current` state as `conflict`; `ConflictModal` shows a `lib/diffResume.ts`
+  summary (section add/remove/change counts + profile field diffs) and offers
+  **keep mine** (re-PUT at the server's version) or **discard mine** (take
+  server). Non-blocking: the editor stays usable, the `conflict` SaveStatus
+  badge re-opens the modal.
+- **Guards / security**: a `beforeunload` guard fires while `listDirty()` is
+  non-empty; the logout button confirms before wiping unsynced work; a
+  mid-session 401 clears the plaintext caches **only when nothing is unsynced**
+  (closes security-review residual §4 without risking queued edits).
 
 ### Backup format
 - `lib/backup.ts` defines `BackupV1` and `migrateBackup()`. The detector
@@ -403,9 +429,10 @@ than calling `set()` directly. Return `null` from the updater for a no-op
   rather than replacing one. The in-editor "load file" affordance is gone.
 
 ### Snapshot history (server-side, per resume)
-- `saveResume(id, data, locales?)` in `server/db.ts` runs in a transaction:
-  it updates the `resumes` row **and** appends to `resume_snapshots` scoped
-  by `resume_id`.
+- `saveResume(id, data, locales?, expectedVersion?)` in `server/db.ts` runs in
+  a transaction: it bumps `version`, updates the `resumes` row **and** appends
+  to `resume_snapshots` scoped by `resume_id`. A stale `expectedVersion`
+  short-circuits to a `conflict` result (nothing written, no snapshot).
 - Identical-to-last-snapshot saves are deduped per resume. Pruning keeps the
   newest **50** per resume — not global.
 - The **History** modal (`SnapshotHistory.tsx`, takes `resumeId`) restores
@@ -576,9 +603,11 @@ Ordered loosely by recommended priority. Each is a self-contained chunk.
 
 > **Recently shipped** (don't re-propose): live preview pane in the Resume View
 > editor, field-level translation assist (Copy + LibreTranslate-proxied Draft),
-> server-side snapshot history, and **multi-resume support** (picker route +
-> per-id routing + per-resume snapshots/locales + delete-with-confirm). See §1
-> and §8.
+> server-side snapshot history, **multi-resume support** (picker route +
+> per-id routing + per-resume snapshots/locales + delete-with-confirm), and
+> **offline editing + conflict safety** (durable per-resume queue, reconnect
+> drain, `version`-based optimistic concurrency with a keep/discard+diff
+> conflict modal). See §1 and §8.
 
 ### 12.1 Export templates
 `ResumeView.template_id` is already on the type (see `types/index.ts`) and called out as "reserved" in `lib/exporter.ts`, but nothing reads it. Two or three named templates (compact technical / formal management / minimal one-pager) would make views visually differentiated — currently a Board CV and a Technical CV produce the same-looking document. Touches both `buildViewHtml` (HTML/CSS path) and `exporter.ts` (DOCX path); each template is a styling delta, not a fork of the render logic. Pairs naturally with the (now shipped) live preview pane — that's what makes template choice tunable without an export round-trip.
@@ -592,15 +621,22 @@ Three switches enumerate the 13 content sections: `viewFilter.getItemTitle/getIt
 ### 12.4 Rename UI for resumes
 The API exposes `PATCH /api/resumes/:id` (rename), but there's no UI for it yet. Add a small "rename" affordance — either an inline edit on the picker card, or a "Rename this resume…" option in the header switcher dropdown. Trivial work; only deferred because the default auto-name ("My resume", "Astrid Solberg — CV") covers most cases.
 
-### 12.5 First-class offline editing (sync queue)
-Today the offline story is a best-effort safety net: `lib/localCache.ts` keeps a per-id plaintext copy in `localStorage`, restored only when the server is unreachable, and overwritten by the server on the next successful load (last-write-wins, no merge). It works, but two rough edges remain:
+### 12.5 Offline-load (PWA / service worker) — *deferred Tier 3*
+Offline *editing* shipped (durable queue + reconnect drain + conflict safety —
+see §8). What's still not possible is *loading* the app with no network: there's
+no service worker caching the shell + assets, so a cold start offline fails. A
+PWA layer (SW caching index.html/JS/CSS/fonts, an update-prompt for version
+skew, offline fallback for the lazy exporter chunk) would close that. Multi-day;
+only worth it if "open and edit with zero connectivity" becomes a real need.
+See `plans/offline-editing.md` (Tier 3, explicitly out of scope for the shipped
+work) for the analysis.
 
-1. **Security trade-off (see security-review skill §4).** On a transient 401 (token rotated/expired mid-session) we clear the *token* but deliberately **keep** the cache, because nuking it could discard edits the server hasn't seen yet. So a resume's plaintext can linger in `localStorage` until the next successful sync. The explicit "Clear saved token" logout *does* wipe all caches (`clearAllCaches()`), but the auto-path can't safely do so without risking unsynced work.
-2. **No conflict handling.** Two tabs (or a laptop that was offline) can silently clobber each other on reconnect.
-
-A proper offline mode would close both: a **per-resume outbound mutation queue** (dirty flag + queued PUTs, drained on reconnect), a **conflict signal** (compare `saved_at`/an etag on save → surface "this resume changed elsewhere" instead of overwriting), and an explicit **"you have N unsynced changes" indicator**. Once edits are provably durable in the queue, the transient-401 path can safely call `clearAllCaches()` too — closing the security residual without the data-loss risk. Scope: touches `useResumePersistence`, `localCache` (queue, not just a snapshot), `api.ts` (etag/If-Match), and the server `PUT` (optimistic-concurrency check). Multi-day; only worth it if offline/multi-device editing becomes a real use case — for a single consultant on one machine, the current net is usually enough.
-
----
+### 12.6 Cross-tab coordination
+Two tabs of the same browser editing one resume share a single `localStorage`
+pending slot and can interleave writes. The server `version` check prevents
+*server* clobber (the second tab's flush 409s into the conflict modal), but a
+`BroadcastChannel` lock would stop the local thrash and let tabs hand off
+cleanly. Low priority — the conflict path already makes it safe, just not tidy.
 
 ## 13. Working with this project in Claude Code
 

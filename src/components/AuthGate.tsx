@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { UnauthorizedError, getStoredToken, clearStoredToken } from '../lib/api'
-import { clearAllCaches } from '../lib/localCache'
+import { clearAllCaches, listDirty } from '../lib/localCache'
 
 const YEAR = new Date().getFullYear()
 
@@ -69,8 +69,18 @@ export function AuthGate({ onSubmit }: AuthGateProps) {
             onClick={() => {
               // Deliberate logout: drop the token AND the plaintext resume
               // caches in localStorage. Closes the shared-machine data-leak
-              // residual (security skill §4) without touching the transient-
-              // 401 path, so unsynced offline work isn't auto-discarded.
+              // residual (security skill §4). Guard first — clearing the caches
+              // also discards any unsynced offline edits, so warn if the queue
+              // is non-empty and let the user back out to export a backup.
+              const dirty = listDirty().length
+              if (
+                dirty > 0 &&
+                !window.confirm(
+                  `You have ${dirty} resume(s) with unsynced changes. ` +
+                  `Clearing your token also deletes the local copies — ` +
+                  `export a backup first if unsure. Clear anyway?`,
+                )
+              ) return
               clearStoredToken()
               clearAllCaches()
               setTokenInput('')

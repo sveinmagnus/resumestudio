@@ -14,6 +14,8 @@ interface Props {
   cacheSavedAt?: string | null
   /** Retry the pending save (only shown when state === 'error'). */
   onRetry?: () => void
+  /** Open the conflict resolver (only shown when state === 'conflict'). */
+  onResolve?: () => void
 }
 
 interface Variant {
@@ -37,7 +39,7 @@ const VARIANTS: Record<Exclude<SaveState, 'idle'>, Variant> = {
              tooltip: (n) => `This resume was changed elsewhere. Your local edits are kept. ${n}` },
 }
 
-export function SaveStatus({ state, cacheSavedAt, onRetry }: Props) {
+export function SaveStatus({ state, cacheSavedAt, onRetry, onResolve }: Props) {
   if (state === 'idle') return null
   const v = VARIANTS[state]
   const Icon = v.icon
@@ -52,6 +54,11 @@ export function SaveStatus({ state, cacheSavedAt, onRetry }: Props) {
       {state === 'error' && onRetry && (
         <button className="ss-retry" onClick={onRetry} title="Retry save">
           <RefreshCw size={12} /> Retry
+        </button>
+      )}
+      {state === 'conflict' && onResolve && (
+        <button className="ss-retry" onClick={onResolve} title="Resolve conflict">
+          Resolve
         </button>
       )}
       <Style />

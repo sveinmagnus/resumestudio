@@ -17,6 +17,8 @@ interface AppHeaderProps {
   cacheSavedAt: string | null
   onRetry: () => void
   onUnauthorized: () => void
+  /** Re-open the conflict resolver from the SaveStatus "Resolve" affordance. */
+  onResolveConflict?: () => void
 }
 
 /**
@@ -26,7 +28,7 @@ interface AppHeaderProps {
  * "create a new resume").
  */
 export function AppHeader({
-  resumeId, section, saveState, cacheSavedAt, onRetry, onUnauthorized,
+  resumeId, section, saveState, cacheSavedAt, onRetry, onUnauthorized, onResolveConflict,
 }: AppHeaderProps) {
   const { undo, redo, canUndo, canRedo } = useUndoRedo()
   const [showHistory, setShowHistory] = useState(false)
@@ -51,7 +53,7 @@ export function AppHeader({
       </div>
 
       <div className="ah-controls">
-        <SaveStatus state={saveState} cacheSavedAt={cacheSavedAt} onRetry={onRetry} />
+        <SaveStatus state={saveState} cacheSavedAt={cacheSavedAt} onRetry={onRetry} onResolve={onResolveConflict} />
         <div className="ah-history">
           <button
             className="ah-hist-btn"

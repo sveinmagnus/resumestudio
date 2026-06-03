@@ -27,7 +27,7 @@ import {
 } from '../lib/api'
 import type { ResumeStore } from '../types'
 import { type SaveState } from '../components/layout/SaveStatus'
-import { loadPending, savePending, clearPending } from '../lib/localCache'
+import { loadPending, savePending, clearPending, listDirty, clearAllCaches } from '../lib/localCache'
 import { subscribeOnline, recheckConnectivity, type Connectivity } from '../lib/connectivity'
 import { navigate } from '../lib/router'
 
@@ -50,6 +50,13 @@ export interface ResumePersistence {
    * paused and the local edits are kept (not discarded).
    */
   conflict: ConflictState | null
+  /**
+   * Resolve an active conflict. `keep` force-overwrites the server with the
+   * local edits (re-PUT at the server's current version); `discard` drops the
+   * local edits and takes the server copy. Both clear the conflict and resume
+   * auto-save.
+   */
+  resolveConflict: (choice: 'keep' | 'discard') => void
   /** Re-run the pending server save (Retry button in SaveStatus). */
   retry: () => void
   /**
@@ -263,6 +270,47 @@ export function useResumePersistence(resumeId: string): ResumePersistence {
     return unsub
   }, [resumeId, flushToServer])
 
+  // ── Unsaved-work guard: warn before a tab close while edits are unsynced.
+  //    Reads listDirty() at event time so it reflects the live queue.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (listDirty().length > 0) { e.preventDefault(); e.returnValue = '' }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [])
+
+  // ── Security residual §4 close: on an auth gate (token expired/rotated
+  //    mid-session), wipe the plaintext local caches IF nothing is unsynced.
+  //    With unsynced edits we keep them (data safety wins over the residual);
+  //    the durable queue means they're recoverable once the user re-auths.
+  useEffect(() => {
+    if (loadState === 'auth' && listDirty().length === 0) clearAllCaches()
+  }, [loadState])
+
+  const resolveConflict = useCallback((choice: 'keep' | 'discard') => {
+    if (!conflict) return
+    conflictPaused.current = false
+    if (choice === 'discard') {
+      // Take the server copy; drop the local edits and the queued record.
+      loadStore(conflict.data, {
+        primary: conflict.meta.primary_locale,
+        secondary: conflict.meta.secondary_locale,
+      })
+      baseVersion.current = conflict.meta.version
+      lastSavedMutation.current = 0 // loadStore reset mutationCount → no spurious save
+      clearPending(resumeId)
+      setConflict(null)
+      setSaveState('idle')
+    } else {
+      // Keep mine: re-PUT the local edits at the server's now-current version
+      // (a clean overwrite). The store still holds the local data untouched.
+      baseVersion.current = conflict.meta.version
+      setConflict(null)
+      void flushToServer()
+    }
+  }, [conflict, loadStore, resumeId, flushToServer])
+
   const submitToken = useCallback(async (token: string) => {
     setStoredToken(token)
     try {
@@ -283,5 +331,5 @@ export function useResumePersistence(resumeId: string): ResumePersistence {
     }
   }, [loadStore, resumeId])
 
-  return { loadState, saveState, cacheSavedAt, conflict, retry: flushToServer, submitToken }
+  return { loadState, saveState, cacheSavedAt, conflict, resolveConflict, retry: flushToServer, submitToken }
 }

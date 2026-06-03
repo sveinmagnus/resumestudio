@@ -9,11 +9,11 @@ import { UnauthorizedError, setStoredToken, getStoredToken } from '../../src/lib
 import { savePending, loadPending } from '../../src/lib/localCache'
 import { emptyStore } from '../fixtures'
 
-const pending = (id: string) =>
-  savePending(id, { data: emptyStore(), locales: { primary: 'en', secondary: null }, base_version: 1, dirty: true })
+const pending = (id: string, dirty = true) =>
+  savePending(id, { data: emptyStore(), locales: { primary: 'en', secondary: null }, base_version: 1, dirty })
 
 describe('<AuthGate>', () => {
-  afterEach(() => { sessionStorage.clear(); localStorage.clear() })
+  afterEach(() => { sessionStorage.clear(); localStorage.clear(); vi.restoreAllMocks() })
   it('disables Connect until a token is entered', () => {
     render(<AuthGate onSubmit={vi.fn()} />)
     expect(screen.getByRole('button', { name: /connect/i })).toBeDisabled()
@@ -45,17 +45,43 @@ describe('<AuthGate>', () => {
 
   // Security skill §4: explicit logout must wipe the local plaintext resume
   // caches, not just the token, so a shared machine doesn't retain the CV.
-  it('"Clear saved token" drops the token AND all local resume caches', async () => {
+  it('"Clear saved token" wipes token + caches with no prompt when nothing is unsynced', async () => {
     setStoredToken('a-token')
-    pending('r1')
-    pending('r2')
-    expect(loadPending('r1')).not.toBeNull()
+    pending('r1', false)
+    pending('r2', false)
+    const confirmSpy = vi.spyOn(window, 'confirm')
+
+    render(<AuthGate onSubmit={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /clear saved token/i }))
+
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(getStoredToken()).toBeNull()
+    expect(loadPending('r1')).toBeNull()
+    expect(loadPending('r2')).toBeNull()
+  })
+
+  it('prompts before wiping when there are unsynced changes, and clears on confirm', async () => {
+    setStoredToken('a-token')
+    pending('r1', true)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     render(<AuthGate onSubmit={vi.fn()} />)
     await userEvent.click(screen.getByRole('button', { name: /clear saved token/i }))
 
     expect(getStoredToken()).toBeNull()
     expect(loadPending('r1')).toBeNull()
-    expect(loadPending('r2')).toBeNull()
+  })
+
+  it('keeps the token AND the caches when the user cancels the unsynced-changes prompt', async () => {
+    setStoredToken('a-token')
+    pending('r1', true)
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    render(<AuthGate onSubmit={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /clear saved token/i }))
+
+    // Nothing discarded — unsynced work is preserved.
+    expect(getStoredToken()).toBe('a-token')
+    expect(loadPending('r1')).not.toBeNull()
   })
 })
