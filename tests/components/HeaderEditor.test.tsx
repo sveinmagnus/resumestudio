@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HeaderEditor } from '../../src/components/editor/HeaderEditor'
 import { useStore } from '../../src/store/useStore'
@@ -13,6 +13,10 @@ function seed() {
   useStore.setState({
     data: { ...emptyStore(), resume: makeResume({ full_name: 'Test Person', title: { en: 'Consultant' } }) },
     hasData: true,
+    // HeaderEditor renders the Identity tab only when activeSection !==
+    // 'key_qualifications' — pin it so the test never depends on the reset
+    // default (which previously left this implicit).
+    activeSection: 'header',
     primaryLocale: 'en',
     secondaryLocale: null,
     expandedItemId: null,
@@ -24,28 +28,34 @@ describe('<HeaderEditor>', () => {
   beforeEach(() => resetStore())
 
   it('edits the full name through a plain TextField', async () => {
+    const user = userEvent.setup()
     seed()
     render(<HeaderEditor />)
     const input = screen.getByDisplayValue('Test Person')
-    await userEvent.clear(input)
-    await userEvent.type(input, 'Astrid Solberg')
-    expect(useStore.getState().data.resume?.full_name).toBe('Astrid Solberg')
+    await user.clear(input)
+    await user.type(input, 'Astrid Solberg')
+    // waitFor: the controlled input commits per keystroke; poll the store so a
+    // scheduling hiccup under load can't flake the read (still asserts the
+    // exact final value).
+    await waitFor(() => expect(useStore.getState().data.resume?.full_name).toBe('Astrid Solberg'))
   })
 
   it('edits the localized title through a DualField', async () => {
+    const user = userEvent.setup()
     seed()
     render(<HeaderEditor />)
     const title = screen.getByDisplayValue('Consultant')
-    await userEvent.type(title, ' Architect')
-    expect(useStore.getState().data.resume?.title.en).toBe('Consultant Architect')
+    await user.type(title, ' Architect')
+    await waitFor(() => expect(useStore.getState().data.resume?.title.en).toBe('Consultant Architect'))
   })
 
   it('edits the email field', async () => {
+    const user = userEvent.setup()
     seed()
     render(<HeaderEditor />)
     const email = screen.getByDisplayValue('test@example.com')
-    await userEvent.clear(email)
-    await userEvent.type(email, 'astrid@cartavio.no')
-    expect(useStore.getState().data.resume?.email).toBe('astrid@cartavio.no')
+    await user.clear(email)
+    await user.type(email, 'astrid@cartavio.no')
+    await waitFor(() => expect(useStore.getState().data.resume?.email).toBe('astrid@cartavio.no'))
   })
 })
