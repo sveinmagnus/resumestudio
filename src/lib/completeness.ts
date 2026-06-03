@@ -8,6 +8,8 @@
 
 import type { ResumeStore, LocalizedString } from '../types'
 import { getItemTitle } from './viewFilter'
+import { richToPlain } from './richText'
+import { SECTIONS } from './sections'
 
 /**
  * Identifies a single tracked field that is empty in the requested locale.
@@ -120,7 +122,9 @@ export function computeCompleteness(
     let present = 0
     for (const f of fields) {
       const v = f.ls[l]
-      if (v && v.trim()) present++
+      // Strip rich-text markup so a value like `<p></p>` counts as empty.
+      // Plain text is unchanged (fast path).
+      if (v && richToPlain(v).trim()) present++
       else missing.push(f.meta)
     }
     result[l] = {
@@ -129,4 +133,103 @@ export function computeCompleteness(
     }
   }
   return result
+}
+
+// ─── Per-section coverage ────────────────────────────────────────────────────
+
+export interface SectionCoverage {
+  /** Section key matching SectionDef.key (e.g. "projects", "educations"). */
+  key: string
+  /** Human-friendly label sourced from SECTIONS. */
+  label: string
+  /** Total items in the section (after disabled filter — disabled items don't count). */
+  total: number
+  /**
+   * Items with at least one populated tracked field in the requested locale.
+   * 0 means the section is *entirely* missing in that language.
+   */
+  populated: number
+}
+
+/**
+ * Return per-section coverage in a given locale for sections that hold
+ * localised content.
+ *
+ * Used by the Overview's "Show sections missing language content" affordance.
+ * The intent is to surface the **structural** picture — does this language
+ * even cover this section? — not the same data the field-level drill-down
+ * already shows. Sections are sorted so the *most-broken* (highest
+ * missing-count) appear first; sections that are completely empty (total=0)
+ * sink to the bottom since "missing in language X" doesn't apply.
+ */
+export function computeSectionCoverage(
+  data: ResumeStore,
+  locale: string,
+): SectionCoverage[] {
+  const out: SectionCoverage[] = []
+  for (const def of SECTIONS) {
+    if (!def.storeKey) continue
+    // Registries (Skill, Role) and the export views section have content
+    // worth measuring too, but the consultant doesn't think of them as
+    // "language content" — skip to match the user mental model.
+    if (def.storeKey === 'skills' || def.storeKey === 'roles' || def.storeKey === 'views') continue
+
+    const rawItems = data[def.storeKey] as unknown[]
+    const items = rawItems.filter(
+      (it) => !(it as { disabled?: boolean }).disabled,
+    )
+
+    let populated = 0
+    for (const item of items) {
+      if (itemHasContentInLocale(def.storeKey, item as Record<string, unknown>, locale)) populated++
+    }
+    out.push({ key: def.key, label: def.label, total: items.length, populated })
+  }
+  // Most-missing first; empty sections last.
+  return out.sort((a, b) => {
+    const ga = a.total - a.populated
+    const gb = b.total - b.populated
+    // Sections with no items at all aren't actionable — push to the bottom.
+    if (a.total === 0 && b.total !== 0) return 1
+    if (b.total === 0 && a.total !== 0) return -1
+    if (gb !== ga) return gb - ga
+    return a.label.localeCompare(b.label)
+  })
+}
+
+/**
+ * Per-section probe: does this item have any user-facing localized content
+ * in the requested locale? Mirrors the "primary content fields" used by
+ * computeCompleteness — same idea, per item instead of in aggregate.
+ *
+ * The check is "any one of the section's key fields has non-empty content"
+ * — a permissive bar, since we're answering "is there *anything* here in
+ * this language" rather than "is this item fully translated".
+ */
+function itemHasContentInLocale(
+  storeKey: string,
+  item: Record<string, unknown>,
+  locale: string,
+): boolean {
+  const has = (field: string): boolean => {
+    const ls = item[field] as LocalizedString | undefined
+    const v = ls?.[locale]
+    return !!(v && richToPlain(v).trim())
+  }
+  switch (storeKey) {
+    case 'key_qualifications':    return has('summary') || has('tag_line') || has('label')
+    case 'projects':              return has('customer') || has('description') || has('long_description')
+    case 'work_experiences':      return has('employer') || has('role_title') || has('long_description')
+    case 'educations':            return has('school') || has('degree') || has('description')
+    case 'courses':               return has('name') || has('program') || has('description')
+    case 'certifications':        return has('name') || has('organiser') || has('description')
+    case 'spoken_languages':      return has('name') || has('level')
+    case 'technology_categories': return has('name')
+    case 'positions':             return has('name') || has('organisation') || has('description')
+    case 'presentations':         return has('title') || has('event') || has('description')
+    case 'publications':          return has('title') || has('publisher') || has('abstract')
+    case 'honor_awards':          return has('name') || has('issuer') || has('description')
+    case 'references':            return has('relationship')
+    default:                      return false
+  }
 }

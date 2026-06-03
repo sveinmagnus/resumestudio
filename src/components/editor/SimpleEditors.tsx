@@ -1,9 +1,11 @@
 import { useStore, newId } from '../../store/useStore'
 import { DualField } from '../ui/DualField'
+import { RichField } from '../ui/RichField'
 import { TextField, DateField, TagField } from '../ui/Fields'
 import { EditorCard, AddButton, FieldRow } from '../ui/EditorCard'
 import { SortableList } from '../ui/SortableList'
 import { resolve, fmtRange, fmtDate } from '../../lib/locales'
+import { richToPlain } from '../../lib/richText'
 import type {
   WorkExperience, Education, Course, Certification, Position,
   Presentation, HonorAward, Publication, SpokenLanguage, KeyQualification,
@@ -28,11 +30,11 @@ export function WorkEditor() {
       {items.map((w) => (
         <EditorCard key={w.id} section="work_experiences" id={w.id}
           title={resolve(w.employer, primaryLocale)} subtitle={resolve(w.role_title, primaryLocale)}
-          meta={fmtRange(w.start, w.end)} preview={resolve(w.long_description, primaryLocale)}
+          meta={fmtRange(w.start, w.end)} preview={richToPlain(resolve(w.long_description, primaryLocale))}
           starred={w.starred} disabled={w.disabled}>
           <DualField label="Employer" value={w.employer} onChange={(v) => updateItem('work_experiences', w.id, { employer: v })} />
           <DualField label="Role / title" value={w.role_title} onChange={(v) => updateItem('work_experiences', w.id, { role_title: v })} />
-          <DualField label="Description" value={w.long_description} onChange={(v) => updateItem('work_experiences', w.id, { long_description: v })} multiline rows={4} />
+          <RichField label="Description" value={w.long_description} onChange={(v) => updateItem('work_experiences', w.id, { long_description: v })} />
           <FieldRow>
             <DateField label="Start" value={w.start} onChange={(v) => updateItem('work_experiences', w.id, { start: v })} />
             <DateField label="End" value={w.end} onChange={(v) => updateItem('work_experiences', w.id, { end: v })} allowOngoing />
@@ -79,11 +81,11 @@ export function EducationEditor() {
       {items.map((e) => (
         <EditorCard key={e.id} section="educations" id={e.id}
           title={resolve(e.school, primaryLocale)} subtitle={resolve(e.degree, primaryLocale)}
-          meta={fmtRange(e.start, e.end)} preview={resolve(e.description, primaryLocale)}
+          meta={fmtRange(e.start, e.end)} preview={richToPlain(resolve(e.description, primaryLocale))}
           starred={e.starred} disabled={e.disabled}>
           <DualField label="School" value={e.school} onChange={(v) => updateItem('educations', e.id, { school: v })} />
           <DualField label="Degree" value={e.degree} onChange={(v) => updateItem('educations', e.id, { degree: v })} />
-          <DualField label="Specialisation / thesis" value={e.description} onChange={(v) => updateItem('educations', e.id, { description: v })} multiline rows={3} />
+          <RichField label="Description" value={e.description} onChange={(v) => updateItem('educations', e.id, { description: v })} />
           <FieldRow>
             <DateField label="Start" value={e.start} onChange={(v) => updateItem('educations', e.id, { start: v })} />
             <DateField label="End" value={e.end} onChange={(v) => updateItem('educations', e.id, { end: v })} allowOngoing />
@@ -119,11 +121,11 @@ export function CoursesEditor() {
       {items.map((c) => (
         <EditorCard key={c.id} section="courses" id={c.id}
           title={resolve(c.name, primaryLocale)} subtitle={resolve(c.program, primaryLocale)}
-          meta={fmtDate(c.completed)} preview={resolve(c.description, primaryLocale)}
+          meta={fmtDate(c.completed)} preview={richToPlain(resolve(c.description, primaryLocale))}
           starred={c.starred} disabled={c.disabled}>
           <DualField label="Course name" value={c.name} onChange={(v) => updateItem('courses', c.id, { name: v })} />
           <DualField label="Provider" value={c.program} onChange={(v) => updateItem('courses', c.id, { program: v })} />
-          <DualField label="Description" value={c.description} onChange={(v) => updateItem('courses', c.id, { description: v })} multiline rows={2} />
+          <RichField label="Description" value={c.description} onChange={(v) => updateItem('courses', c.id, { description: v })} />
           <DateField label="Completed" value={c.completed} onChange={(v) => updateItem('courses', c.id, { completed: v })} />
         </EditorCard>
       ))}
@@ -152,11 +154,11 @@ export function CertificationsEditor() {
       {items.map((c) => (
         <EditorCard key={c.id} section="certifications" id={c.id}
           title={resolve(c.name, primaryLocale)} subtitle={resolve(c.organiser, primaryLocale)}
-          meta={fmtDate(c.issued)} preview={resolve(c.description, primaryLocale)}
+          meta={fmtDate(c.issued)} preview={richToPlain(resolve(c.description, primaryLocale))}
           starred={c.starred} disabled={c.disabled}>
           <DualField label="Certification" value={c.name} onChange={(v) => updateItem('certifications', c.id, { name: v })} />
           <DualField label="Issuing organisation" value={c.organiser} onChange={(v) => updateItem('certifications', c.id, { organiser: v })} />
-          <DualField label="Description" value={c.description} onChange={(v) => updateItem('certifications', c.id, { description: v })} multiline rows={2} />
+          <RichField label="Description" value={c.description} onChange={(v) => updateItem('certifications', c.id, { description: v })} />
           <FieldRow>
             <DateField label="Issued" value={c.issued} onChange={(v) => updateItem('certifications', c.id, { issued: v })} />
             <DateField label="Expires" value={c.expires} onChange={(v) => updateItem('certifications', c.id, { expires: v })} allowOngoing />
@@ -184,15 +186,19 @@ export function PositionsEditor() {
   }
   return (
     <div className="section-pane">
+      <p className="section-intro">
+        Board memberships, advisory roles, volunteer positions, association leadership,
+        committee work, and other engagements outside paid employment.
+      </p>
       <SortableList section="positions" ids={items.map((x) => x.id)}>
       {items.map((p) => (
         <EditorCard key={p.id} section="positions" id={p.id}
           title={resolve(p.name, primaryLocale)} subtitle={resolve(p.organisation, primaryLocale)}
-          meta={fmtRange(p.start, p.end)} preview={resolve(p.description, primaryLocale)}
+          meta={fmtRange(p.start, p.end)} preview={richToPlain(resolve(p.description, primaryLocale))}
           starred={p.starred} disabled={p.disabled}>
           <DualField label="Position / role" value={p.name} onChange={(v) => updateItem('positions', p.id, { name: v })} />
           <DualField label="Organisation" value={p.organisation} onChange={(v) => updateItem('positions', p.id, { organisation: v })} />
-          <DualField label="Description" value={p.description} onChange={(v) => updateItem('positions', p.id, { description: v })} multiline rows={2} />
+          <RichField label="Description" value={p.description} onChange={(v) => updateItem('positions', p.id, { description: v })} />
           <FieldRow>
             <DateField label="Start" value={p.start} onChange={(v) => updateItem('positions', p.id, { start: v })} />
             <DateField label="End" value={p.end} onChange={(v) => updateItem('positions', p.id, { end: v })} allowOngoing />
@@ -200,7 +206,15 @@ export function PositionsEditor() {
         </EditorCard>
       ))}
       </SortableList>
-      <AddButton label="Add position" onClick={add} />
+      <AddButton label="Add role" onClick={add} />
+      <style>{`
+        .section-intro {
+          font-size: 13.5px; color: var(--ink-soft); line-height: 1.55;
+          padding: 12px 14px; margin-bottom: 16px;
+          background: var(--paper-sunken); border-left: 3px solid var(--accent);
+          border-radius: var(--r-sm);
+        }
+      `}</style>
     </div>
   )
 }
@@ -223,11 +237,11 @@ export function PresentationsEditor() {
       {items.map((p) => (
         <EditorCard key={p.id} section="presentations" id={p.id}
           title={resolve(p.title, primaryLocale)} subtitle={resolve(p.event, primaryLocale)}
-          meta={fmtDate(p.date)} preview={resolve(p.description, primaryLocale)}
+          meta={fmtDate(p.date)} preview={richToPlain(resolve(p.description, primaryLocale))}
           starred={p.starred} disabled={p.disabled}>
           <DualField label="Title" value={p.title} onChange={(v) => updateItem('presentations', p.id, { title: v })} />
           <DualField label="Event / venue" value={p.event} onChange={(v) => updateItem('presentations', p.id, { event: v })} />
-          <DualField label="Abstract" value={p.description} onChange={(v) => updateItem('presentations', p.id, { description: v })} multiline rows={3} />
+          <RichField label="Abstract" value={p.description} onChange={(v) => updateItem('presentations', p.id, { description: v })} />
           <FieldRow>
             <DateField label="Date" value={p.date} onChange={(v) => updateItem('presentations', p.id, { date: v })} />
             <TextField label="URL" value={p.url || ''} onChange={(v) => updateItem('presentations', p.id, { url: v })} />
@@ -259,11 +273,11 @@ export function PublicationsEditor() {
       {items.map((p) => (
         <EditorCard key={p.id} section="publications" id={p.id}
           title={resolve(p.title, primaryLocale)} subtitle={resolve(p.publisher, primaryLocale)}
-          meta={fmtDate(p.date)} preview={resolve(p.abstract, primaryLocale)}
+          meta={fmtDate(p.date)} preview={richToPlain(resolve(p.abstract, primaryLocale))}
           starred={p.starred} disabled={p.disabled}>
           <DualField label="Title" value={p.title} onChange={(v) => updateItem('publications', p.id, { title: v })} />
           <DualField label="Publisher" value={p.publisher} onChange={(v) => updateItem('publications', p.id, { publisher: v })} />
-          <DualField label="Abstract" value={p.abstract} onChange={(v) => updateItem('publications', p.id, { abstract: v })} multiline rows={3} />
+          <RichField label="Abstract" value={p.abstract} onChange={(v) => updateItem('publications', p.id, { abstract: v })} />
           <FieldRow>
             <div className="pf-wrap">
               <label className="pf-label">Type</label>
@@ -306,12 +320,12 @@ export function AwardsEditor() {
       {items.map((a) => (
         <EditorCard key={a.id} section="honor_awards" id={a.id}
           title={resolve(a.name, primaryLocale)} subtitle={resolve(a.issuer, primaryLocale)}
-          meta={fmtDate(a.date)} preview={resolve(a.description, primaryLocale)}
+          meta={fmtDate(a.date)} preview={richToPlain(resolve(a.description, primaryLocale))}
           disabled={a.disabled} canStar={false}>
           <DualField label="Award" value={a.name} onChange={(v) => updateItem('honor_awards', a.id, { name: v })} />
           <DualField label="Issuer" value={a.issuer} onChange={(v) => updateItem('honor_awards', a.id, { issuer: v })} />
           <DualField label="For work" value={a.for_work} onChange={(v) => updateItem('honor_awards', a.id, { for_work: v })} />
-          <DualField label="Description" value={a.description} onChange={(v) => updateItem('honor_awards', a.id, { description: v })} multiline rows={2} />
+          <RichField label="Description" value={a.description} onChange={(v) => updateItem('honor_awards', a.id, { description: v })} />
           <DateField label="Date" value={a.date} onChange={(v) => updateItem('honor_awards', a.id, { date: v })} />
         </EditorCard>
       ))}
@@ -384,11 +398,11 @@ export function ProfileEditor() {
       {items.map((kq) => (
         <EditorCard key={kq.id} section="key_qualifications" id={kq.id}
           title={resolve(kq.label, primaryLocale) || 'Profile'} subtitle={resolve(kq.tag_line, primaryLocale)}
-          preview={resolve(kq.summary, primaryLocale)}
+          preview={richToPlain(resolve(kq.summary, primaryLocale))}
           starred={kq.starred} disabled={kq.disabled}>
           <DualField label="Section label" value={kq.label} onChange={(v) => updateItem('key_qualifications', kq.id, { label: v })} />
           <DualField label="Tag line" value={kq.tag_line} onChange={(v) => updateItem('key_qualifications', kq.id, { tag_line: v })} />
-          <DualField label="Summary" value={kq.summary} onChange={(v) => updateItem('key_qualifications', kq.id, { summary: v })} multiline rows={6} />
+          <RichField label="Summary" value={kq.summary} onChange={(v) => updateItem('key_qualifications', kq.id, { summary: v })} />
           <div className="sub-block">
             <div className="sub-head">Key competency points</div>
             {kq.key_points.map((kp, i) => (

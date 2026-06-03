@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useLayoutEffect, useRef } from 'react'
 import { Copy, Languages, Loader2 } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import type { LocalizedString } from '../../types'
@@ -6,6 +6,45 @@ import { LOCALE_LABELS } from '../../lib/locales'
 import { api } from '../../lib/api'
 import { canDraftBetween } from '../../lib/translateClient'
 import { useTranslationAvailable } from '../../store/useTranslation'
+
+/**
+ * Resize a textarea to fit its content. Called on mount (so editing an
+ * existing long value opens already-expanded) and on every keystroke.
+ *
+ * We reset to `auto` first so shrinking on backspace works — `scrollHeight`
+ * never decreases when the element's height stays fixed.
+ */
+function autoSize(el: HTMLTextAreaElement | null) {
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight}px`
+}
+
+function AutoTextarea({
+  value, rows, placeholder, className, onChange,
+}: {
+  value: string
+  rows: number
+  placeholder: string
+  className: string
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  // useLayoutEffect so the resize happens before the browser paints — no
+  // brief flash at the initial small height.
+  useLayoutEffect(() => { autoSize(ref.current) }, [value])
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      rows={rows}
+      placeholder={placeholder}
+      className={className}
+      onChange={(e) => { onChange(e); autoSize(e.currentTarget) }}
+      style={{ overflow: 'hidden', resize: 'none' }}
+    />
+  )
+}
 
 interface DualFieldProps {
   label: string
@@ -80,16 +119,28 @@ export function DualField({ label, value, onChange, multiline, rows = 3, placeho
 
   const renderInput = (locale: string, variant: 'primary' | 'secondary') => {
     const v = value[locale] || ''
-    const common = {
-      value: v,
-      placeholder: placeholder || `${LOCALE_LABELS[locale]?.name || locale}…`,
-      onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-        handleChange(locale, variant, e.target.value),
-      className: `df-input df-${variant}`,
+    const ph = placeholder || `${LOCALE_LABELS[locale]?.name || locale}…`
+    const cls = `df-input df-${variant}`
+    if (multiline) {
+      return (
+        <AutoTextarea
+          value={v}
+          rows={rows}
+          placeholder={ph}
+          className={cls}
+          onChange={(e) => handleChange(locale, variant, e.target.value)}
+        />
+      )
     }
-    return multiline
-      ? <textarea {...common} rows={rows} />
-      : <input {...common} type="text" />
+    return (
+      <input
+        type="text"
+        value={v}
+        placeholder={ph}
+        className={cls}
+        onChange={(e) => handleChange(locale, variant, e.target.value)}
+      />
+    )
   }
 
   const canDraft = !!secondary && translationAvailable && canDraftBetween(primary, secondary)

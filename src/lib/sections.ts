@@ -6,16 +6,24 @@ export interface SectionDef {
   storeKey?: Exclude<keyof ResumeStore, 'resume'>
   icon: string  // lucide icon name
   group: 'profile' | 'experience' | 'credentials' | 'extras' | 'registry' | 'export'
+  /**
+   * Hide from the sidebar nav but keep in SECTIONS so other consumers
+   * (view export, completeness coverage, importer) still see it.
+   * Used by `key_qualifications` which now lives inside the Personal
+   * Details Profile sub-tab.
+   */
+  hidden?: boolean
 }
 
 export const SECTIONS: SectionDef[] = [
   { key: 'overview', label: 'Overview', icon: 'LayoutDashboard', group: 'profile' },
   { key: 'header', label: 'Personal Details', icon: 'User', group: 'profile' },
-  { key: 'key_qualifications', label: 'Profile & Summary', storeKey: 'key_qualifications', icon: 'FileText', group: 'profile' },
+  // Kept here (hidden) so views/exports/coverage still discover it.
+  { key: 'key_qualifications', label: 'Profile & Summary', storeKey: 'key_qualifications', icon: 'FileText', group: 'profile', hidden: true },
 
   { key: 'projects', label: 'Projects', storeKey: 'projects', icon: 'Briefcase', group: 'experience' },
   { key: 'work_experiences', label: 'Employment', storeKey: 'work_experiences', icon: 'Building2', group: 'experience' },
-  { key: 'positions', label: 'Positions & Volunteering', storeKey: 'positions', icon: 'Users', group: 'experience' },
+  { key: 'positions', label: 'Other roles', storeKey: 'positions', icon: 'Users', group: 'experience' },
 
   { key: 'educations', label: 'Education', storeKey: 'educations', icon: 'GraduationCap', group: 'credentials' },
   { key: 'courses', label: 'Courses', storeKey: 'courses', icon: 'BookOpen', group: 'credentials' },

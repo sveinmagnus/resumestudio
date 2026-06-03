@@ -13,7 +13,7 @@ import { ProjectsEditor } from './components/editor/ProjectsEditor'
 import {
   WorkEditor, EducationEditor, CoursesEditor, CertificationsEditor,
   PositionsEditor, PresentationsEditor, PublicationsEditor, AwardsEditor,
-  SpokenLanguagesEditor, ProfileEditor,
+  SpokenLanguagesEditor,
 } from './components/editor/SimpleEditors'
 import { SkillsEditor, RolesEditor, ReferencesEditor, TechCategoriesEditor } from './components/editor/RegistryEditors'
 import { ResumeViewsEditor } from './components/editor/ResumeViewsEditor'
@@ -99,7 +99,11 @@ function EditorRoute({ resumeId, onUnauthorized }: { resumeId: string; onUnautho
   }
 
   // ── Main editor shell ────────────────────────────────────────────────────
-  const section = SECTIONS.find((s) => s.key === activeSection)
+  // 'key_qualifications' folds into Personal Details (Profile sub-tab), so the
+  // breadcrumb/title still reads "Personal Details" while the section key may
+  // still be 'key_qualifications' (Overview's missing-field deep link uses it).
+  const sectionKeyForChrome = activeSection === 'key_qualifications' ? 'header' : activeSection
+  const section = SECTIONS.find((s) => s.key === sectionKeyForChrome)
 
   return (
     <div className="app-shell">
@@ -118,8 +122,8 @@ function EditorRoute({ resumeId, onUnauthorized }: { resumeId: string; onUnautho
           {/* Reset boundary on section change so a crashed view never traps the user. */}
           <ErrorBoundary resetKey={activeSection}>
             {activeSection === 'overview'              && <Overview />}
-            {activeSection === 'header'                && <HeaderEditor />}
-            {activeSection === 'key_qualifications'    && <ProfileEditor />}
+            {(activeSection === 'header' ||
+              activeSection === 'key_qualifications') && <HeaderEditor />}
             {activeSection === 'projects'              && <ProjectsEditor />}
             {activeSection === 'work_experiences'      && <WorkEditor />}
             {activeSection === 'positions'             && <PositionsEditor />}

@@ -1,9 +1,11 @@
 import { useStore, newId } from '../../store/useStore'
 import { DualField } from '../ui/DualField'
+import { RichField } from '../ui/RichField'
 import { TextField, DateField, TagField } from '../ui/Fields'
 import { EditorCard, AddButton, FieldRow } from '../ui/EditorCard'
 import { SortableList } from '../ui/SortableList'
 import { resolve, fmtRange } from '../../lib/locales'
+import { richToPlain } from '../../lib/richText'
 import type { Project, ProjectRole, ProjectSkill } from '../../types'
 import { Plus, X } from 'lucide-react'
 
@@ -33,13 +35,13 @@ export function ProjectsEditor() {
           title={resolve(p.customer, primaryLocale) || resolve(p.description, primaryLocale)}
           subtitle={resolve(p.description, primaryLocale)}
           meta={fmtRange(p.start, p.end)}
-          preview={resolve(p.long_description, primaryLocale)}
+          preview={richToPlain(resolve(p.long_description, primaryLocale))}
           starred={p.starred} disabled={p.disabled}>
 
           <DualField label="Customer" value={p.customer} onChange={(v) => updateItem('projects', p.id, { customer: v })} />
           <DualField label="Description (short)" value={p.description} onChange={(v) => updateItem('projects', p.id, { description: v })} />
           <DualField label="Industry" value={p.industry} onChange={(v) => updateItem('projects', p.id, { industry: v })} />
-          <DualField label="Description" value={p.long_description} onChange={(v) => updateItem('projects', p.id, { long_description: v })} multiline rows={6} />
+          <RichField label="Description" value={p.long_description} onChange={(v) => updateItem('projects', p.id, { long_description: v })} />
 
           <FieldRow>
             <DateField label="Start" value={p.start} onChange={(v) => updateItem('projects', p.id, { start: v })} />

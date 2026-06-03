@@ -1,6 +1,7 @@
 import type { ResumeStore, ResumeView, ViewSection, LocalizedString } from '../types'
 import { SECTIONS } from './sections'
 import { resolve, fmtRange, fmtDate } from './locales'
+import { renderRichHtml } from './richText'
 
 // ─── Section helpers ──────────────────────────────────────────────────────────
 
@@ -129,6 +130,9 @@ export function escapeHtml(s: string | null | undefined): string {
 function renderItem(sectionKey: string, item: unknown, locale: string): string {
   const it = item as AnyItem
   const l = (field: string) => escapeHtml(ls(it, field, locale))
+  // Rich-text variant: preserves the allowed inline tags (b/i/u/ul/ol/li/p/br)
+  // for description-shaped fields. Plain values fall through to escapeHtml.
+  const rich = (field: string) => renderRichHtml(ls(it, field, locale), escapeHtml)
   const r = escapeHtml(range(it))
   const meta = (parts: string[]) => parts.filter(Boolean).join(' · ')
 
@@ -144,17 +148,17 @@ function renderItem(sectionKey: string, item: unknown, locale: string): string {
       return `<div class="ve-item">
         <h3>${l('customer')}</h3>
         <div class="ve-meta">${meta([r, l('industry'), roleNames.join(', ')])}</div>
-        <div class="ve-desc">${l('long_description') || l('description')}</div>
+        <div class="ve-desc">${rich('long_description') || rich('description')}</div>
         ${skills ? `<div class="ve-tags">${skills}</div>` : ''}
       </div>`
     }
     case 'key_qualifications': {
       const points = (it.key_points as Array<{ name: LocalizedString; long_description: LocalizedString }> ?? [])
-        .map((p) => `<li><strong>${escapeHtml(resolve(p.name, locale))}</strong>: ${escapeHtml(resolve(p.long_description, locale))}</li>`)
+        .map((p) => `<li><strong>${escapeHtml(resolve(p.name, locale))}</strong>: ${renderRichHtml(resolve(p.long_description, locale), escapeHtml)}</li>`)
         .join('')
       return `<div class="ve-item">
         <h3>${l('label')}</h3>
-        <div class="ve-desc">${l('summary')}</div>
+        <div class="ve-desc">${rich('summary')}</div>
         ${points ? `<ul class="ve-points">${points}</ul>` : ''}
       </div>`
     }
@@ -162,31 +166,31 @@ function renderItem(sectionKey: string, item: unknown, locale: string): string {
       return `<div class="ve-item">
         <h3>${l('employer')}</h3>
         <div class="ve-meta">${meta([l('role_title'), r])}</div>
-        <div class="ve-desc">${l('long_description') || l('description')}</div>
+        <div class="ve-desc">${rich('long_description') || rich('description')}</div>
       </div>`
     case 'educations':
       return `<div class="ve-item">
         <h3>${l('school')}</h3>
         <div class="ve-meta">${meta([l('degree'), r])}</div>
-        <div class="ve-desc">${l('description')}</div>
+        <div class="ve-desc">${rich('description')}</div>
       </div>`
     case 'courses':
       return `<div class="ve-item">
         <h3>${l('name')}</h3>
         <div class="ve-meta">${meta([l('program')])}</div>
-        <div class="ve-desc">${l('description')}</div>
+        <div class="ve-desc">${rich('description')}</div>
       </div>`
     case 'certifications':
       return `<div class="ve-item">
         <h3>${l('name')}</h3>
         <div class="ve-meta">${meta([l('organiser'), escapeHtml(fmtDate(it.issued as YM))])}</div>
-        <div class="ve-desc">${l('description')}</div>
+        <div class="ve-desc">${rich('description')}</div>
       </div>`
     case 'positions':
       return `<div class="ve-item">
         <h3>${l('name')}</h3>
         <div class="ve-meta">${meta([l('organisation'), r])}</div>
-        <div class="ve-desc">${l('description')}</div>
+        <div class="ve-desc">${rich('description')}</div>
       </div>`
     case 'spoken_languages':
       return `<div class="ve-item ve-inline"><strong>${l('name')}</strong> — ${l('level')}</div>`
@@ -203,19 +207,19 @@ function renderItem(sectionKey: string, item: unknown, locale: string): string {
       return `<div class="ve-item">
         <h3>${l('title')}</h3>
         <div class="ve-meta">${meta([l('event')])}</div>
-        <div class="ve-desc">${l('description')}</div>
+        <div class="ve-desc">${rich('description')}</div>
       </div>`
     case 'honor_awards':
       return `<div class="ve-item">
         <h3>${l('name')}</h3>
         <div class="ve-meta">${meta([l('issuer')])}</div>
-        <div class="ve-desc">${l('description')}</div>
+        <div class="ve-desc">${rich('description')}</div>
       </div>`
     case 'publications':
       return `<div class="ve-item">
         <h3>${l('title')}</h3>
         <div class="ve-meta">${meta([l('publisher')])}</div>
-        <div class="ve-desc">${l('abstract')}</div>
+        <div class="ve-desc">${rich('abstract')}</div>
       </div>`
     case 'references':
       if (!it.include_in_exports) return ''
@@ -306,6 +310,10 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
     .ve-inline { display: inline-block; margin-right: 20px; }
     .ve-meta { font-size: 9pt; color: #6B7280; margin: 2px 0 5px; }
     .ve-desc { font-size: 10pt; color: #374151; margin-top: 5px; }
+    .ve-desc p { margin: 0 0 4px; }
+    .ve-desc p:last-child { margin-bottom: 0; }
+    .ve-desc ul, .ve-desc ol { margin: 5px 0 5px 18px; }
+    .ve-desc li { margin-bottom: 2px; }
     .ve-points { margin: 8px 0 0 18px; font-size: 10pt; color: #374151; }
     .ve-points li { margin-bottom: 3px; }
     .ve-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }

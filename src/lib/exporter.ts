@@ -26,6 +26,7 @@ import type {
 import { SECTIONS } from './sections'
 import { resolve, fmtRange, fmtDate } from './locales'
 import { applyView } from './viewFilter'
+import { parseRichBlocks, type RichRun } from './richText'
 
 // ─── Brand constants (mirror Cartavio brand used by the HTML export) ─────────
 const ACCENT_HEX = '002E6E'     // Cartavio navy
@@ -47,6 +48,53 @@ function para(text: string, opts: PStyle = {}): Paragraph {
     spacing: { before: opts.before, after: opts.after ?? 60 },
     children: [new TextRun({ text, italics: opts.italic, bold: opts.bold, color: opts.color, font: BODY_FONT })],
   })
+}
+
+/**
+ * Render a rich-text value (or plain text) as docx paragraphs.
+ * Plain text becomes a single paragraph; markup becomes a stream of
+ * paragraphs / bullet- or number-prefixed list-item paragraphs.
+ *
+ * docx supports proper numbering instances but the setup cost outweighs the
+ * benefit here — we emit a leading "•" / "1." inline. Print/PDF/DOCX outputs
+ * look indistinguishable for the depth of nesting our users produce.
+ */
+function richParagraphs(html: string, opts: PStyle = {}): Paragraph[] {
+  const blocks = parseRichBlocks(html)
+  if (!blocks.length) return []
+  const out: Paragraph[] = []
+  for (const block of blocks) {
+    const runs = renderRuns(block.runs, opts)
+    if (block.kind === 'paragraph') {
+      out.push(new Paragraph({
+        spacing: { before: opts.before, after: opts.after ?? 60 },
+        children: runs,
+      }))
+      continue
+    }
+    // list-item: prefix with marker, indent by 360 twips per level.
+    const marker = block.ordered ? `${block.index}. ` : '• '
+    out.push(new Paragraph({
+      spacing: { after: 30 },
+      indent: { left: 360 + block.level * 360 },
+      children: [
+        new TextRun({ text: marker, font: BODY_FONT, color: opts.color }),
+        ...runs,
+      ],
+    }))
+  }
+  return out
+}
+
+function renderRuns(runs: RichRun[], opts: PStyle): TextRun[] {
+  return runs.map((r) => new TextRun({
+    text: r.text,
+    bold: r.bold ?? opts.bold,
+    italics: r.italic ?? opts.italic,
+    underline: r.underline ? {} : undefined,
+    color: opts.color,
+    font: BODY_FONT,
+  }))
 }
 
 function sectionHeading(label: string): Paragraph {
@@ -197,7 +245,7 @@ function renderKQs(items: unknown[], locale: string): Paragraph[] {
     const tag     = ls(k, 'tag_line', locale)
     const summary = ls(k, 'summary',  locale)
     if (tag)     out.push(para(tag, { italic: true, after: 80 }))
-    if (summary) out.push(para(summary, { after: 120 }))
+    if (summary) out.push(...richParagraphs(summary, { after: 120 }))
     const points = (k.key_points as Array<AnyItem & { disabled?: boolean }> | undefined) ?? []
     for (const kp of points) {
       if (kp.disabled) continue
@@ -245,7 +293,7 @@ function renderProjects(items: unknown[], locale: string): Paragraph[] {
     const shortDesc = ls(p, 'description', locale)
     const longDesc  = ls(p, 'long_description', locale)
     if (shortDesc && shortDesc !== title)       out.push(para(shortDesc, { after: 80 }))
-    if (longDesc)                                out.push(para(longDesc,  { after: 100 }))
+    if (longDesc)                                out.push(...richParagraphs(longDesc,  { after: 100 }))
 
     const highlights = (p.highlights as LocalizedString[] | undefined) ?? []
     for (const h of highlights) {
@@ -287,7 +335,7 @@ function renderWork(items: unknown[], locale: string): Paragraph[] {
       out.push(para(String(w.employment_type).replace('_', ' '), { italic: true, color: SUBTLE_HEX, after: 80 }))
     }
     const longDesc = ls(w, 'long_description', locale)
-    if (longDesc) out.push(para(longDesc, { after: 80 }))
+    if (longDesc) out.push(...richParagraphs(longDesc, { after: 80 }))
   }
   return out
 }
@@ -307,7 +355,7 @@ function renderEducations(items: unknown[], locale: string): Paragraph[] {
       ],
     }))
     const desc = ls(e, 'description', locale)
-    if (desc)    out.push(para(desc, { after: 40 }))
+    if (desc)    out.push(...richParagraphs(desc, { after: 40 }))
     if (e.grade) out.push(para(`Grade: ${e.grade as string}`, { italic: true, color: SUBTLE_HEX, after: 40 }))
   }
   return out
@@ -327,7 +375,7 @@ function renderCourses(items: unknown[], locale: string): Paragraph[] {
       ],
     }))
     const desc = ls(c, 'description', locale)
-    if (desc) out.push(para(desc, { after: 50 }))
+    if (desc) out.push(...richParagraphs(desc, { after: 50 }))
   }
   return out
 }
@@ -400,7 +448,7 @@ function renderPositions(items: unknown[], locale: string): Paragraph[] {
       ],
     }))
     const desc = ls(p, 'description', locale)
-    if (desc) out.push(para(desc, { after: 50 }))
+    if (desc) out.push(...richParagraphs(desc, { after: 50 }))
   }
   return out
 }
@@ -419,7 +467,7 @@ function renderPresentations(items: unknown[], locale: string): Paragraph[] {
       ],
     }))
     const desc = ls(p, 'description', locale)
-    if (desc)   out.push(para(desc, { after: 30 }))
+    if (desc)   out.push(...richParagraphs(desc, { after: 30 }))
     if (p.url)  out.push(para(p.url as string, { color: SUBTLE_HEX, after: 40 }))
   }
   return out
@@ -439,7 +487,7 @@ function renderPublications(items: unknown[], locale: string): Paragraph[] {
       ],
     }))
     const abstract = ls(p, 'abstract', locale)
-    if (abstract) out.push(para(abstract, { after: 30 }))
+    if (abstract) out.push(...richParagraphs(abstract, { after: 30 }))
     if (p.url)    out.push(para(p.url as string, { color: SUBTLE_HEX, after: 40 }))
   }
   return out
@@ -459,7 +507,7 @@ function renderAwards(items: unknown[], locale: string): Paragraph[] {
       ],
     }))
     const desc = ls(a, 'description', locale)
-    if (desc) out.push(para(desc, { after: 50 }))
+    if (desc) out.push(...richParagraphs(desc, { after: 50 }))
   }
   return out
 }

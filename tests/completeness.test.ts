@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeCompleteness } from '../src/lib/completeness'
+import { computeCompleteness, computeSectionCoverage } from '../src/lib/completeness'
 import {
   emptyStore, makeProject, makeWork, makeEducation, makeKQ, makeCourse,
 } from './fixtures'
@@ -118,5 +118,83 @@ describe('computeCompleteness()', () => {
     expect(titleMissing).toMatchObject({
       section: 'header', itemId: null, itemLabel: 'Personal details',
     })
+  })
+})
+
+describe('computeSectionCoverage()', () => {
+  it('reports per-section populated/total counts for the requested locale', () => {
+    const store = {
+      ...emptyStore(),
+      projects: [
+        makeProject({ id: 'p1', customer: { en: 'Acme' } }),                          // en only
+        makeProject({ id: 'p2', customer: { en: 'Beta', no: 'Beta' } }),              // both
+      ],
+      educations: [
+        // School AND degree both no-only — otherwise the fixture's default
+        // degree.en would make this item "populated" in English.
+        makeEducation({ id: 'e1', school: { no: 'Universitetet' }, degree: { no: 'BSc' } }),
+      ],
+    }
+    const en = computeSectionCoverage(store, 'en')
+    const projectsEn = en.find((r) => r.key === 'projects')!
+    const eduEn = en.find((r) => r.key === 'educations')!
+    expect(projectsEn).toEqual({ key: 'projects', label: 'Projects', total: 2, populated: 2 })
+    expect(eduEn).toEqual({ key: 'educations', label: 'Education', total: 1, populated: 0 })
+  })
+
+  it('skips registry sections (skills/roles) and views', () => {
+    const out = computeSectionCoverage(emptyStore(), 'en')
+    expect(out.find((r) => r.key === 'skills')).toBeUndefined()
+    expect(out.find((r) => r.key === 'roles')).toBeUndefined()
+    expect(out.find((r) => r.key === 'views')).toBeUndefined()
+  })
+
+  it('excludes disabled items from the totals', () => {
+    const store = {
+      ...emptyStore(),
+      projects: [
+        makeProject({ id: 'p1', customer: { en: 'Acme' }, disabled: true }),
+        makeProject({ id: 'p2', customer: { en: 'Beta' } }),
+      ],
+    }
+    const out = computeSectionCoverage(store, 'en')
+    const projects = out.find((r) => r.key === 'projects')!
+    expect(projects.total).toBe(1)
+    expect(projects.populated).toBe(1)
+  })
+
+  it('sorts most-missing-first, with empty sections last', () => {
+    const store = {
+      ...emptyStore(),
+      // Fully missing
+      educations: [makeEducation({ school: { no: 'U' } })],
+      // Partially missing
+      work_experiences: [
+        makeWork({ employer: { en: 'A' } }),
+        makeWork({ employer: { no: 'B' } }),
+      ],
+      // Empty (no items at all) — other sections
+    }
+    const out = computeSectionCoverage(store, 'en')
+    const labels = out.filter((r) => r.total > 0).map((r) => r.label)
+    // Education is fully missing (1 gap), Employment has 1 of 2 missing — same
+    // gap count, tie-broken alphabetically: Education before Employment.
+    expect(labels.slice(0, 2)).toEqual(['Education', 'Employment'])
+    // Empty sections end up at the bottom.
+    const last = out[out.length - 1]
+    expect(last.total).toBe(0)
+  })
+
+  it('counts items as populated if any tracked field has content in the locale', () => {
+    const store = {
+      ...emptyStore(),
+      key_qualifications: [makeKQ({
+        label: {}, summary: { no: 'oppsummering' }, tag_line: {},
+      })],
+      courses: [makeCourse({ name: { no: 'A' }, program: {}, description: {} })],
+    }
+    const noOut = computeSectionCoverage(store, 'no')
+    expect(noOut.find((r) => r.key === 'key_qualifications')?.populated).toBe(1)
+    expect(noOut.find((r) => r.key === 'courses')?.populated).toBe(1)
   })
 })

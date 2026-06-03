@@ -33,7 +33,7 @@ const ADD_CASES: { name: string; Comp: ComponentType; section: SectionKey; addLa
   { name: 'WorkEditor', Comp: WorkEditor, section: 'work_experiences', addLabel: /add employment/i },
   { name: 'EducationEditor', Comp: EducationEditor, section: 'educations', addLabel: /add education/i },
   { name: 'CertificationsEditor', Comp: CertificationsEditor, section: 'certifications', addLabel: /add certification/i },
-  { name: 'PositionsEditor', Comp: PositionsEditor, section: 'positions', addLabel: /add position/i },
+  { name: 'PositionsEditor', Comp: PositionsEditor, section: 'positions', addLabel: /add role/i },
   { name: 'PresentationsEditor', Comp: PresentationsEditor, section: 'presentations', addLabel: /add presentation/i },
   { name: 'PublicationsEditor', Comp: PublicationsEditor, section: 'publications', addLabel: /add publication/i },
   { name: 'AwardsEditor', Comp: AwardsEditor, section: 'honor_awards', addLabel: /add award/i },

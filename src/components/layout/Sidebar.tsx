@@ -18,7 +18,7 @@ const YEAR = new Date().getFullYear()
 export function Sidebar() {
   const { data, activeSection, setActiveSection } = useStore()
 
-  const grouped = SECTIONS.reduce<Record<string, typeof SECTIONS>>((acc, s) => {
+  const grouped = SECTIONS.filter((s) => !s.hidden).reduce<Record<string, typeof SECTIONS>>((acc, s) => {
     (acc[s.group] ||= []).push(s)
     return acc
   }, {})
