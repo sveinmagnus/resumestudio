@@ -50,6 +50,14 @@ What works today:
   and deletes the source.
 - **React error boundary** around the editor so a crashed view never traps the
   user.
+- **Downloadable desktop build** — a portable folder (bundled Node + esbuild'd
+  server + built client) with a double-clickable launcher that boots the app on
+  a free loopback port and opens the browser. Data lives in a stable per-user OS
+  folder; an optional **whole-store JSON backup** written to a cloud-synced
+  folder (Google Drive/Dropbox/OneDrive) syncs CVs across computers via a
+  newest-wins merge on launch. Build with `npm run build:desktop`. See §14 and
+  `DESKTOP.md`. The persistence architecture is unchanged, so a later move to
+  Electron is repackaging, not a rewrite.
 
 What's intentionally simple:
 - The **router** is a hand-rolled ~120-line History API hook
@@ -126,6 +134,8 @@ src/
 │   ├── ImportScreen.tsx        ← Callback-driven import UI: onStartFresh / onImported(store, suggestedName) + compact mode
 │   ├── AuthGate.tsx            ← Token-entry modal shown on 401 (onSubmit → App-level handler)
 │   ├── SnapshotHistory.tsx     ← Per-resume version-history modal: takes resumeId; restore via replaceData
+│   ├── SyncPanel.tsx           ← Picker "Sync & backup" panel (desktop build only): status + Back up now / Restore from folder. Renders null when no sync folder is configured
+│   ├── SettingsModal.tsx       ← Picker gear → Settings: translation mode (off / Docker-managed / remote URL) + sync folder. Read-only note when server reports managed:false
 │   ├── AppHeader.tsx           ← Editor top bar: ResumeSwitcher + SaveStatus + undo/redo + LanguageSwitcher + History + backup-export
 │   ├── layout/
 │   │   ├── Sidebar.tsx         ← Section navigation
@@ -148,16 +158,30 @@ src/
 └── index.css                   ← Design tokens + body/scrollbar/animations + .check-row utility
 
 server/                         ← Express API + SQLite persistence
-├── index.ts                    ← Bootstrap: createApp() + app.listen()
-├── app.ts                      ← createApp(): security headers, json, routers, SPA catch-all in prod
+├── index.ts                    ← Bootstrap (VPS/dev entry): createApp() + app.listen() on a fixed port
+├── app.ts                      ← createApp(): security headers, json, routers, static client serving (RESUME_CLIENT_DIR or prod dist)
 ├── auth.ts                     ← Bearer-token middleware (env: RESUME_API_TOKEN, read lazily), constant-time compare
-├── db.ts                       ← createResumeDb(path) factory + lazy singleton; multi-row `resumes` + scoped `resume_snapshots` (last 50/resume, deduped, ON DELETE CASCADE); drops old single-row table on boot
+├── db.ts                       ← createResumeDb(path) factory + lazy singleton; multi-row `resumes` + scoped `resume_snapshots` (last 50/resume, deduped, ON DELETE CASCADE); dumpResumes/restoreResumes (store sync) + close() (WAL checkpoint); getDefaultDb/closeDefaultDb
+├── config.ts                   ← PURE: resolvePaths()/defaultDataDir() — per-user data dir, db path, backup dir, log file (desktop build)
+├── backup.ts                   ← Whole-store JSON backup format (StoreBackupV1) + atomic write/read + signature. NOT the per-resume client backup
+├── backupScheduler.ts          ← Signature-gated periodic backup writer (start/flush/stop)
+├── backupRuntime.ts            ← Process-wide holder for the active scheduler so the settings route can reconfigure it live (initBackupRuntime/reconfigureBackup/flushBackup/stopBackup)
+├── settings.ts                 ← Desktop settings file (settings.json): load/save + applyToEnv onto process.env; isDesktop() gate; toView() masks the API key
+├── translateDocker.ts          ← Optional managed Docker LibreTranslate: dockerAvailable/start/stop + translateReachable probe (spawn, argv-only)
 ├── translate.ts               ← LibreTranslate proxy: locale map, fetch w/ timeout (env: LIBRETRANSLATE_URL/_API_KEY, read lazily)
+├── desktop/                    ← Desktop launcher (not used by the VPS entry)
+│   ├── launcher.ts             ← Entry the portable build runs: data dir + free port + boot-restore + open browser + scheduler + graceful shutdown. No import.meta/__dirname so it bundles to CJS
+│   ├── freePort.ts             ← Find a free loopback port (preferred → ladder → OS-assigned)
+│   └── openBrowser.ts          ← Zero-dep cross-platform default-browser opener
 └── routes/
     ├── resume.ts               ← /api/resumes collection: list/create/load/save/rename/delete + per-resume /snapshots(/:sid)
-    └── translate.ts            ← GET /api/translate/status, POST /api/translate
+    ├── translate.ts            ← GET /api/translate/status, POST /api/translate
+    ├── backup.ts               ← /api/backup: GET /status, POST /now, POST /restore (reads RESUME_BACKUP_DIR lazily)
+    └── settings.ts             ← /api/settings: GET/PUT (desktop-gated) + POST /translate/test + POST /docker (start/stop/status)
 
-tests/                          ← Vitest specs (382 tests at last count)
+scripts/build-desktop.mjs       ← Assembles the portable release/ folder (esbuild bundle + dist + native deps + Node runtime + launcher shims). Run per target OS
+
+tests/                          ← Vitest specs (~660 tests at last count)
 ├── fixtures.ts                 ← Shared makeProject() / makeRole() / ... factories
 ├── setup-rtl.ts                ← jest-dom matchers + afterEach(cleanup) for component tests
 ├── helpers/store-reset.ts      ← resetStore() — restores the singleton store between component tests
@@ -166,8 +190,8 @@ tests/                          ← Vitest specs (382 tests at last count)
 ├── merge.test.ts, store.test.ts, translateClient.test.ts, viewFilter.test.ts
 ├── components/                 ← RTL tests (.test.tsx, jsdom) for every editor (Header/Projects/Registry/Simple/
 │                                  ResumeViews/Overview), shell (AppHeader/Sidebar/AuthGate/ImportScreen/
-│                                  LanguageSwitcher/SaveStatus/ErrorBoundary/SnapshotHistory) + ui (DualField/Fields/EditorCard/SortableList)
-└── server/                     ← db, translate, auth (direct) + routes (supertest over createApp()), node env
+│                                  LanguageSwitcher/SaveStatus/ErrorBoundary/SnapshotHistory/SyncPanel/SettingsModal) + ui (DualField/Fields/EditorCard/SortableList)
+└── server/                     ← db (incl. dump/restore/close), config, backup, settings, translate, translateDocker, auth (direct) + routes (resume/backup/settings via supertest over createApp()), node env
 ```
 
 ### Layered design — these layers must stay clean
@@ -447,15 +471,23 @@ than calling `set()` directly. Return `null` from the updater for a no-op
   mutation: it lands in the undo stack and is re-saved. Reversible.
 
 ### Translation assist (server-side proxy)
-- The client never calls the translation backend directly. `POST /api/translate`
-  (auth-gated) proxies to a self-hosted **LibreTranslate** instance configured
-  via `LIBRETRANSLATE_URL` (+ optional `LIBRETRANSLATE_API_KEY`). Rationale: the
-  URL/key stay server-side (the client reads no env vars — §2), CV text flows
-  server→server inside the deployment, and there's one auth perimeter.
-- `server/translate.ts` maps the app's locale codes to ISO codes the service
-  expects (`no→nb`, `se→sv`, `dk→da`; others pass through). A near-identical map
-  lives in `lib/translateClient.ts` for display gating — kept duplicated rather
-  than coupling the two build trees; both are tiny.
+- The client never calls a translation backend directly. `POST /api/translate`
+  (auth-gated) proxies to whichever **provider** is configured. URLs/keys stay
+  server-side (the client reads no env vars — §2), CV text flows server→provider,
+  and there's one auth perimeter.
+- **Pluggable providers** (`server/translate.ts`): `TRANSLATE_PROVIDER` ∈
+  `off | libretranslate | deepl | google | azure`. `resolveConfig(env)` reads the
+  provider + its key(s) lazily; `translate()` dispatches to the matching backend;
+  `isTranslationConfigured()` is provider-scoped. **Back-compat:** if
+  `TRANSLATE_PROVIDER` is unset but `LIBRETRANSLATE_URL` is set, it defaults to
+  `libretranslate` (so old env-only deployments keep working). Per-provider env:
+  `LIBRETRANSLATE_URL`/`_API_KEY`, `DEEPL_API_KEY` (Free vs Pro auto-detected from
+  the `:fx` suffix → different host), `GOOGLE_TRANSLATE_API_KEY`,
+  `AZURE_TRANSLATOR_KEY`/`_REGION`. Each provider has its own locale map (DeepL
+  uppercases + needs `EN-GB` for an English target; Azure uses `nb`; Google uses
+  `no`). Errors never echo upstream detail (could leak an internal URL/key).
+- A near-identical app-locale map lives in `lib/translateClient.ts` for display
+  gating — kept duplicated rather than coupling the two build trees; both tiny.
 - `GET /api/translate/status` reports `{configured}`; the client memoizes this
   once (`getTranslationAvailability`) so N `DualField`s share one probe, and the
   "Draft translation" button only renders when it's `true`. Drafts are always
@@ -545,6 +577,8 @@ npm run preview          # serve dist/ to verify the prod build works
 npm test                 # vitest run
 npm run typecheck        # client + server tsc
 npm start                # production server (NODE_ENV=production)
+npm run desktop          # build client + run the desktop launcher from source (tsx)
+npm run build:desktop    # assemble the portable release/ folder (per target OS)
 ```
 
 ### Verifying changes
@@ -614,7 +648,9 @@ Ordered loosely by recommended priority. Each is a self-contained chunk.
 > per-id routing + per-resume snapshots/locales + delete-with-confirm), and
 > **offline editing + conflict safety** (durable per-resume queue, reconnect
 > drain, `version`-based optimistic concurrency with a keep/discard+diff
-> conflict modal). See §1 and §8.
+> conflict modal), and the **downloadable desktop build + cross-computer JSON
+> sync** (portable folder, per-user data dir, Drive-folder store backup with
+> newest-wins boot-merge). See §1, §14, and `DESKTOP.md`.
 
 ### 12.1 Export templates
 `ResumeView.template_id` is already on the type (see `types/index.ts`) and called out as "reserved" in `lib/exporter.ts`, but nothing reads it. Two or three named templates (compact technical / formal management / minimal one-pager) would make views visually differentiated — currently a Board CV and a Technical CV produce the same-looking document. Touches both `buildViewHtml` (HTML/CSS path) and `exporter.ts` (DOCX path); each template is a styling delta, not a fork of the render logic. Pairs naturally with the (now shipped) live preview pane — that's what makes template choice tunable without an export round-trip.
@@ -657,3 +693,67 @@ A few tips specifically for this codebase:
 - **`useSortable` is no-op outside a `<SortableContext>`** but `<EditorCard>` will still show a drag handle. If a card isn't reorderable, pass `sortable={false}`.
 
 If a request is large or touches many files, propose a plan first — list the files you'd change and what each change is. Then proceed once confirmed.
+
+---
+
+## 14. Desktop build & cross-computer sync
+
+Full end-user + build docs live in **`DESKTOP.md`**. Key facts for working here:
+
+- **Two server entries, one app.** `server/index.ts` is the VPS/dev entry (fixed
+  port, `tsx`). `server/desktop/launcher.ts` is the desktop entry. Both call the
+  same `createApp()`. Don't fork app logic per entry — differences are env/wiring
+  only.
+- **The launcher is bundled to CJS** by `scripts/build-desktop.mjs` (esbuild,
+  `better-sqlite3` external). Because of that, **launcher code must not use
+  `import.meta`/`__dirname`** — it relies on env + `process.cwd()`. `app.ts` and
+  `db.ts` guard their `import.meta.url` (`import.meta.url ? … : process.cwd()`)
+  because esbuild emits `""` for it in the bundle; don't "simplify" that back to
+  a bare `fileURLToPath(import.meta.url)` or the bundle crashes at boot.
+- **Paths come from `server/config.ts`** (pure). The launcher sets
+  `RESUME_DB_PATH` + `RESUME_CLIENT_DIR` from it before `createApp()`/first DB
+  use, so `db.ts`/`app.ts` pick them up through the env vars they already honour.
+- **Data dir** is per-user OS-standard (`%APPDATA%\ResumeStudio`,
+  `~/Library/Application Support/ResumeStudio`, `~/.local/share/resume-studio`),
+  overridable via `RESUME_DATA_DIR`. This matches what Electron's
+  `app.getPath('userData')` would give — deliberate, for the eventual migration.
+- **Sync model = whole-store JSON backup, NOT the live DB in the cloud folder.**
+  `RESUME_BACKUP_DIR` (e.g. a Google Drive folder) holds one
+  `resume-studio-backup.json` written atomically. The launcher merges newer
+  content from it on boot; the `BackupScheduler` keeps it current while running;
+  the picker `SyncPanel` exposes Back-up-now / Restore. Merge is **newest-wins
+  per resume by `saved_at`, union, never deletes** (`db.restoreResumes`, `merge`
+  mode). `replace` mode (deletes local rows absent from the backup) exists but is
+  not wired to any always-on path. Putting the live SQLite file in a sync folder
+  is intentionally avoided (corruption risk); `RESUME_DB_JOURNAL=TRUNCATE` is the
+  documented escape hatch if someone insists.
+- **`db.close()`** does `wal_checkpoint(TRUNCATE)` then close — the launcher
+  calls it (via `closeDefaultDb()`) on shutdown so the `.db` is self-contained at
+  rest. Keep shutdown ordering: `scheduler.flush()` → `closeDefaultDb()` →
+  `server.close()`.
+- **Two backup concepts, don't conflate:** `src/lib/backup.ts` =
+  per-resume client download (`resumestudio/v1`); `server/backup.ts` =
+  whole-store sync file (`resumestudio-store/v1`).
+- **In-app settings are desktop-only.** The launcher sets `RESUME_DESKTOP=1`;
+  `settings.ts → isDesktop()` gates the editable surface. `loadOrInitSettings()`
+  seeds `settings.json` from env on first run, then `applyToEnv()` pushes it back
+  onto `process.env` so the **lazily-env-reading** translate/backup code picks up
+  changes with no restart. The VPS build never sets `RESUME_DESKTOP`, so
+  `/api/settings` reports `managed:false`, PUT 403s, and config stays env-driven.
+  Don't make translate/backup read settings directly — keep them reading env, and
+  route runtime changes through `applyToEnv` (+ `reconfigureBackup` for the
+  periodic scheduler, since that's stateful and lives in `backupRuntime`).
+- **Managed translate = the app drives Docker**, it does not bundle the engine.
+  `translateDocker.ts` shells out (argv-only, never a shell string) to
+  `docker compose -f $RESUME_COMPOSE_FILE up -d libretranslate`. Everything there
+  is best-effort and must never throw into the request path — Docker missing just
+  yields `available:false`. After changing translate settings, the client calls
+  `resetTranslationAvailability()` so the editor re-probes `/api/translate/status`.
+- **Translate providers are settings-selectable** (desktop) or env-selectable
+  (VPS): the Settings screen writes `translate_provider` + per-provider keys;
+  `applyToEnv` maps them to `TRANSLATE_PROVIDER`/`DEEPL_API_KEY`/… so the lazily-
+  env-reading `translate.ts` picks them up live. `settingsToTranslateConfig()`
+  builds a `TranslateConfig` without touching env — used by `POST
+  /api/settings/translate/test` to probe *pending* (unsaved) config by drafting
+  one phrase. Keys are write-only over the API: `toView()` returns `*_set`
+  booleans, never the value; only the on-disk `settings.json` holds them.
