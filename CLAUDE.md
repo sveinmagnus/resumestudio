@@ -31,6 +31,19 @@ What works today:
   starred-only filter, custom intro, then export PDF (browser print pipeline)
   or DOCX (lazy-loaded docx lib). A **live preview pane** in the view editor
   re-renders the document as you tune it (iframe + page-count estimate).
+- **View customization** — per-view styling (density, body size, heading font,
+  accent color, page margin, tag style; `lib/viewStyle.ts`), per-section detail
+  levels (off / summary / full) and style overrides, a configurable
+  **header/footer** (which contact fields show, labels, separators, name/title
+  type sizing, profile photo + company logo placement, footer copyright/note;
+  `lib/viewHeader.ts`), and per-section sort modes (`lib/sectionSort.ts`).
+  **Untrusted view config (from imports) is sanitised at the render boundary —
+  see the security skill before touching `viewStyle`/`viewHeader`/`viewFilter`.**
+- **Richer content** — limited **rich-text** descriptions (bold/italic/underline/
+  lists via an allowlist sanitiser, `lib/richText.ts`), uploaded profile photo +
+  company logo (canvas-downscaled to data URLs, `lib/image.ts`), and additional
+  sections: **Key Competencies**, **Recommendations**, and a synthetic
+  **Promoted Projects** view section (the starred projects).
 - **CVpartner JSON import** and **portable JSON backup** (export + load) with
   a versioned format and a migration scaffold. Loading either kind of file
   from the picker creates a new resume (the in-editor "load file" button is
@@ -113,7 +126,9 @@ src/
 │   ├── useStore.ts             ← Zustand store + generic CRUD actions; currentResumeId; unloadStore()
 │   ├── useUndoRedo.ts          ← Undo/redo hook (Ctrl/Cmd+Z), subscribes to mutationCount
 │   ├── useResumePersistence.ts ← Per-id boot load + auto-save orchestration; takes resumeId
-│   └── useTranslation.ts       ← useTranslationAvailable() — memoized "is translate configured?" probe
+│   ├── useTranslation.ts       ← useTranslationAvailable() — memoized "is translate configured?" probe
+│   ├── useSortedItems.ts       ← Apply a section's sort mode (lib/sectionSort) for display
+│   └── useReorderGuard.ts      ← Blocks drag-reordering when a non-custom sort mode is active
 ├── lib/
 │   ├── api.ts                  ← Server client (listResumes/createResume/loadResume(id)/saveResume(id,data,locales)/patchResume/deleteResume + snapshots + translate)
 │   ├── backup.ts               ← Portable JSON backup format + migrateBackup() scaffold
@@ -127,13 +142,23 @@ src/
 │   ├── router.ts               ← Hand-rolled History API router: useRoute(), navigate(), <Link>, parseRoute()
 │   ├── sections.ts             ← Sidebar section definitions and groups
 │   ├── translateClient.ts      ← PURE: app→service locale map, canDraftBetween(), memoized availability probe
-│   └── viewFilter.ts           ← Apply a ResumeView (sections, exclusions, starred); buildViewHtml() for PDF
+│   ├── connectivity.ts         ← navigator.onLine + health-poll confirmation; subscribeOnline() drives the reconnect drain
+│   ├── syncEngine.ts           ← PURE sync decisions (decideBoot/selectDrainTargets) — boot/drain matrix, unit-tested w/o timers
+│   ├── diffResume.ts           ← PURE: section/profile diff summary for the ConflictModal
+│   ├── richText.ts             ← PURE-ish: limited rich-text (b/i/u/ul/ol/li) — sanitizeRich allowlist + renderRichHtml (HTML) + parseRichBlocks (DOCX). SECURITY-CRITICAL render path
+│   ├── viewStyle.ts            ← PURE: ViewStyle → concrete tokens (deriveTokens); sanitizeHexColor; resolveFontCss — render-boundary validation of view styling
+│   ├── viewHeader.ts           ← PURE: header/footer config defaults + builders; withHeaderDefaults/withFooterDefaults sanitise untrusted view config
+│   ├── sectionSort.ts          ← PURE: per-section sort (custom / alphabetical / start / end / date)
+│   ├── image.ts                ← Profile-photo/logo helpers: canvas downscale → data URL (browser); imageInfoFromDataUrl (PURE, for DOCX). Rejects SVG
+│   ├── wipeLocale.ts           ← PURE: remove a locale's content across the store (language-config tool)
+│   └── viewFilter.ts           ← Apply a ResumeView (detail/exclusions/starred); buildViewHtml() for PDF/preview. escapeHtml. SECURITY-CRITICAL render path
 ├── components/
 │   ├── ErrorBoundary.tsx       ← Wraps the editor; resets on activeSection change
 │   ├── ResumeList.tsx          ← Picker route (/): card list + "Add resume" panel + delete confirm
 │   ├── ImportScreen.tsx        ← Callback-driven import UI: onStartFresh / onImported(store, suggestedName) + compact mode
 │   ├── AuthGate.tsx            ← Token-entry modal shown on 401 (onSubmit → App-level handler)
 │   ├── SnapshotHistory.tsx     ← Per-resume version-history modal: takes resumeId; restore via replaceData
+│   ├── ConflictModal.tsx       ← Non-blocking 409 conflict UI: diffResume summary + keep-mine / discard-mine
 │   ├── SyncPanel.tsx           ← Picker "Sync & backup" panel (desktop build only): status + Back up now / Restore from folder. Renders null when no sync folder is configured
 │   ├── SettingsModal.tsx       ← Picker gear → Settings: translation mode (off / Docker-managed / remote URL) + sync folder. Read-only note when server reports managed:false
 │   ├── AppHeader.tsx           ← Editor top bar: ResumeSwitcher + SaveStatus + undo/redo + LanguageSwitcher + History + backup-export
@@ -196,7 +221,7 @@ tests/                          ← Vitest specs (~660 tests at last count)
 
 ### Layered design — these layers must stay clean
 1. **`types/`** has zero runtime imports. Pure type definitions.
-2. **`lib/`** is pure logic. No React. The only DOM touchers are `exporter.ts` (download anchor), `viewFilter.ts` (string-builds HTML), and `localCache.ts` (localStorage). Each is easy to unit-test (see `tests/`).
+2. **`lib/`** is pure logic. No React. A few touch DOM/browser APIs but stay unit-testable (jsdom): `exporter.ts` (download anchor), `viewFilter.ts` (string-builds HTML), `localCache.ts` (localStorage), `richText.ts` (DOMParser, for the rich-text allowlist), and `image.ts` (`fileToResizedDataUrl` uses canvas; `imageInfoFromDataUrl` is pure). Each is easy to unit-test (see `tests/`).
 3. **`store/`** owns mutable state. Only place where data lives.
 4. **`components/`** read from the store and call store actions. **No business logic in components — if a computation is more than one line, it goes in `lib/`** (see `lib/completeness.ts` for an example of moving computation out of a component).
 
