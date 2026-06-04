@@ -59,6 +59,12 @@ export interface Resume {
   linkedin_url: string | null
   website_url: string | null
   profile_image_url: string | null
+  /** Uploaded profile photo as a base64 data URL (distinct from profile_image_url, an external link). */
+  profile_photo?: string | null
+  /** Uploaded company / consultancy logo as a base64 data URL. */
+  company_logo?: string | null
+  /** Consultancy presenting the resume, e.g. "Cartavio AS". Used for the view footer copyright. */
+  company_name?: string | null
   default_locale: string
   supported_locales: string[]
   created_at: string
@@ -348,6 +354,76 @@ export interface ViewSection {
   style?: SectionStyle
 }
 
+// ─── View header & footer configuration ──────────────────────────────────────
+
+/**
+ * A single contact / detail row in a view header. The field's value is pulled
+ * from the resume (or, for `languages`, summarised from spoken_languages).
+ */
+export type HeaderFieldKey =
+  | 'phone' | 'email' | 'location' | 'nationality' | 'date_of_birth'
+  | 'linkedin' | 'website' | 'twitter' | 'languages'
+
+export interface HeaderField {
+  key: HeaderFieldKey
+  /** Whether this field is rendered in the header at all. */
+  show: boolean
+  /** Localized descriptor prefix, e.g. {no: 'Telefon: ', en: 'Phone: '}. Empty string = no prefix. */
+  label: LocalizedString
+  /** True = join the previous field's line (separated by ViewHeaderConfig.separator). False = start a new line. */
+  same_line: boolean
+  sort_order: number
+}
+
+/** Where the profile photo sits relative to the identity (name/title/contact) block. */
+export type PhotoPlacement = 'none' | 'left' | 'right' | 'above' | 'below'
+
+/** Where the company logo sits in the top banner. */
+export type LogoPlacement = 'none' | 'left' | 'center' | 'right'
+
+/** Typography for a single header text element (the name or the title). */
+export interface HeaderTextStyle {
+  /** Explicit point size; null = derive from the view's body-size scale. */
+  size_pt: number | null
+  /** Font family — a heading font choice or the body font. */
+  font: HeadingFont | 'body'
+}
+
+export interface ViewHeaderConfig {
+  /** Configurable detail rows, in display order. */
+  fields: HeaderField[]
+  /** Separator string for fields sharing a line, e.g. ' | ' or ' · '. */
+  separator: string
+  name_style: HeaderTextStyle
+  title_style: HeaderTextStyle
+  photo_placement: PhotoPlacement
+  /** Override the master profile photo for this view (base64 data URL). null = use the master photo. */
+  photo_override: string | null
+  logo_placement: LogoPlacement
+  /** Override the master company logo for this view (base64 data URL). null = use the master logo. */
+  logo_override: string | null
+}
+
+/** A closing visual separator drawn at the end of the document. */
+export type FooterSeparator = 'none' | 'line' | 'double' | 'dotted' | 'dashed' | 'thick'
+
+/**
+ * Whose name appears in the optional footer copyright line.
+ *  - 'person'  — the resume's full_name
+ *  - 'company' — the resume's company_name
+ *  - 'custom'  — a per-view override string (copyright_custom)
+ */
+export type CopyrightHolder = 'none' | 'person' | 'company' | 'custom'
+
+export interface ViewFooterConfig {
+  separator: FooterSeparator
+  copyright: CopyrightHolder
+  /** Per-view copyright holder text, used when copyright === 'custom'. Localized. */
+  copyright_custom: LocalizedString
+  /** Optional localized note appended after the copyright line. */
+  note: LocalizedString
+}
+
 export interface ResumeView {
   id: string
   name: string
@@ -360,6 +436,10 @@ export interface ResumeView {
   template_id: string | null
   /** View-wide styling. Required on new views — older builds may not set it; consumers must tolerate undefined and use DEFAULT_VIEW_STYLE. */
   style: ViewStyle
+  /** Header layout & content config. Required on new views; consumers tolerate undefined via withHeaderDefaults. */
+  header: ViewHeaderConfig
+  /** Footer / closing visual config. Required on new views; consumers tolerate undefined via withFooterDefaults. */
+  footer: ViewFooterConfig
   last_exported_at: string | null
   created_at: string
   updated_at: string

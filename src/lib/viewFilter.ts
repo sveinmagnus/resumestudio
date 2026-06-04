@@ -4,7 +4,8 @@ import type {
 import { SECTIONS } from './sections'
 import { resolve, fmtRange, fmtDate } from './locales'
 import { renderRichHtml } from './richText'
-import { DEFAULT_VIEW_STYLE, deriveTokens, resolveSectionStyle, withDefaults, type ResolvedSectionStyle, type StyleTokens } from './viewStyle'
+import { DEFAULT_VIEW_STYLE, deriveTokens, resolveSectionStyle, withDefaults, resolveFontCss, type ResolvedSectionStyle, type StyleTokens } from './viewStyle'
+import { withHeaderDefaults, withFooterDefaults, buildHeaderLines, buildCopyrightLine } from './viewHeader'
 
 // ─── Section helpers ──────────────────────────────────────────────────────────
 
@@ -150,6 +151,15 @@ export function escapeHtml(s: string | null | undefined): string {
       default:  return c
     }
   })
+}
+
+/**
+ * Guard: only embed images that are base64 data URLs. The generated document's
+ * CSP allows `img-src 'self' data:` — an external http(s) URL would be blocked
+ * anyway, so we never emit one (and never trust an arbitrary attribute value).
+ */
+export function isDataImage(src: string | null | undefined): src is string {
+  return !!src && /^data:image\//.test(src)
 }
 
 /**
@@ -388,9 +398,54 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
     .join('\n')
 
   const intro = escapeHtml(lc(view.introduction))
-  const contact = escapeHtml(
-    [r.email, r.phone, r.linkedin_url].filter(Boolean).join('  ·  '),
-  )
+
+  // ── Header (configurable identity block) ──────────────────────────────────
+  const header = withHeaderDefaults(view.header)
+  const footer = withFooterDefaults(view.footer)
+
+  const photoSrc = header.photo_override ?? r.profile_photo ?? null
+  const logoSrc = header.logo_override ?? r.company_logo ?? null
+  const showPhoto = header.photo_placement !== 'none' && isDataImage(photoSrc)
+  const showLogo = header.logo_placement !== 'none' && isDataImage(logoSrc)
+
+  const nameSizePt = header.name_style.size_pt ?? tokens.h1Pt
+  const titleSizePt = header.title_style.size_pt ?? tokens.smallFontSizePt + 1
+  const nameStyleCss = `font-family:${resolveFontCss(header.name_style.font)};font-size:${nameSizePt}pt;`
+  const titleStyleCss = `font-family:${resolveFontCss(header.title_style.font)};font-size:${titleSizePt}pt;`
+
+  const lines = buildHeaderLines(header, r, store, locale)
+  const sep = escapeHtml(header.separator)
+  const contactHtml = lines
+    .map((line) => {
+      const segs = line
+        .map((s) => `${s.label ? `<span class="ve-hlabel">${escapeHtml(s.label)}</span>` : ''}${escapeHtml(s.value)}`)
+        .join(`<span class="ve-hsep">${sep}</span>`)
+      return `<div class="ve-hline">${segs}</div>`
+    })
+    .join('\n')
+
+  const titleText = escapeHtml(lc(r.title))
+  const photoImg = showPhoto ? `<img class="ve-photo" src="${escapeHtml(photoSrc!)}" alt="">` : ''
+  const identityHtml = `<div class="ve-identity">
+    <h1 class="ve-name" style="${nameStyleCss}">${escapeHtml(r.full_name)}</h1>
+    ${titleText ? `<div class="ve-header-title" style="${titleStyleCss}">${titleText}</div>` : ''}
+    ${contactHtml ? `<div class="ve-header-contact">${contactHtml}</div>` : ''}
+  </div>`
+  const headerInner = header.photo_placement === 'below'
+    ? `${identityHtml}${photoImg}`
+    : `${photoImg}${identityHtml}`
+  const logoHtml = showLogo
+    ? `<div class="ve-logo-banner ve-logo-${header.logo_placement}"><img class="ve-logo" src="${escapeHtml(logoSrc!)}" alt=""></div>`
+    : ''
+
+  // ── Footer (closing visual) ───────────────────────────────────────────────
+  const copyright = escapeHtml(buildCopyrightLine(footer, r, new Date().getFullYear(), locale))
+  const footerNote = escapeHtml(lc(footer.note))
+  const footerText = [copyright, footerNote].filter(Boolean).join('  ·  ')
+  const showFooter = footer.separator !== 'none' || !!footerText
+  const footerHtml = showFooter
+    ? `<footer class="ve-footer ve-footer-${footer.separator}">${footerText ? `<div class="ve-copyright">${footerText}</div>` : ''}</footer>`
+    : ''
 
   // Restrictive CSP: blocks any script execution inside the generated document
   // (defence in depth — the escape-at-render above is the primary defence).
@@ -422,8 +477,36 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
            color: ${tokens.accentCss}; border-bottom: 1.5px solid ${tokens.accentCss}33; padding-bottom: 5px;
            margin: ${tokens.itemGapPx * 2}px 0 ${tokens.sectionHeadingAfterPx}px; }
     h3  { font-size: ${tokens.h3Pt}pt; font-weight: 600; color: ${tokens.accentCss}; margin-bottom: 3px; }
-    .ve-header-title  { font-size: ${tokens.smallFontSizePt + 1}pt; color: #374151; margin: 3px 0 8px; }
+    .ve-header-title  { color: #374151; margin: 3px 0 8px; }
     .ve-header-contact { font-size: ${tokens.metaFontSizePt}pt; color: #6B7280; }
+    .ve-hline { margin: 1px 0; }
+    .ve-hlabel { color: #9097A1; }
+    .ve-hsep { color: #C2C7CE; padding: 0 2px; }
+    /* Logo banner */
+    .ve-logo-banner { margin-bottom: 10px; display: flex; }
+    .ve-logo-banner.ve-logo-left { justify-content: flex-start; }
+    .ve-logo-banner.ve-logo-center { justify-content: center; }
+    .ve-logo-banner.ve-logo-right { justify-content: flex-end; }
+    .ve-logo { max-height: 52px; max-width: 240px; width: auto; height: auto; object-fit: contain; }
+    /* Identity + photo layout */
+    .ve-header { margin-bottom: 6px; }
+    .ve-header.ve-photo-left  { display: flex; gap: 18px; align-items: flex-start; }
+    .ve-header.ve-photo-right { display: flex; gap: 18px; align-items: flex-start; flex-direction: row-reverse; }
+    .ve-header.ve-photo-above { display: flex; gap: 12px; flex-direction: column; align-items: flex-start; }
+    .ve-header.ve-photo-below { display: flex; gap: 12px; flex-direction: column; align-items: flex-start; }
+    .ve-identity { min-width: 0; }
+    .ve-photo {
+      width: 112px; height: 112px; object-fit: cover; border-radius: 8px;
+      flex-shrink: 0; border: 1px solid ${tokens.accentCss}22;
+    }
+    /* Footer */
+    .ve-footer { margin-top: 28px; padding-top: 12px; }
+    .ve-footer-line   { border-top: 1px solid ${tokens.accentCss}66; }
+    .ve-footer-double { border-top: 3px double ${tokens.accentCss}88; }
+    .ve-footer-dotted { border-top: 2px dotted ${tokens.accentCss}66; }
+    .ve-footer-dashed { border-top: 2px dashed ${tokens.accentCss}66; }
+    .ve-footer-thick  { border-top: 3px solid ${tokens.accentCss}; }
+    .ve-copyright { text-align: center; font-size: ${tokens.metaFontSizePt}pt; color: #9097A1; margin-top: 8px; }
     .ve-intro { background: ${tokens.accentCss}10; border-left: 3px solid ${tokens.accentCss};
                 padding: 12px 18px; margin: 20px 0; font-size: ${tokens.smallFontSizePt}pt; white-space: pre-line; }
     .ve-section { margin-bottom: 8px; }
@@ -453,15 +536,16 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
   </style>
 </head>
 <body>
-  <div class="ve-header">
-    <h1>${escapeHtml(r.full_name)}</h1>
-    <div class="ve-header-title">${escapeHtml(lc(r.title))}</div>
-    ${contact ? `<div class="ve-header-contact">${contact}</div>` : ''}
+  ${logoHtml}
+  <div class="ve-header${showPhoto ? ` ve-photo-${header.photo_placement}` : ''}">
+    ${headerInner}
   </div>
 
   ${intro ? `<div class="ve-intro">${intro}</div>` : ''}
 
   ${sectionsHtml}
+
+  ${footerHtml}
 </body>
 </html>`
 }

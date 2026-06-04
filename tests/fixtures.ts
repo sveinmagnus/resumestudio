@@ -5,6 +5,7 @@ import type {
   Reference, Resume,
 } from '../src/types'
 import { DEFAULT_VIEW_STYLE } from '../src/lib/viewStyle'
+import { DEFAULT_VIEW_HEADER, DEFAULT_VIEW_FOOTER, defaultHeaderFields } from '../src/lib/viewHeader'
 
 export function emptyStore(): ResumeStore {
   return {
@@ -34,6 +35,9 @@ export function makeResume(over: Partial<Resume> = {}): Resume {
     linkedin_url: null,
     website_url: null,
     profile_image_url: null,
+    profile_photo: null,
+    company_logo: null,
+    company_name: null,
     default_locale: 'en',
     supported_locales: ['en', 'no'],
     created_at: '2024-01-01T00:00:00Z',
@@ -319,6 +323,8 @@ export function makeView(over: Partial<ResumeView> = {}): ResumeView {
     page_limit: null,
     template_id: null,
     style: { ...DEFAULT_VIEW_STYLE },
+    header: { ...DEFAULT_VIEW_HEADER, fields: defaultHeaderFields() },
+    footer: { ...DEFAULT_VIEW_FOOTER, copyright_custom: {}, note: {} },
     last_exported_at: null,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',

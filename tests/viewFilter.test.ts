@@ -1,13 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import {
   applyView, buildViewSections, reorderViewSections,
-  getItemTitle, getItemSubtitle, buildViewHtml,
+  getItemTitle, getItemSubtitle, buildViewHtml, isDataImage,
 } from '../src/lib/viewFilter'
 import { SECTIONS } from '../src/lib/sections'
+import { withHeaderDefaults, withFooterDefaults } from '../src/lib/viewHeader'
 import {
   emptyStore, makeProject, makeWork, makeEducation, makeKQ,
-  makeView, makeReference, makeSpokenLanguage,
+  makeView, makeReference, makeSpokenLanguage, makeResume,
 } from './fixtures'
+
+// A 1x1 transparent PNG data URL (valid for the isDataImage guard + img embedding).
+const PNG_1x1 =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+P+/HgAFhAJ/wlseKgAAAABJRU5ErkJggg=='
 
 // ─── buildViewSections ────────────────────────────────────────────────────────
 
@@ -496,5 +501,173 @@ describe('buildViewHtml()', () => {
       expect(html).not.toContain('Jan 2020')
       expect(html).not.toContain('Jun 2021')
     })
+  })
+
+  // ─── Configurable header ─────────────────────────────────────────────────
+
+  describe('header configuration', () => {
+    it('renders contact rows with descriptor prefixes', () => {
+      const store = emptyStore()
+      store.resume = makeResume({ phone: '+47 913 04 810', email: 'sm@cartavio.no' })
+      const view = makeView({
+        sections: buildViewSections(),
+        header: withHeaderDefaults({
+          fields: [
+            { key: 'phone', show: true, label: { en: 'Telefon: ' }, same_line: false, sort_order: 0 },
+            { key: 'email', show: true, label: { en: 'Epost: ' }, same_line: true, sort_order: 1 },
+          ],
+        }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).toContain('Telefon: ')
+      expect(html).toContain('+47 913 04 810')
+      expect(html).toContain('Epost: ')
+      expect(html).toContain('sm@cartavio.no')
+    })
+
+    it('renders the languages summary row', () => {
+      const store = emptyStore()
+      store.resume = makeResume()
+      store.spoken_languages = [
+        makeSpokenLanguage({ name: { en: 'Norwegian' }, level: { en: 'native' }, sort_order: 0 }),
+        makeSpokenLanguage({ name: { en: 'English' }, level: { en: 'fluent' }, sort_order: 1 }),
+      ]
+      const view = makeView({
+        sections: buildViewSections(),
+        header: withHeaderDefaults({
+          fields: [{ key: 'languages', show: true, label: { en: 'Languages: ' }, same_line: false, sort_order: 0 }],
+        }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).toContain('Norwegian (native), English (fluent)')
+    })
+
+    it('applies an explicit name font size', () => {
+      const store = emptyStore()
+      const view = makeView({
+        sections: buildViewSections(),
+        header: withHeaderDefaults({ name_style: { size_pt: 41, font: 'serif' } }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).toMatch(/font-size:41pt/)
+    })
+
+    it('embeds the profile photo when placement is set and a data URL exists', () => {
+      const store = emptyStore()
+      store.resume = makeResume({ profile_photo: PNG_1x1 })
+      const view = makeView({
+        sections: buildViewSections(),
+        header: withHeaderDefaults({ photo_placement: 'left' }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).toContain('class="ve-photo"')
+      expect(html).toContain('ve-photo-left')
+      expect(html).toContain(PNG_1x1)
+    })
+
+    it('does not embed a photo when placement is none', () => {
+      const store = emptyStore()
+      store.resume = makeResume({ profile_photo: PNG_1x1 })
+      const view = makeView({
+        sections: buildViewSections(),
+        header: withHeaderDefaults({ photo_placement: 'none' }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).not.toContain('class="ve-photo"')
+    })
+
+    it('prefers the per-view photo override over the master photo', () => {
+      const store = emptyStore()
+      store.resume = makeResume({ profile_photo: 'data:image/png;base64,MASTERxx' })
+      const view = makeView({
+        sections: buildViewSections(),
+        header: withHeaderDefaults({ photo_placement: 'above', photo_override: PNG_1x1 }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).toContain(PNG_1x1)
+      expect(html).not.toContain('MASTERxx')
+    })
+
+    it('embeds the company logo banner with placement class', () => {
+      const store = emptyStore()
+      store.resume = makeResume({ company_logo: PNG_1x1 })
+      const view = makeView({
+        sections: buildViewSections(),
+        header: withHeaderDefaults({ logo_placement: 'center' }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).toContain('ve-logo-banner')
+      expect(html).toContain('ve-logo-center')
+    })
+  })
+
+  // ─── Footer ───────────────────────────────────────────────────────────────
+
+  describe('footer configuration', () => {
+    it('renders a person copyright line', () => {
+      const store = emptyStore()
+      store.resume = makeResume({ full_name: 'Ada Lovelace' })
+      const view = makeView({
+        sections: buildViewSections(),
+        footer: withFooterDefaults({ separator: 'line', copyright: 'person', note: {} }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).toContain('ve-footer-line')
+      expect(html).toMatch(/©\s*\d{4}\s*Ada Lovelace/)
+    })
+
+    it('renders a company copyright + note', () => {
+      const store = emptyStore()
+      store.resume = makeResume({ company_name: 'Cartavio AS' })
+      const view = makeView({
+        sections: buildViewSections(),
+        footer: withFooterDefaults({ separator: 'thick', copyright: 'company', note: { en: 'Confidential' } }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).toContain('Cartavio AS')
+      expect(html).toContain('Confidential')
+    })
+
+    it('renders a per-view custom copyright holder in the export locale', () => {
+      const store = emptyStore()
+      store.resume = makeResume({ full_name: 'Ada', company_name: 'Cartavio AS' })
+      const view = makeView({
+        sections: buildViewSections(),
+        footer: withFooterDefaults({
+          separator: 'dotted',
+          copyright: 'custom',
+          copyright_custom: { en: 'Partner Consulting Ltd' },
+        }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).toContain('Partner Consulting Ltd')
+      expect(html).not.toContain('Cartavio AS')
+      expect(html).not.toMatch(/©\s*\d{4}\s*Ada\b/)
+    })
+
+    it('omits the footer entirely when separator none and copyright none', () => {
+      const store = emptyStore()
+      const view = makeView({
+        sections: buildViewSections(),
+        footer: withFooterDefaults({ separator: 'none', copyright: 'none', note: {} }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      // The footer CSS classes always exist in the <style> block; assert the
+      // footer *element* is absent instead.
+      expect(html).not.toContain('<footer')
+    })
+  })
+})
+
+describe('isDataImage()', () => {
+  it('accepts base64 image data URLs', () => {
+    expect(isDataImage('data:image/png;base64,AAAA')).toBe(true)
+    expect(isDataImage('data:image/jpeg;base64,AAAA')).toBe(true)
+  })
+  it('rejects external URLs, empty, and null', () => {
+    expect(isDataImage('https://example.com/a.png')).toBe(false)
+    expect(isDataImage('')).toBe(false)
+    expect(isDataImage(null)).toBe(false)
+    expect(isDataImage(undefined)).toBe(false)
   })
 })

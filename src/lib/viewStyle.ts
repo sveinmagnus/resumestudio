@@ -114,6 +114,19 @@ const BODY_FONT_CSS = `Ubuntu, sans-serif`
 const BODY_FONT_DOCX = 'Ubuntu'
 
 /**
+ * Resolve a header text-style font choice (a HeadingFont or the body font) to a
+ * CSS family string. Used by the configurable view header (name / title).
+ */
+export function resolveFontCss(font: HeadingFont | 'body'): string {
+  return font === 'body' ? BODY_FONT_CSS : HEADING_FONT_MAP[font].css
+}
+
+/** DOCX equivalent of resolveFontCss — returns the bare font name docx expects. */
+export function resolveFontDocx(font: HeadingFont | 'body'): string {
+  return font === 'body' ? BODY_FONT_DOCX : HEADING_FONT_MAP[font].docx
+}
+
+/**
  * Resolve a ViewStyle (or section override merged with view) to the concrete
  * tokens that renderers consume. Pure — same input gives the same tokens.
  */
