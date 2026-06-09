@@ -209,11 +209,14 @@ launch and then daily**, and you can check on demand. There are two places to
 do it:
 
 - **System tray** — right-click the Resume Studio tray icon. The middle item
-  reads **"Check for updates"**; click it to check now. When a newer version is
-  found it changes to **"Install update (vX.Y.Z)"**.
+  reads **"Check for updates"**; click it to check now. A small native popup
+  reports the result either way — "you're on the latest version" or that a new
+  version is available — and when a newer version is found the item changes to
+  **"Install update (vX.Y.Z)"**.
 - **In the app** — the resume picker shows an **"Update available"** banner with
   an **Install update** button (and a *Release notes* link), and **Settings →
-  Updates** shows your current version with a **Check for updates** button.
+  Updates** shows your current version with a **Check for updates** button (with
+  an inline result message).
 
 **How it installs.** Click **Install update** (tray or banner). The app
 downloads the new build for your OS from the release, then restarts itself onto
