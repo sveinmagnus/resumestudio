@@ -233,6 +233,7 @@ server/                         ← Express API + SQLite persistence
 │   ├── launcher.ts             ← Entry the portable build runs: data dir + free port + boot-restore + open browser + scheduler + tray + auto-update + graceful shutdown. No import.meta/__dirname so it bundles to CJS
 │   ├── freePort.ts             ← Find a free loopback port (preferred → ladder → OS-assigned)
 │   ├── openBrowser.ts          ← Zero-dep cross-platform default-browser opener
+│   ├── notify.ts               ← PURE buildNotifyCommand + best-effort native popup (Win MessageBox / mac osascript / Linux notify-send). Used for the manual tray "Check for updates" result
 │   ├── tray.ts                 ← System-tray icon (systray2) with Open / Updates / Quit; routeClick() pure dispatch + setUpdate() (live update-item); best-effort (null if no tray)
 │   ├── trayIcon.ts             ← PURE: generates the tray icon (navy/cyan mark) via zlib — PNG (*nix) / ICO (Windows), no image dep
 │   ├── updater.ts              ← Auto-updater core: PURE compareVersions/assetNameFor/isAllowedHost (SSRF) + checkForUpdate (GitHub) + downloadAsset/extractArchive(tar)/stageUpdate
@@ -875,4 +876,7 @@ Full end-user + build docs live in **`DESKTOP.md`**. Key facts for working here:
   `RESUME_UPDATE_REPO` overrides the repo. The build (`build-desktop.mjs`) bakes
   `RESUME_APP_VERSION` into the shims and emits the `.tar.gz` to `release-dist/`;
   `.github/workflows/release.yml` publishes it. Keep `assetNameFor` in
-  `updater.ts` and the duplicated copy in `build-desktop.mjs` in sync.
+  `updater.ts` and the duplicated copy in `build-desktop.mjs` in sync. A
+  **manual** tray "Check for updates" (`handleUpdateClick` → `runCheck(true)`)
+  pops a native result popup via `notify.ts` (the tray has no browser to show
+  "up to date" in); the daily background check stays silent (`runCheck(false)`).

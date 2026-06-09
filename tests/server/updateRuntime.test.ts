@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest'
-import { buildSwapScript } from '../../server/desktop/updateRuntime'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import {
+  buildSwapScript, initUpdateRuntime, runCheck, __resetUpdateRuntimeForTests,
+} from '../../server/desktop/updateRuntime'
 
 const base = {
   installDir: '/opt/Resume Studio',
@@ -50,5 +52,45 @@ describe('buildSwapScript (POSIX)', () => {
   it('single-quote-escapes paths to survive spaces', () => {
     // The install dir has a space; it must be single-quoted in the script.
     expect(s.contents).toContain(`'/opt/Resume Studio'`)
+  })
+})
+
+describe('runCheck → manual-check popup (announce)', () => {
+  afterEach(() => { __resetUpdateRuntimeForTests(); vi.unstubAllGlobals() })
+
+  function wire(notify: (t: string, m: string) => void) {
+    initUpdateRuntime({
+      installDir: '/tmp/rs', appVersion: '0.0.1', log: () => {},
+      requestShutdown: () => {}, notify,
+    })
+    // Same version → up to date.
+    vi.stubGlobal('fetch', (async () => new Response(
+      JSON.stringify({ tag_name: 'v0.0.1', assets: [] }), { status: 200 },
+    )) as unknown as typeof fetch)
+  }
+
+  it('pops a result on a manual check but stays silent on a background check', async () => {
+    const notify = vi.fn()
+    wire(notify)
+
+    await runCheck(false)            // daily/background → no popup
+    expect(notify).not.toHaveBeenCalled()
+
+    await runCheck(true)             // manual tray click → popup
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(notify.mock.calls[0][1]).toMatch(/latest version/i)
+  })
+
+  it('announces an error result when the check fails', async () => {
+    const notify = vi.fn()
+    initUpdateRuntime({
+      installDir: '/tmp/rs', appVersion: '0.0.1', log: () => {},
+      requestShutdown: () => {}, notify,
+    })
+    vi.stubGlobal('fetch', (async () => new Response('nope', { status: 500 })) as unknown as typeof fetch)
+
+    await runCheck(true)
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(notify.mock.calls[0][1]).toMatch(/could not check/i)
   })
 })

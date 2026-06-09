@@ -36,6 +36,11 @@ export interface UpdateRuntimeConfig {
   log: (msg: string) => void
   /** Begin the launcher's graceful shutdown (so the swap script can take over). */
   requestShutdown: () => void
+  /**
+   * Show a native popup with the result of a MANUAL check (the tray has no
+   * browser to show feedback in). Optional + best-effort; omitted on headless.
+   */
+  notify?: (title: string, message: string) => void
 }
 
 /** What the tray needs to render the update menu item. */
@@ -148,8 +153,12 @@ export function getUpdateStatus(): UpdateStatusView {
 
 const BUSY: UpdateState[] = ['checking', 'downloading', 'applying']
 
-/** Check GitHub for a newer release. Safe to call repeatedly; no-op while busy. */
-export async function runCheck(): Promise<UpdateStatusView> {
+/**
+ * Check GitHub for a newer release. Safe to call repeatedly; no-op while busy.
+ * Pass `announce` for a MANUAL check (tray click) to pop a native result popup —
+ * the daily background check leaves it false so it stays silent.
+ */
+export async function runCheck(announce = false): Promise<UpdateStatusView> {
   if (!cfg) return getUpdateStatus()
   if (BUSY.includes(state)) return getUpdateStatus()
   setState('checking')
@@ -166,7 +175,23 @@ export async function runCheck(): Promise<UpdateStatusView> {
     setState('error')
     cfg.log(`  update     : check failed — ${(err as Error).message}`)
   }
+  if (announce) announceResult()
   return getUpdateStatus()
+}
+
+/** Pop a native result popup after a manual check (best-effort). */
+function announceResult(): void {
+  if (!cfg?.notify) return
+  const title = 'Resume Studio'
+  if (state === 'uptodate') {
+    cfg.notify(title, `You're already on the latest version (v${cfg.appVersion}).`)
+  } else if (state === 'available' && info) {
+    cfg.notify(title, info.assetUrl
+      ? `Update available: v${info.latestVersion}. Open the tray menu and choose Install update to update now.`
+      : `Version v${info.latestVersion} is available — there is no automatic install for this platform; download it from the release page.`)
+  } else if (state === 'error') {
+    cfg.notify(title, 'Could not check for updates. Please check your internet connection and try again.')
+  }
 }
 
 /**
@@ -203,10 +228,11 @@ export async function runInstall(): Promise<void> {
   }
 }
 
-/** Tray/banner click dispatch: install when ready, otherwise check. */
+/** Tray click dispatch: install when ready, otherwise run a MANUAL check
+ *  (announce=true → native result popup, since the tray has no browser). */
 export function handleUpdateClick(): void {
   if (state === 'available' || state === 'staged') void runInstall()
-  else if (!BUSY.includes(state)) void runCheck()
+  else if (!BUSY.includes(state)) void runCheck(true)
 }
 
 /** Write the swap script, spawn it detached, then ask the launcher to shut down. */

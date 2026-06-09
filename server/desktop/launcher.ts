@@ -35,6 +35,7 @@ import { startTranslate } from '../translateDocker.js'
 import { findFreePort } from './freePort.js'
 import { openBrowser } from './openBrowser.js'
 import { startTray, type TrayHandle } from './tray.js'
+import { notify } from './notify.js'
 import { APP_VERSION } from '../version.js'
 import {
   initUpdateRuntime, setTrayRefresher, runCheck, handleUpdateClick,
@@ -197,6 +198,9 @@ async function main(): Promise<void> {
       appVersion: APP_VERSION,
       log,
       requestShutdown: () => shutdown('update'),
+      // Native popup so a manual tray "Check for updates" always gives feedback
+      // (the tray has no browser to show an "up to date" message in).
+      notify: (title, message) => notify(title, message, log),
     })
     log(`  updates    : enabled (install dir: ${installDir})`)
   }
