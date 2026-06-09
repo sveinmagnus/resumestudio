@@ -50,6 +50,17 @@ What works today:
   a versioned format and a migration scaffold. Loading either kind of file
   from the picker creates a new resume (the in-editor "load file" button is
   gone — backup load is picker-only).
+- **AI-assisted import from PDF/Word** (`lib/aiImport.ts`,
+  `components/AIImportModal.tsx`) — a *bring-your-own-LLM* flow, no external
+  service or API key. The picker hands the user a downloadable template
+  (`public/ai-import-template.md`, also served at `/ai-import-template.md`)
+  describing a deliberately-simple exchange schema (`resumestudio-ai/v1`:
+  plain strings, no ids, skills/roles by name). The user runs it in any LLM
+  with their CV, pastes the returned JSON back, and `validateAIImport`
+  (field-pathed errors) → `importFromAIDraft` (interns skills/roles into the
+  shared registries, wraps strings as `LocalizedString`, links projects to
+  jobs by employer name) builds a new resume after a preview. AI-format files
+  dropped on the normal import zone are auto-routed too.
 - **Translation assist** on every `DualField` secondary input: "Copy from
   primary" (no network) plus an optional "Draft translation" that proxies
   through the server to a self-hosted LibreTranslate instance (drafts are

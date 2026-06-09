@@ -1,7 +1,11 @@
 import { useRef, useState } from 'react'
-import { Upload, FileJson, Sparkles, FilePlus } from 'lucide-react'
+import { Upload, FileJson, Sparkles, FilePlus, Wand2 } from 'lucide-react'
 import { isBackupFormat, importFromBackup, UnsupportedBackupVersionError } from '../lib/backup'
 import { importFromCVPartner } from '../lib/importer'
+import {
+  isAIImportFormat, validateAIImport, importFromAIDraft, InvalidAIImportError,
+} from '../lib/aiImport'
+import { AIImportModal } from './AIImportModal'
 import type { ResumeStore } from '../types'
 
 const YEAR = new Date().getFullYear()
@@ -23,6 +27,7 @@ function deriveName(store: ResumeStore, fallback: string): string {
 export function ImportScreen({ compact = false, onStartFresh, onImported }: ImportScreenProps) {
   const [error, setError]       = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [showAI, setShowAI]     = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = async (file: File) => {
@@ -31,7 +36,13 @@ export function ImportScreen({ compact = false, onStartFresh, onImported }: Impo
       const text = await file.text()
       const json = JSON.parse(text) as unknown
 
-      if (isBackupFormat(json)) {
+      if (isAIImportFormat(json)) {
+        // AI-import drafts get validated up-front; the field-pathed message is
+        // far more useful than a generic parse failure. (The guided AI modal
+        // shows the full issue list — here we surface the first problem.)
+        const store = importFromAIDraft(validateAIImport(json))
+        await onImported(store, deriveName(store, 'AI-imported resume'))
+      } else if (isBackupFormat(json)) {
         const store = importFromBackup(json)
         await onImported(store, deriveName(store, 'Imported resume'))
       } else {
@@ -39,7 +50,7 @@ export function ImportScreen({ compact = false, onStartFresh, onImported }: Impo
         await onImported(store, deriveName(store, 'Imported CV'))
       }
     } catch (e) {
-      const msg = e instanceof UnsupportedBackupVersionError
+      const msg = e instanceof UnsupportedBackupVersionError || e instanceof InvalidAIImportError
         ? e.message
         : `Could not parse file: ${(e as Error).message}`
       setError(msg)
@@ -78,7 +89,7 @@ export function ImportScreen({ compact = false, onStartFresh, onImported }: Impo
         >
           <div className="is-drop-icon"><Upload size={28} /></div>
           <div className="is-drop-title">Drop your resume file here</div>
-          <div className="is-drop-sub">or click to browse — accepts Resume Studio backups and CVpartner exports</div>
+          <div className="is-drop-sub">or click to browse — Resume Studio backups, CVpartner exports, or AI import files</div>
           <input
             ref={inputRef}
             type="file"
@@ -94,17 +105,30 @@ export function ImportScreen({ compact = false, onStartFresh, onImported }: Impo
           <div className="is-features">
             <div className="is-feat"><FileJson size={16} /> Resume Studio backup (.json) — restore a previous session</div>
             <div className="is-feat"><FileJson size={16} /> CVpartner export (.json) — import projects, employment, education, skills &amp; more</div>
+            <div className="is-feat"><Wand2 size={16} /> Start from a PDF/Word CV with your own AI — no account or API key needed</div>
             <div className="is-feat"><Sparkles size={16} /> Side-by-side dual-language editing in any two locales</div>
           </div>
         )}
 
         <div className="is-divider"><span>or</span></div>
 
+        <button className="is-ai" onClick={() => setShowAI(true)}>
+          <Wand2 size={16} />
+          Start from a PDF/Word file with AI
+        </button>
+
         <button className="is-fresh" onClick={() => void onStartFresh()}>
           <FilePlus size={16} />
           Start with an empty resume
         </button>
       </div>
+
+      {showAI && (
+        <AIImportModal
+          onClose={() => setShowAI(false)}
+          onImported={onImported}
+        />
+      )}
 
       {!compact && (
         <footer className="is-page-footer">
@@ -178,6 +202,17 @@ export function ImportScreen({ compact = false, onStartFresh, onImported }: Impo
         .is-divider::before, .is-divider::after {
           content: ''; flex: 1; height: 1px; background: var(--line);
         }
+
+        /* AI-assisted import button — prominent (accent outline) */
+        .is-ai {
+          display: inline-flex; align-items: center; gap: 8px; width: 100%;
+          justify-content: center; padding: 11px 22px; border-radius: var(--r-md);
+          border: 1.5px solid var(--accent); background: var(--accent-wash);
+          font-size: 14px; font-weight: 600; color: var(--accent);
+          transition: all .15s; margin-bottom: 10px;
+        }
+        .is-ai:hover { background: var(--accent); color: #fff; }
+        .is-ai svg { flex-shrink: 0; }
 
         /* Start fresh button */
         .is-fresh {
