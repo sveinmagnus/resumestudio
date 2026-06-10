@@ -773,6 +773,12 @@ cleanly. Low priority — the conflict path already makes it safe, just not tidy
 
 A few tips specifically for this codebase:
 
+- **`knowledge.yaml` (repo root) is a KCP manifest** — a machine-navigable index
+  of every knowledge artifact here (this file, the `.claude/skills/`, `DESKTOP.md`,
+  `plans/`, the docs site, CI policies) with intent, dependencies, and freshness
+  (`validated`) metadata. When deciding *which* doc/skill to read for a task,
+  consult it; when you change a document, update its unit's `validated` date.
+  Spec: https://github.com/Cantara/knowledge-context-protocol
 - **Always read the relevant file before editing.** Files are small; reading is cheap.
 - **`types/index.ts` is the source of truth.** When in doubt about a field, look there.
 - **The store actions are generically typed.** Use them; don't write per-section update functions. Use the `mutate()` helper if you add a new action.

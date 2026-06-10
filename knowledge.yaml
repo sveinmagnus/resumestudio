@@ -1,0 +1,291 @@
+# Knowledge Context Protocol manifest — https://github.com/Cantara/knowledge-context-protocol
+# Agent-navigable map of this repo's knowledge. Declared, not duplicated: every unit
+# points at an existing file. Keep `validated` dates honest — update them when you
+# re-verify a unit's accuracy, and when you change a document, update its unit here.
+kcp_version: "0.14"
+project: resume-studio
+version: 0.2.2
+updated: "2026-06-10"
+language: en
+hints:
+  recommended_entry_point: claude-instructions
+
+units:
+  # ── Instruction layer (eager — Claude Code auto-loads CLAUDE.md) ──────────
+  - id: claude-instructions
+    path: CLAUDE.md
+    intent: "How must an agent work in this codebase? Architecture map, data model, store patterns, conventions, and what not to change."
+    scope: global
+    audience: [agent, developer]
+    validated: "2026-06-10"
+    update_frequency: weekly
+    triggers: [conventions, architecture, data-model, store, persistence, sections]
+    hints:
+      token_estimate: 16700
+      load_strategy: eager
+      priority: critical
+
+  # ── Project overviews ─────────────────────────────────────────────────────
+  - id: readme
+    path: README.md
+    intent: "What is Resume Studio and how do I install, run, and configure it?"
+    scope: global
+    audience: [human, agent]
+    # No `validated` date on purpose: known stale (claims single-resume schema,
+    # old test count, missing env vars). See plan-roadmap item A1 before trusting.
+    update_frequency: monthly
+    triggers: [overview, quickstart, install, configuration, env]
+    hints:
+      token_estimate: 2000
+      priority: supplementary
+
+  - id: desktop-guide
+    path: DESKTOP.md
+    intent: "How does the portable desktop build work — building, data dirs, cloud-folder sync, tray, and auto-update?"
+    scope: project
+    audience: [human, developer, agent]
+    validated: "2026-06-10"
+    update_frequency: monthly
+    depends_on: [readme]
+    triggers: [desktop, launcher, portable, tray, auto-update, sync, backup-folder]
+    hints:
+      token_estimate: 3900
+
+  # ── Schemas ────────────────────────────────────────────────────────────────
+  - id: data-model
+    kind: schema
+    path: src/types/index.ts
+    intent: "What is the resume data model? Single source of truth for every entity, localized field, and view-config type."
+    format: text
+    scope: global
+    audience: [developer, agent]
+    validated: "2026-06-10"
+    update_frequency: monthly
+    triggers: [types, entities, LocalizedString, ResumeStore, ResumeView, schema]
+    hints:
+      token_estimate: 4300
+      priority: critical
+
+  - id: ai-import-schema
+    kind: schema
+    path: public/ai-import-template.md
+    intent: "What is the resumestudio-ai/v1 exchange schema that external LLMs fill in for the bring-your-own-LLM CV import?"
+    scope: module
+    audience: [human, agent]
+    validated: "2026-06-10"
+    update_frequency: rarely
+    triggers: [ai-import, byo-llm, exchange-schema, import]
+    hints:
+      token_estimate: 1600
+
+  # ── Agent skills (lazy — read before touching their domain) ───────────────
+  - id: skill-store-persistence
+    path: .claude/skills/store-and-persistence.md
+    intent: "What rules govern the Zustand store, auto-save, boot, undo, and the loadStore-vs-replaceData split?"
+    scope: module
+    audience: [agent]
+    validated: "2026-06-10"
+    depends_on: [claude-instructions, data-model]
+    triggers: [store, zustand, auto-save, undo, redo, mutationCount, localCache, persistence]
+    hints:
+      token_estimate: 1700
+
+  - id: skill-export-pipeline
+    path: .claude/skills/export-pipeline.md
+    intent: "How do the HTML/PDF and DOCX export paths stay in sync, and what is the docx lazy-load discipline?"
+    scope: module
+    audience: [agent]
+    validated: "2026-06-10"
+    depends_on: [claude-instructions, data-model]
+    triggers: [export, docx, pdf, viewFilter, exporter, buildViewHtml, preview]
+    hints:
+      token_estimate: 1500
+
+  - id: skill-security-review
+    path: .claude/skills/security-review.md
+    intent: "What escaping/sanitising rules protect the render pipeline, server, auth, and imports — and how to review changes against them?"
+    kind: policy
+    scope: project
+    audience: [agent]
+    validated: "2026-06-10"
+    depends_on: [claude-instructions]
+    triggers: [security, xss, escaping, sanitise, auth, csp, untrusted-input]
+    hints:
+      token_estimate: 4300
+      priority: critical
+
+  - id: skill-software-testing
+    path: .claude/skills/software-testing.md
+    intent: "How to write tests that find bugs here — the typecheck/test/build gate, regression discipline, and live verification."
+    scope: project
+    audience: [agent]
+    validated: "2026-06-10"
+    depends_on: [claude-instructions]
+    triggers: [testing, vitest, rtl, regression, qa, verification]
+    hints:
+      token_estimate: 2300
+
+  - id: skill-cvpartner-import
+    path: .claude/skills/cvpartner-import.md
+    intent: "What CVpartner-format quirks and importer invariants must be preserved when touching importer.ts?"
+    scope: module
+    audience: [agent]
+    validated: "2026-06-10"
+    depends_on: [claude-instructions, data-model]
+    triggers: [cvpartner, importer, locale-detection, import]
+    hints:
+      token_estimate: 1600
+
+  - id: skill-cartavio-brand
+    path: .claude/skills/cartavio-brand.md
+    intent: "What are the Cartavio brand colors, fonts, and design tokens all UI must follow?"
+    scope: project
+    audience: [agent]
+    validated: "2026-06-10"
+    triggers: [brand, design, colors, fonts, tokens, styling]
+    hints:
+      token_estimate: 1200
+
+  # ── Plans (design rationale; the first is live, the others shipped) ──────
+  - id: plan-roadmap
+    path: plans/improvement-roadmap.md
+    intent: "What improvements and new features are planned, in what order, and why? (Full-solution review, June 2026.)"
+    scope: global
+    audience: [human, developer, agent]
+    validated: "2026-06-10"
+    update_frequency: monthly
+    depends_on: [claude-instructions]
+    triggers: [roadmap, future-work, refactor, features, priorities]
+    hints:
+      token_estimate: 4400
+
+  - id: plan-multi-resume
+    path: plans/multi-resume.md
+    intent: "Why is multi-resume designed the way it is? Historical design plan — the feature has shipped."
+    scope: project
+    audience: [developer, agent]
+    update_frequency: never
+    triggers: [multi-resume, picker, routing, design-rationale]
+    hints:
+      token_estimate: 4300
+      priority: reference
+
+  - id: plan-offline-editing
+    path: plans/offline-editing.md
+    intent: "Why is offline editing / conflict safety designed the way it is? Historical design plan — Tiers 1–2 shipped, Tier 3 (PWA) deferred."
+    scope: project
+    audience: [developer, agent]
+    update_frequency: never
+    triggers: [offline, sync, conflict, queue, design-rationale]
+    hints:
+      token_estimate: 4100
+      priority: reference
+
+  # ── End-user documentation site (GitHub Pages) ────────────────────────────
+  - id: site-landing
+    path: docs/index.md
+    intent: "What is Resume Studio, who is it for, and what makes it different? (End-user landing page.)"
+    scope: global
+    audience: [human]
+    validated: "2026-06-10"
+    update_frequency: monthly
+    hints:
+      token_estimate: 650
+
+  - id: site-features
+    path: docs/features.md
+    intent: "What does Resume Studio do today, feature by feature? (Most current end-user feature list.)"
+    scope: global
+    audience: [human, agent]
+    validated: "2026-06-10"
+    update_frequency: monthly
+    triggers: [features, capabilities, what-shipped]
+    hints:
+      token_estimate: 1450
+
+  - id: site-how-to
+    path: docs/how-to.md
+    intent: "How does an end user perform day-to-day tasks — first launch, editing, views, exporting, syncing?"
+    scope: global
+    audience: [human]
+    update_frequency: monthly
+    hints:
+      token_estimate: 2600
+
+  - id: site-download
+    path: docs/download.md
+    intent: "Where does an end user download the desktop build for each OS?"
+    scope: global
+    audience: [human]
+    update_frequency: monthly
+    hints:
+      token_estimate: 1000
+
+  # ── Policies ───────────────────────────────────────────────────────────────
+  - id: ci-policy
+    kind: policy
+    path: .github/workflows/ci.yml
+    intent: "What checks must pass on every push and PR? (typecheck + test + build)"
+    format: yaml
+    scope: project
+    audience: [developer, agent]
+    validated: "2026-06-10"
+    update_frequency: rarely
+    triggers: [ci, checks, pipeline]
+    hints:
+      token_estimate: 150
+
+  - id: release-policy
+    kind: policy
+    path: .github/workflows/release.yml
+    intent: "How are desktop releases built and published to GitHub Releases?"
+    format: yaml
+    scope: project
+    audience: [developer, agent]
+    validated: "2026-06-10"
+    update_frequency: rarely
+    depends_on: [desktop-guide]
+    triggers: [release, publish, tarball, versioning]
+    hints:
+      token_estimate: 900
+
+  - id: env-reference
+    path: .env.example
+    intent: "Which environment variables does the server read, and what do they default to?"
+    format: text
+    scope: project
+    audience: [developer, agent]
+    validated: "2026-06-10"
+    update_frequency: monthly
+    triggers: [env, configuration, token, translate-provider]
+    hints:
+      token_estimate: 1100
+
+relationships:
+  - from: claude-instructions
+    to: skill-store-persistence
+    type: enables
+  - from: claude-instructions
+    to: skill-export-pipeline
+    type: enables
+  - from: claude-instructions
+    to: skill-security-review
+    type: enables
+  - from: data-model
+    to: skill-export-pipeline
+    type: context
+  - from: data-model
+    to: skill-store-persistence
+    type: context
+  - from: skill-security-review
+    to: skill-export-pipeline
+    type: governs
+  - from: skill-security-review
+    to: ai-import-schema
+    type: governs
+  - from: plan-roadmap
+    to: readme
+    type: contradicts   # roadmap A1 documents README's stale claims
+  - from: desktop-guide
+    to: release-policy
+    type: enables
