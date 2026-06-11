@@ -45,7 +45,14 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          # Pinned, not '20': better-sqlite3's prebuild-install resolves its
+          # binary via node-abi, which lags brand-new Node patch releases. An
+          # unknown patch (e.g. 20.20.2) finds no prebuilt and falls back to
+          # node-gyp, which can't drive the runner's Visual Studio 18 image —
+          # the Windows build dies. This is also the Node bundled into the
+          # desktop build (build-desktop copies process.execPath), so bump it
+          # deliberately, never by float.
+          node-version: '20.18.1'
           cache: 'npm'
 
       - name: Install dependencies
