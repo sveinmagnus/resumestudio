@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import {
   listResumes, createResume, getResume, saveResume,
   deleteResume, renameResume, listSnapshots, getSnapshot,
+  storageStats,
 } from '../db.js'
 
 const router = Router()
@@ -41,6 +42,14 @@ router.post('/', (req: Request, res: Response): void => {
         : undefined,
   })
   res.status(201).json({ resume: meta })
+})
+
+/**
+ * GET /api/resumes/storage — per-resume payload weights + DB size (roadmap A4
+ * "measure first"). Registered BEFORE `/:id` so 'storage' isn't matched as an id.
+ */
+router.get('/storage', (_req: Request, res: Response): void => {
+  res.json(storageStats())
 })
 
 // ─── Single-resume snapshot history ───────────────────────────────────────────

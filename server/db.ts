@@ -3,6 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { randomUUID } from 'crypto'
 import fs from 'fs'
+import { payloadStats } from './storage.js'
 
 // See the note in app.ts: esbuild emits "" for import.meta.url in the desktop
 // CJS bundle, so guard against fileURLToPath(""). DATA_DIR is only consulted
@@ -119,6 +120,25 @@ export interface SnapshotMeta {
   size: number
 }
 
+/** Per-resume payload weight — the A4 "measure first" readout. */
+export interface ResumeStorageStats {
+  id: string
+  name: string
+  /** UTF-8 size of the live `data` JSON — what every auto-save PUT and localStorage pending record carries. */
+  bytes: number
+  /** Share of `bytes` held by embedded base64 images. */
+  image_bytes: number
+  snapshot_count: number
+  /** Total bytes across this resume's (image-free) snapshots. */
+  snapshot_bytes: number
+}
+
+export interface StorageStats {
+  /** Size of the SQLite database (page_count × page_size). */
+  db_bytes: number
+  resumes: ResumeStorageStats[]
+}
+
 export interface CreateResumeInput {
   name: string
   data?: unknown
@@ -153,6 +173,12 @@ export interface ResumeDb {
   renameResume(id: string, name: string): boolean
   listSnapshots(resumeId: string): SnapshotMeta[]
   getSnapshot(resumeId: string, snapshotId: number): Record<string, unknown> | null
+  /**
+   * Per-resume payload weights (live JSON size, embedded-image share, snapshot
+   * totals) plus the DB file size. Read-only measurement — scans every row, so
+   * call it on demand (a picker load), not per save.
+   */
+  storageStats(): StorageStats
   /**
    * Every resume as portable backup entries, oldest-created first. The source
    * for a store-backup written to the sync folder.
@@ -314,6 +340,14 @@ export function createResumeDb(dbPath: string): ResumeDb {
   const selectSnapshot = db.prepare(`
     SELECT data FROM resume_snapshots WHERE resume_id = ? AND id = ?
   `)
+  const selectStorageRows = db.prepare(`
+    SELECT id, name, data FROM resumes ORDER BY saved_at DESC
+  `)
+  // CAST AS BLOB so LENGTH counts bytes, not characters (TEXT LENGTH is chars).
+  const selectSnapshotTotals = db.prepare(`
+    SELECT resume_id, COUNT(*) AS count, SUM(LENGTH(CAST(data AS BLOB))) AS bytes
+    FROM resume_snapshots GROUP BY resume_id
+  `)
 
   // ─── Row coercion ─────────────────────────────────────────────────────────
   interface MetaRow {
@@ -428,6 +462,29 @@ export function createResumeDb(dbPath: string): ResumeDb {
     return row ? (JSON.parse(row.data) as Record<string, unknown>) : null
   }
 
+  const storageStats = (): StorageStats => {
+    const pageCount = db.pragma('page_count', { simple: true }) as number
+    const pageSize = db.pragma('page_size', { simple: true }) as number
+    const totals = new Map(
+      (selectSnapshotTotals.all() as { resume_id: string; count: number; bytes: number | null }[])
+        .map((r) => [r.resume_id, { count: r.count, bytes: r.bytes ?? 0 }]),
+    )
+    const resumes = (selectStorageRows.all() as { id: string; name: string; data: string }[])
+      .map((row) => {
+        const { bytes, image_bytes } = payloadStats(row.data)
+        const snap = totals.get(row.id)
+        return {
+          id: row.id,
+          name: row.name,
+          bytes,
+          image_bytes,
+          snapshot_count: snap?.count ?? 0,
+          snapshot_bytes: snap?.bytes ?? 0,
+        }
+      })
+    return { db_bytes: pageCount * pageSize, resumes }
+  }
+
   const dumpResumes = (): ResumeBackupEntry[] =>
     (selectAllFull.all() as FullRow[]).map((row) => ({
       id: row.id,
@@ -504,7 +561,7 @@ export function createResumeDb(dbPath: string): ResumeDb {
   return {
     listResumes, createResume, getResume, saveResume,
     deleteResume, renameResume, listSnapshots, getSnapshot,
-    dumpResumes, restoreResumes, close,
+    storageStats, dumpResumes, restoreResumes, close,
   }
 }
 
@@ -551,6 +608,7 @@ export const listSnapshots = (resumeId: string): SnapshotMeta[] => defaultDb().l
 export const getSnapshot = (
   resumeId: string, snapshotId: number,
 ): Record<string, unknown> | null => defaultDb().getSnapshot(resumeId, snapshotId)
+export const storageStats = (): StorageStats => defaultDb().storageStats()
 export const dumpResumes = (): ResumeBackupEntry[] => defaultDb().dumpResumes()
 export const restoreResumes = (
   entries: ResumeBackupEntry[], opts?: RestoreOptions,

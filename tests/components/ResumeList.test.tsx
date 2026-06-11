@@ -114,6 +114,28 @@ describe('<ResumeList>', () => {
     expect(screen.getByText('Safe CV')).toBeInTheDocument()
   })
 
+  it('flags heavy resumes with a payload-weight note, leaves light ones unmarked', async () => {
+    vi.spyOn(api, 'listResumes').mockResolvedValue([
+      META({ id: 'light', name: 'Light CV' }),
+      META({ id: 'heavy', name: 'Heavy CV' }),
+    ])
+    vi.spyOn(api, 'storageStats').mockResolvedValue({
+      db_bytes: 5_000_000,
+      resumes: [
+        { id: 'light', name: 'Light CV', bytes: 40_000, image_bytes: 0, snapshot_count: 2, snapshot_bytes: 70_000 },
+        { id: 'heavy', name: 'Heavy CV', bytes: 2_600_000, image_bytes: 2_000_000, snapshot_count: 5, snapshot_bytes: 90_000 },
+      ],
+    })
+    render(<ResumeList onUnauthorized={() => {}} />)
+    await screen.findByText('Heavy CV')
+    // The heavy card gets the readout (risk level: ≥ 2.5 MB)…
+    expect(await screen.findByText(/≈2\.6 MB \(2\.0 MB images\)/)).toBeInTheDocument()
+    // …the light card gets none (exactly one weight note in the document).
+    expect(screen.getAllByText(/≈/)).toHaveLength(1)
+    // The footer shows the DB total.
+    expect(screen.getByText(/DB 5\.0 MB/)).toBeInTheDocument()
+  })
+
   it('surfaces an auth failure to the parent', async () => {
     const { UnauthorizedError } = await import('../../src/lib/api')
     vi.spyOn(api, 'listResumes').mockRejectedValue(new UnauthorizedError())
