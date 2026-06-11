@@ -348,3 +348,24 @@ describe('auth gating (token configured)', () => {
     expect(res.status).toBe(401)
   })
 })
+
+describe('storage readout', () => {
+  it('GET /api/resumes/storage → 200 with db size and per-resume weights', async () => {
+    const photo = `data:image/jpeg;base64,${'A'.repeat(500)}`
+    const id = await createResume('Weighty CV', { data: { resume: { profile_photo: photo } } })
+    const res = await request(app).get('/api/resumes/storage')
+    expect(res.status).toBe(200)
+    expect(res.body.db_bytes).toBeGreaterThan(0)
+    const stat = res.body.resumes.find((r: { id: string }) => r.id === id)
+    expect(stat).toBeDefined()
+    expect(stat.bytes).toBeGreaterThan(0)
+    expect(stat.image_bytes).toBe(photo.length)
+  })
+
+  it('is not shadowed by the /:id route (storage is not treated as an id)', async () => {
+    // A 404 here would mean Express matched 'storage' as a resume id.
+    const res = await request(app).get('/api/resumes/storage')
+    expect(res.status).toBe(200)
+    expect(res.body).toHaveProperty('resumes')
+  })
+})

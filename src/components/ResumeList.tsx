@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { FileText, Plus, Trash2, Loader2, Pencil, Check, X, Settings } from 'lucide-react'
 import { api, type ResumeMeta, UnauthorizedError, ServerError } from '../lib/api'
+import { fmtBytes, weightLevel, type ResumeStorageStats, type StorageStats } from '../lib/storage'
 import { fmtRelativeTime, detectLocalesInData } from '../lib/locales'
 import { freshStore } from '../lib/freshStore'
 import { listDirty } from '../lib/localCache'
@@ -12,6 +13,26 @@ import { UpdateBanner } from './UpdateBanner'
 import type { ResumeStore } from '../types'
 
 const YEAR = new Date().getFullYear()
+
+/**
+ * Inline payload-weight warning for one picker card. Renders nothing while the
+ * resume is under the "large" threshold — the readout is an alert, not a stat
+ * the user must parse on every visit.
+ */
+function WeightNote({ stat }: { stat: ResumeStorageStats | undefined }) {
+  if (!stat) return null
+  const level = weightLevel(stat.bytes)
+  if (level === 'ok') return null
+  const detail = stat.image_bytes > 0 ? ` (${fmtBytes(stat.image_bytes)} images)` : ''
+  const title = level === 'risk'
+    ? 'This resume is approaching the browser’s offline-cache quota (~5 MB) — consider smaller images.'
+    : 'This resume’s payload is large — every save re-sends all of it, mostly embedded images.'
+  return (
+    <span className={level === 'risk' ? 'rl-weight rl-weight-risk' : 'rl-weight'} title={title}>
+      {' · '}≈{fmtBytes(stat.bytes)}{detail}
+    </span>
+  )
+}
 
 interface ResumeListProps {
   onUnauthorized: () => void
@@ -39,6 +60,8 @@ export function ResumeList({ onUnauthorized }: ResumeListProps) {
   // The running app version, shown in the footer. From the update status
   // endpoint (never throws); hidden when unknown ('0.0.0').
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  // Payload-weight readout (never throws; null = unavailable, readout hidden).
+  const [storage, setStorage] = useState<StorageStats | null>(null)
 
   const reload = useCallback(() => {
     setError(null)
@@ -58,6 +81,14 @@ export function ResumeList({ onUnauthorized }: ResumeListProps) {
       .then((s) => setAppVersion(s.currentVersion && s.currentVersion !== '0.0.0' ? s.currentVersion : null))
       .catch(() => setAppVersion(null))
   }, [])
+
+  useEffect(() => {
+    void api.storageStats().then(setStorage)
+  }, [])
+
+  const statsById = new Map<string, ResumeStorageStats>(
+    (storage?.resumes ?? []).map((s) => [s.id, s]),
+  )
 
   // ── Create flow: store → API → navigate ────────────────────────────────
   const create = useCallback(async (name: string, data: ResumeStore) => {
@@ -274,6 +305,7 @@ export function ResumeList({ onUnauthorized }: ResumeListProps) {
                       {' · '}
                       {r.primary_locale.toUpperCase()}
                       {r.secondary_locale && ` / ${r.secondary_locale.toUpperCase()}`}
+                      <WeightNote stat={statsById.get(r.id)} />
                     </div>
                   </div>
                 </Link>
@@ -314,6 +346,14 @@ export function ResumeList({ onUnauthorized }: ResumeListProps) {
           <>
             <span className="rl-footer-dot">·</span>
             <span title="Installed version">v{appVersion}</span>
+          </>
+        )}
+        {storage && (
+          <>
+            <span className="rl-footer-dot">·</span>
+            <span title="Server database size (resumes + snapshot history)">
+              DB {fmtBytes(storage.db_bytes)}
+            </span>
           </>
         )}
       </footer>
@@ -390,6 +430,8 @@ export function ResumeList({ onUnauthorized }: ResumeListProps) {
           border-radius: 50%; background: #b87900; flex-shrink: 0;
         }
         .rl-meta { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+        .rl-weight { color: #b87900; }
+        .rl-weight-risk { color: #b91c1c; font-weight: 600; }
         .rl-unsynced-note {
           margin-bottom: 16px; padding: 9px 14px; font-size: 12.5px;
           background: #fff7e6; color: #b87900; border-radius: var(--r-sm);

@@ -37,6 +37,43 @@ describe('createResumeDb — file permissions', () => {
   })
 })
 
+describe('createResumeDb — storageStats', () => {
+  const photo = `data:image/jpeg;base64,${'A'.repeat(2000)}`
+
+  it('returns empty resumes and a positive db size on a fresh DB', () => {
+    const db = freshDb()
+    const stats = db.storageStats()
+    expect(stats.resumes).toEqual([])
+    expect(stats.db_bytes).toBeGreaterThan(0)
+  })
+
+  it('reports per-resume bytes and image share', () => {
+    const db = freshDb()
+    const plain = db.createResume({ name: 'Plain', data: { resume: { name: { en: 'CV' } } } })
+    const heavy = db.createResume({ name: 'Heavy', data: { resume: { profile_photo: photo } } })
+    const stats = db.storageStats()
+    const plainStat = stats.resumes.find((r) => r.id === plain.id)!
+    const heavyStat = stats.resumes.find((r) => r.id === heavy.id)!
+    expect(plainStat.image_bytes).toBe(0)
+    expect(plainStat.bytes).toBeGreaterThan(0)
+    expect(heavyStat.image_bytes).toBe(photo.length)
+    expect(heavyStat.bytes).toBeGreaterThan(heavyStat.image_bytes)
+    expect(heavyStat.name).toBe('Heavy')
+  })
+
+  it('counts snapshots per resume, and snapshot bytes exclude stripped images', () => {
+    const db = freshDb()
+    const meta = db.createResume({ name: 'CV' })
+    db.saveResume(meta.id, { resume: { profile_photo: photo, name: { en: 'v1' } } })
+    const stat = db.storageStats().resumes.find((r) => r.id === meta.id)!
+    expect(stat.snapshot_count).toBe(db.listSnapshots(meta.id).length)
+    expect(stat.snapshot_count).toBeGreaterThan(0)
+    // Snapshots are stored image-free, so their total stays far below the live row.
+    expect(stat.snapshot_bytes).toBeLessThan(stat.bytes)
+    expect(stat.snapshot_bytes).toBeGreaterThan(0)
+  })
+})
+
 describe('createResumeDb — resume CRUD', () => {
   it('lists no resumes on a fresh DB', () => {
     const db = freshDb()

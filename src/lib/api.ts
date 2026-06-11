@@ -1,4 +1,5 @@
 import type { ResumeStore } from '../types'
+import type { StorageStats } from './storage'
 
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 //
@@ -325,6 +326,21 @@ export const api = {
     const res = await request('DELETE', `/api/resumes/${encodeURIComponent(id)}`)
     if (res.status === 404) throw new NotFoundError('Resume not found')
     if (!res.ok) throw new ServerError(res.status, `Delete failed: ${res.statusText}`)
+  },
+
+  /**
+   * Per-resume payload weights + DB size (the A4 storage readout). Best-effort
+   * decoration for the picker: returns null on any failure rather than
+   * throwing, so a stats hiccup never blocks listing resumes.
+   */
+  async storageStats(): Promise<StorageStats | null> {
+    try {
+      const res = await request('GET', '/api/resumes/storage')
+      if (!res.ok) return null
+      return await res.json() as StorageStats
+    } catch {
+      return null
+    }
   },
 
   // ── Snapshot history (per resume) ────────────────────────────────────────
