@@ -32,11 +32,9 @@ test('fresh install screen creates the first resume; picker lists it', async ({ 
   await expect(page.getByRole('heading', { name: 'Your resumes' })).toBeVisible()
 })
 
-// TextField labels aren't programmatically associated with their inputs
-// (no htmlFor/id — flagged under the roadmap A8 accessibility item), so
-// getByLabel can't reach them; locate through the field wrapper instead.
-const fullName = (page: Page) =>
-  page.locator('.pf-wrap', { has: page.locator('label:text-is("Full name")') }).locator('input')
+// TextField labels are programmatically associated (htmlFor/id) since the
+// v0.3.1 accessibility wave — getByLabel is the canonical locator.
+const fullName = (page: Page) => page.getByLabel('Full name', { exact: true })
 
 test('an edit auto-saves to the server and survives a reload', async ({ page }) => {
   await createResume(page)
