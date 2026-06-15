@@ -63,3 +63,39 @@ jobs:
           name: playwright-traces
           path: test-results/
           retention-days: 7
+
+  depcheck:
+    name: depcheck (advisory)
+    runs-on: ubuntu-latest
+    # Advisory only — flags unused deps + phantom (undeclared) imports but must
+    # never block a merge. We deliberately stayed on npm rather than pnpm; this
+    # is the cheap guardrail that recovers pnpm's one real benefit (catching
+    # hidden dependencies) without the migration cost.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # depcheck resolves a few packages (peer deps, special parsers) via the
+      # installed tree, so install first for results that match a local run.
+      - name: Install
+        run: npm ci
+
+      - name: Check for unused / missing dependencies
+        shell: bash
+        run: |
+          echo '## depcheck (advisory)' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Flags unused dependencies and phantom (undeclared) imports. Advisory only — does not block merge.' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          # Pinned to the version validated locally. `|| true` keeps the step
+          # green: depcheck exits non-zero on any finding, but this is advisory.
+          npx --yes depcheck@1.4.7 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
