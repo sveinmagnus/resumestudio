@@ -21,7 +21,11 @@ import type {
   Skill, Role, Industry, Reference, TechnologyCategory, CategorySkill,
   LocalizedString, Project, WorkExperience,
 } from '../../types'
-import { X, Plus, Sparkles, Combine, Filter as FilterIcon, Briefcase, FolderKanban } from 'lucide-react'
+import { X, Plus, Sparkles, Combine, Filter as FilterIcon, Briefcase, FolderKanban, List, LayoutGrid } from 'lucide-react'
+import {
+  DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent,
+} from '@dnd-kit/core'
+import { useDialog } from '../ui/useDialog'
 
 // ── Shared registry-filter bar ──────────────────────────────────────────────
 
@@ -275,11 +279,68 @@ export function SkillsEditor() {
 
 // ── Role registry ────────────────────────────────────────────────────────────
 
+/** Distinct, sorted role category labels (non-empty). */
+function roleCategories(roles: Role[]): string[] {
+  const set = new Set<string>()
+  for (const r of roles) {
+    const c = (r.category ?? '').trim()
+    if (c) set.add(c)
+  }
+  return [...set].sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * The role's edit fields — shared by the list-view card and the category-view
+ * lightbox so both surfaces show the same editor.
+ */
+function RoleEditBody({ role, allRoles, categories, onMerge }: {
+  role: Role
+  allRoles: Role[]
+  categories: string[]
+  onMerge: (sourceId: string, targetId: string) => void
+}) {
+  const { data, primaryLocale, updateItem } = useStore()
+  const u = usageOfRole(data, role.id)
+  const catListId = `role-cat-${role.id}`
+  return (
+    <>
+      <DualField label="Role name" value={role.name} onChange={(v) => updateItem('roles', role.id, { name: v })} />
+      <FieldRow>
+        <TextField label="Years of experience" value={role.years_of_experience.toString()} type="number"
+          onChange={(v) => updateItem('roles', role.id, { years_of_experience: parseFloat(v) || 0 })} />
+        <TextField label="Manual offset (±)" value={role.years_of_experience_offset.toString()} type="number"
+          onChange={(v) => updateItem('roles', role.id, { years_of_experience_offset: parseFloat(v) || 0 })} />
+        <label className="pf-wrap">
+          <span className="pf-label">Category</span>
+          <input
+            className="pf-input" list={catListId} value={role.category ?? ''} placeholder="Uncategorized"
+            onChange={(e) => updateItem('roles', role.id, { category: e.target.value.trim() || null })}
+          />
+          <datalist id={catListId}>
+            {categories.map((c) => <option key={c} value={c} />)}
+          </datalist>
+        </label>
+      </FieldRow>
+      <RoleUsagePanel projects={u.projects} employments={u.work_experiences} />
+      <MergeRow
+        kind="role"
+        sourceId={role.id}
+        allItems={allRoles.filter((x) => x.id !== role.id).map((x) => ({ id: x.id, label: resolve(x.name, primaryLocale) }))}
+        onMerge={onMerge}
+      />
+    </>
+  )
+}
+
 export function RolesEditor() {
   const { data, primaryLocale, secondaryLocale, addItem, updateItem, replaceData } = useStore()
   const [filter, setFilter] = useState<RegistryFilter>('all')
+  const [view, setView] = useState<'list' | 'category'>('list')
+  // Category view opens the full editor in a lightbox for the clicked role.
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const sortedItems = useSortedItems('roles')
+  const categories = useMemo(() => roleCategories(sortedItems), [sortedItems])
 
   const usage = useMemo(
     () => new Map(sortedItems.map((r) => [r.id, countRoleReferences(data, r.id)])),
@@ -309,7 +370,7 @@ export function RolesEditor() {
   const add = () => {
     const r: Role = {
       id: newId(), resume_id: data.resume!.id, name: {}, years_of_experience: 0,
-      years_of_experience_offset: 0, starred: false, sort_order: sortedItems.length, disabled: false,
+      years_of_experience_offset: 0, starred: false, sort_order: sortedItems.length, disabled: false, category: null,
     }
     addItem('roles', r)
   }
@@ -318,53 +379,198 @@ export function RolesEditor() {
     if (!confirmMerge('role', sourceId, targetId, data.roles, primaryLocale, countRoleReferences(data, sourceId))) return
     replaceData(mergeRoles(data, sourceId, targetId))
   }
+
+  const editingRole = editingId ? data.roles.find((r) => r.id === editingId) ?? null : null
+
   return (
     <div className="section-pane">
       <p className="registry-note">Reusable role labels referenced by projects and employments. "Solution Architect" is defined once here.</p>
-      <FilterBar filter={filter} onChange={setFilter} counts={counts} />
-      <SortBar section="roles" count={sortedItems.length} />
-      {/* SortableList only wraps the rendered slice; reordering with a filter
-          active still bakes into sort_order against the visible items, which
-          is the intuitive behaviour. */}
-      <SortableList section="roles" ids={displayItems.map((x) => x.id)}>
-      {displayItems.length === 0 && (
-        <div className="registry-empty">
-          {filter === 'unused'
-            ? 'No unused roles — every role is referenced somewhere.'
-            : filter === 'missing-translation'
-              ? 'No roles are missing a translation in the secondary language.'
-              : 'No roles yet — add your first below.'}
-        </div>
+      <div className="reg-view-toggle" role="group" aria-label="Role view">
+        <button type="button" className={`rvt-btn ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')} aria-pressed={view === 'list'}>
+          <List size={14} /> List
+        </button>
+        <button type="button" className={`rvt-btn ${view === 'category' ? 'active' : ''}`} onClick={() => setView('category')} aria-pressed={view === 'category'}>
+          <LayoutGrid size={14} /> By category
+        </button>
+      </div>
+
+      {view === 'list' ? (
+        <>
+          <FilterBar filter={filter} onChange={setFilter} counts={counts} />
+          <SortBar section="roles" count={sortedItems.length} />
+          {/* SortableList only wraps the rendered slice; reordering with a filter
+              active still bakes into sort_order against the visible items, which
+              is the intuitive behaviour. */}
+          <SortableList section="roles" ids={displayItems.map((x) => x.id)}>
+          {displayItems.length === 0 && (
+            <div className="registry-empty">
+              {filter === 'unused'
+                ? 'No unused roles — every role is referenced somewhere.'
+                : filter === 'missing-translation'
+                  ? 'No roles are missing a translation in the secondary language.'
+                  : 'No roles yet — add your first below.'}
+            </div>
+          )}
+          {displayItems.map((r) => {
+            const u = usageOfRole(data, r.id)
+            const projectCount = u.projects.length
+            const empCount = u.work_experiences.length
+            return (
+              <EditorCard key={r.id} section="roles" id={r.id}
+                title={resolve(r.name, primaryLocale)}
+                subtitle={r.category ?? undefined}
+                meta={`${projectCount} project${projectCount === 1 ? '' : 's'} | ${empCount} employment${empCount === 1 ? '' : 's'}`}
+                starred={r.starred} disabled={r.disabled}>
+                <RoleEditBody role={r} allRoles={sortedItems} categories={categories} onMerge={onMerge} />
+              </EditorCard>
+            )
+          })}
+          </SortableList>
+          <AddButton label="Add role" onClick={add} />
+        </>
+      ) : (
+        <>
+          <p className="registry-note rcv-hint">Drag a role onto another category header to recategorize it. Click a role to edit it. Set a role's category in its editor.</p>
+          <RoleCategoryView roles={sortedItems} onOpen={setEditingId} />
+          <AddButton label="Add role" onClick={add} />
+        </>
       )}
-      {displayItems.map((r) => {
-        const u = usageOfRole(data, r.id)
-        const projectCount = u.projects.length
-        const empCount = u.work_experiences.length
-        return (
-          <EditorCard key={r.id} section="roles" id={r.id}
-            title={resolve(r.name, primaryLocale)}
-            meta={`${projectCount} project${projectCount === 1 ? '' : 's'} | ${empCount} employment${empCount === 1 ? '' : 's'}`}
-            starred={r.starred} disabled={r.disabled}>
-            <DualField label="Role name" value={r.name} onChange={(v) => updateItem('roles', r.id, { name: v })} />
-            <FieldRow>
-              <TextField label="Years of experience" value={r.years_of_experience.toString()} type="number"
-                onChange={(v) => updateItem('roles', r.id, { years_of_experience: parseFloat(v) || 0 })} />
-              <TextField label="Manual offset (±)" value={r.years_of_experience_offset.toString()} type="number"
-                onChange={(v) => updateItem('roles', r.id, { years_of_experience_offset: parseFloat(v) || 0 })} />
-            </FieldRow>
-            <RoleUsagePanel projects={u.projects} employments={u.work_experiences} />
-            <MergeRow
-              kind="role"
-              sourceId={r.id}
-              allItems={sortedItems.filter((x) => x.id !== r.id).map((x) => ({ id: x.id, label: resolve(x.name, primaryLocale) }))}
-              onMerge={onMerge}
-            />
-          </EditorCard>
-        )
-      })}
-      </SortableList>
-      <AddButton label="Add role" onClick={add} />
+
+      {editingRole && (
+        <RoleEditModal
+          role={editingRole}
+          allRoles={sortedItems}
+          categories={categories}
+          onMerge={onMerge}
+          onClose={() => setEditingId(null)}
+        />
+      )}
       <RegistryStyles />
+    </div>
+  )
+}
+
+// ── Role category view (grouped, compact, drag-to-recategorize) ───────────────
+
+const UNCATEGORIZED = '__uncategorized__'
+
+function RoleCategoryView({ roles, onOpen }: { roles: Role[]; onOpen: (id: string) => void }) {
+  const primaryLocale = useStore((s) => s.primaryLocale)
+  const updateItem = useStore((s) => s.updateItem)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+
+  // Group by category (Uncategorized last), categories A→Z.
+  const groups = useMemo(() => {
+    const m = new Map<string, Role[]>()
+    for (const r of roles) {
+      const key = (r.category ?? '').trim() || UNCATEGORIZED
+      if (!m.has(key)) m.set(key, [])
+      m.get(key)!.push(r)
+    }
+    return [...m.entries()].sort(([a], [b]) => {
+      if (a === UNCATEGORIZED) return 1
+      if (b === UNCATEGORIZED) return -1
+      return a.localeCompare(b)
+    })
+  }, [roles])
+
+  const onDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e
+    if (!over) return
+    const target = String(over.id) === UNCATEGORIZED ? null : String(over.id)
+    const role = roles.find((r) => r.id === String(active.id))
+    if (!role || (role.category ?? null) === target) return
+    updateItem('roles', String(active.id), { category: target })
+  }
+
+  return (
+    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+      <div className="rcv">
+        {groups.map(([key, list]) => (
+          <RoleCatGroup
+            key={key}
+            catKey={key}
+            label={key === UNCATEGORIZED ? 'Uncategorized' : key}
+            roles={list}
+            locale={primaryLocale}
+            onOpen={onOpen}
+          />
+        ))}
+      </div>
+    </DndContext>
+  )
+}
+
+function RoleCatGroup({ catKey, label, roles, locale, onOpen }: {
+  catKey: string; label: string; roles: Role[]; locale: string; onOpen: (id: string) => void
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: catKey })
+  return (
+    <div className="rcv-group">
+      <div ref={setNodeRef} className={`rcv-head ${isOver ? 'is-over' : ''}`}>
+        {label} <span className="rcv-count">{roles.length}</span>
+      </div>
+      <div className="rcv-chips">
+        {roles.map((r) => <RoleCatChip key={r.id} role={r} locale={locale} onOpen={onOpen} />)}
+      </div>
+    </div>
+  )
+}
+
+function RoleCatChip({ role, locale, onOpen }: { role: Role; locale: string; onOpen: (id: string) => void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: role.id })
+  const style = transform
+    ? { transform: `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` }
+    : undefined
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      className={`rcv-chip ${isDragging ? 'is-dragging' : ''}`}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={() => onOpen(role.id)}
+      title="Drag to another category · click to edit"
+    >
+      {resolve(role.name, locale) || '(unnamed role)'}
+    </button>
+  )
+}
+
+function RoleEditModal({ role, allRoles, categories, onMerge, onClose }: {
+  role: Role
+  allRoles: Role[]
+  categories: string[]
+  onMerge: (sourceId: string, targetId: string) => void
+  onClose: () => void
+}) {
+  const primaryLocale = useStore((s) => s.primaryLocale)
+  const dialogRef = useDialog(onClose)
+  return (
+    <div className="rcv-modal-backdrop" role="presentation" onClick={onClose}>
+      <div className="rcv-modal" ref={dialogRef} role="dialog" aria-modal="true" aria-label="Edit role" onClick={(e) => e.stopPropagation()}>
+        <div className="rcv-modal-head">
+          <h3>{resolve(role.name, primaryLocale) || '(unnamed role)'}</h3>
+          <button className="rcv-modal-close" onClick={onClose} aria-label="Close"><X size={16} /></button>
+        </div>
+        <RoleEditBody role={role} allRoles={allRoles} categories={categories} onMerge={onMerge} />
+      </div>
+      <style>{`
+        .rcv-modal-backdrop {
+          position: fixed; inset: 0; background: rgba(15,23,42,.45);
+          display: grid; place-items: center; z-index: 100; padding: 24px; animation: fadeIn .15s ease;
+        }
+        .rcv-modal {
+          background: var(--paper); border-radius: var(--r-lg); box-shadow: var(--shadow-lg);
+          width: min(640px, 94vw); max-height: 88vh; overflow-y: auto; overscroll-behavior: contain;
+          padding: 20px 24px 24px; animation: fadeUp .2s ease;
+        }
+        .rcv-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+        .rcv-modal-head h3 { font-size: 20px; }
+        .rcv-modal-close { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-sm); color: var(--ink-faint); }
+        .rcv-modal-close:hover { background: var(--paper-sunken); color: var(--accent); }
+      `}</style>
     </div>
   )
 }
@@ -1077,6 +1283,36 @@ function RegistryStyles() {
         padding: 24px 16px; text-align: center;
         background: var(--paper-sunken); border-radius: var(--r-md); margin-bottom: 12px;
       }
+      /* List / By-category view toggle */
+      .reg-view-toggle { display: inline-flex; gap: 2px; padding: 3px; margin-bottom: 14px;
+        background: var(--paper-sunken); border-radius: var(--r-md); }
+      .rvt-btn {
+        display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
+        font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+        border-radius: var(--r-sm); transition: color .12s, background .12s;
+      }
+      .rvt-btn:hover { color: var(--accent); }
+      .rvt-btn.active { background: var(--paper); color: var(--accent); box-shadow: var(--shadow-sm); }
+      .rcv-hint { border-left-color: var(--secondary-ink-text, var(--accent)); }
+      /* Category view: grouped, compact, drag-to-recategorize */
+      .rcv { display: flex; flex-direction: column; gap: 14px; margin-bottom: 12px; }
+      .rcv-group { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+      .rcv-head {
+        display: flex; align-items: center; gap: 8px; padding: 9px 13px;
+        font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+        color: var(--ink-soft); background: var(--paper-sunken);
+        border-bottom: 1px solid var(--line); transition: background .12s, color .12s, box-shadow .12s;
+      }
+      .rcv-head.is-over { background: var(--accent-wash); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+      .rcv-count { font-weight: 700; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+      .rcv-chips { display: flex; flex-wrap: wrap; gap: 7px; padding: 12px 13px; min-height: 20px; }
+      .rcv-chip {
+        padding: 6px 12px; font-size: 13px; font-weight: 500; color: var(--ink);
+        background: var(--paper-raised); border: 1px solid var(--line); border-radius: 16px;
+        cursor: grab; touch-action: none; transition: color .12s, border-color .12s, background .12s;
+      }
+      .rcv-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-wash); }
+      .rcv-chip.is-dragging { opacity: .6; cursor: grabbing; box-shadow: var(--shadow-md); z-index: 20; position: relative; }
       /* Related-skill suggestions (F12 pt3) */
       .rsp {
         margin-bottom: 16px; padding: 11px 14px;

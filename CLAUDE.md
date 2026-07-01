@@ -141,7 +141,12 @@ What works today:
   dual-language popover** pattern is used for **project roles** and the
   **employment role link** (picking an existing role fills both languages; the
   popover edits the registry Role), plus linking a reference to a project /
-  employment.
+  employment. The **Role registry** also has a **"By category" view**
+  (`Role.category`, optional free-text): a compact grouping of role titles under
+  category headers, where dragging a role onto another header recategorizes it
+  (dnd-kit `useDraggable`/`useDroppable`) and clicking a role opens the normal
+  editor in a lightbox. Categories are assigned via the Category field in the
+  role editor; the distinct values form the headers.
 - **React error boundary** around the editor so a crashed view never traps the
   user.
 - **Downloadable desktop build** — a portable folder (bundled Node + esbuild'd

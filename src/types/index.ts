@@ -133,6 +133,13 @@ export interface Role {
   starred: boolean
   sort_order: number
   disabled: boolean
+  /**
+   * Optional free-text grouping label for the Role registry's "by category"
+   * view (e.g. "Architecture", "Leadership"). Additive/optional — absent roles
+   * group under "Uncategorized". Not a registry of its own; the distinct values
+   * across roles form the category headers.
+   */
+  category?: string | null
 }
 
 export interface KeyQualification {

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   SkillsEditor, RolesEditor, IndustriesEditor, ReferencesEditor, TechCategoriesEditor,
@@ -10,7 +10,7 @@ import {
 import { useStore } from '../../src/store/useStore'
 import { setSkillRelationsForTest } from '../../src/lib/skillTaxonomy'
 import { resetStore } from '../helpers/store-reset'
-import { emptyStore, makeSkill, makeProject, makeIndustry } from '../fixtures'
+import { emptyStore, makeSkill, makeProject, makeIndustry, makeRole } from '../fixtures'
 import type { ResumeStore } from '../../src/types'
 
 function seed(data: ResumeStore = emptyStore()) {
@@ -234,5 +234,47 @@ describe('<SkillsEditor> — active item stays put while editing (missing-transl
 
     expect(useStore.getState().data.skills.find((s) => s.id === 's1')!.name.no).toBe('TypeScript')
     expect(screen.getByLabelText(/Skill name \(Norsk\)/i)).toBeInTheDocument()
+  })
+})
+
+describe('<RolesEditor> — category view', () => {
+  beforeEach(() => resetStore())
+
+  function seedRoles() {
+    useStore.setState({
+      data: {
+        ...emptyStore(),
+        roles: [
+          makeRole({ id: 'r1', name: { en: 'Solution Architect' }, category: 'Architecture' }),
+          makeRole({ id: 'r2', name: { en: 'Backend Developer' }, category: 'Development' }),
+          makeRole({ id: 'r3', name: { en: 'Scrum Master' } }), // uncategorized
+        ],
+      },
+      hasData: true, primaryLocale: 'en', secondaryLocale: null,
+      activeSection: 'roles', expandedItemId: null, mutationCount: 0,
+    })
+  }
+
+  it('groups roles by category with an Uncategorized bucket and compact chips', async () => {
+    seedRoles()
+    render(<RolesEditor />)
+    await userEvent.click(screen.getByRole('button', { name: /by category/i }))
+    expect(screen.getByText('Architecture')).toBeInTheDocument()
+    expect(screen.getByText('Development')).toBeInTheDocument()
+    expect(screen.getByText('Uncategorized')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Solution Architect/ })).toBeInTheDocument()
+  })
+
+  it('opens the edit lightbox on chip click and assigns a category', async () => {
+    seedRoles()
+    render(<RolesEditor />)
+    await userEvent.click(screen.getByRole('button', { name: /by category/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Scrum Master' }))
+
+    const dialog = await screen.findByRole('dialog', { name: /edit role/i })
+    expect(within(dialog).getByLabelText(/Role name/i)).toBeInTheDocument()
+
+    await userEvent.type(within(dialog).getByPlaceholderText('Uncategorized'), 'Agile')
+    expect(useStore.getState().data.roles.find((r) => r.id === 'r3')!.category).toBe('Agile')
   })
 })
