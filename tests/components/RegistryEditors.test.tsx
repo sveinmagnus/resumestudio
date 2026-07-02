@@ -87,7 +87,7 @@ describe('<SkillsEditor> — add + merge', () => {
         makeSkill({ id: 's1', name: { en: 'React' }, category: 'Frontend' }),
         makeSkill({ id: 's2', name: { en: 'Vue' }, category: 'Frontend' }),
         makeSkill({ id: 's3', name: { en: 'Postgres' }, category: 'Data' }),
-        makeSkill({ id: 's4', name: { en: 'Leadership' }, category: null, skill_type: 'soft' }),
+        makeSkill({ id: 's4', name: { en: 'Leadership' }, category: null }),
       ],
     })
     render(<SkillsEditor />)

@@ -120,10 +120,10 @@ describe('skill matrix in buildViewHtml', () => {
   })
 
   it('omits the Category column entirely when no skill has a category', () => {
-    // matrixStore skills have skill_type defaulting to a value, which prettifies
-    // into a category — so to assert omission, blank the skill_type.
+    // The Category column shows only when a skill has a classification or a
+    // free-text category; clear both so it's omitted.
     const store = matrixStore()
-    store.skills.forEach((s) => { s.skill_type = '' as never; s.classification = undefined })
+    store.skills.forEach((s) => { s.category = null; s.classification = undefined })
     const sections = buildViewSections().map((s) =>
       s.key === 'skill_matrix' ? { ...s, detail: 'full' as const } : s,
     )

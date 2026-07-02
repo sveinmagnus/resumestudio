@@ -94,24 +94,21 @@ export interface Skill {
   resume_id: string
   name: LocalizedString
   default_category: LocalizedString | null
-  skill_type: 'technical' | 'methodology' | 'domain' | 'soft'
   total_duration_in_years: number
   proficiency: number   // 0–5
   is_highlighted: boolean
   /**
    * Authoritative classification from the Quadim skill library (e.g.
    * "Technical", "Management", "Analytical"), stamped at import when the name
-   * matches the library (roadmap F12 pt4). Optional/additive — manually-added
-   * skills lack it and fall back to `skill_type` in the skill-matrix Category
-   * column. Free string (the library taxonomy is richer than our enum).
+   * matches the library (roadmap F12 pt4). Optional/additive. Used as the
+   * skill-matrix Category column when present, else the free-text `category`.
    */
   classification?: string
   /**
-   * Optional free-text grouping label for the Skill registry's "by category"
-   * view (e.g. "Frontend", "Cloud", "Data") — the consultant's own
-   * organisation of a large skill list, distinct from `skill_type` (the coarse
-   * export classifier) and `classification` (the Quadim library's). Additive /
-   * optional; absent skills group under "Uncategorized".
+   * The skill's category — the consultant's own free-text grouping (e.g.
+   * "Frontend", "Cloud", "Data"), auto-fillable from the Quadim library. This
+   * is the SINGLE category concept: the list card, the By-category view and the
+   * category filter all group on it. Absent/empty skills read as "Uncategorized".
    */
   category?: string | null
   created_at: string

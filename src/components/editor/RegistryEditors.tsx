@@ -7,8 +7,7 @@ import {
   type SkillRelations, type SkillDomains,
 } from '../../lib/skillTaxonomy'
 import {
-  autoCategorizeSkills, clearSkillCategories, effectiveSkillCategory,
-  SKILL_TYPE_LABELS, UNCATEGORIZED_LABEL,
+  autoCategorizeSkills, clearSkillCategories, effectiveSkillCategory, UNCATEGORIZED_LABEL,
 } from '../../lib/skillCategorize'
 import { DualField } from '../ui/DualField'
 import { TextField } from '../ui/Fields'
@@ -344,19 +343,15 @@ export function SkillsEditor() {
 
   const makeSkill = (name: Skill['name']): Skill => ({
     id: newId(), resume_id: data.resume!.id, name, default_category: null,
-    skill_type: 'technical', total_duration_in_years: 0, proficiency: 0, is_highlighted: false,
+    total_duration_in_years: 0, proficiency: 0, is_highlighted: false,
     category: null, created_at: new Date().toISOString(),
   })
   // Datalist for the editor: every real category in use (never "Uncategorized",
-  // which is the empty state, not an assignable label), plus the four type
-  // labels as ready-made defaults.
-  const categories = useMemo(() => {
-    const set = new Set<string>(
-      categoryCounts.map(([c]) => c).filter((c) => c !== UNCATEGORIZED_LABEL),
-    )
-    for (const label of Object.values(SKILL_TYPE_LABELS)) set.add(label)
-    return [...set].sort((a, b) => a.localeCompare(b))
-  }, [categoryCounts])
+  // which is the empty state, not an assignable label).
+  const categories = useMemo(
+    () => categoryCounts.map(([c]) => c).filter((c) => c !== UNCATEGORIZED_LABEL),
+    [categoryCounts],
+  )
   const editingSkill = editingId ? data.skills.find((s) => s.id === editingId) ?? null : null
   const add = () => addItem('skills', makeSkill({}))
   // Add a library-suggested skill under the primary locale (matches the
@@ -1141,7 +1136,7 @@ export function TechCategoriesEditor() {
   const createSkillAndLink = (catId: string, text: string) => {
     const skill: Skill = {
       id: newId(), resume_id: data.resume!.id, name: { [primaryLocale]: text },
-      default_category: null, skill_type: 'technical', total_duration_in_years: 0,
+      default_category: null, total_duration_in_years: 0,
       proficiency: 0, is_highlighted: false, created_at: new Date().toISOString(),
     }
     addItem('skills', skill, { open: false }) // don't collapse this category card
@@ -1189,7 +1184,7 @@ export function TechCategoriesEditor() {
                 .map((s) => ({
                   id: s.id,
                   label: resolve(s.name, primaryLocale) || '(unnamed skill)',
-                  sublabel: s.skill_type,
+                  sublabel: s.category?.trim() || undefined,
                 }))}
               onPick={(skillId) => linkSkillIntoCategory(cat.id, skillId)}
               onAddNew={(text) => createSkillAndLink(cat.id, text)}

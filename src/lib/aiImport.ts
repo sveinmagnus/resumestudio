@@ -378,7 +378,6 @@ export function importFromAIDraft(input: AIImportV1): ResumeStore {
       resume_id: resumeId,
       name: { [loc]: name },
       default_category: null,
-      skill_type: 'technical',
       total_duration_in_years: 0,
       proficiency: 0,
       is_highlighted: false,

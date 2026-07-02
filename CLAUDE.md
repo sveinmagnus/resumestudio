@@ -46,18 +46,18 @@ What works today:
   fills each skill's `category` from the library's fine-grained `domain` — Tier 1
   by exact name match, Tier 2 by a relations-graph majority vote — never
   overwriting a manually-set category, applied via `replaceData` (undoable +
-  auto-saved). **A skill's category and its `skill_type` are ONE concept in the
-  UI** — there is no separate "type" control; the four `skill_type` names are
-  just ready-made labels offered in the editor's datalist.
-  `effectiveSkillCategory(skill)` (explicit `category`, else **"Uncategorized"**
-  — no type fallback) is what the list card subtitle, the By-category grouping,
-  and the registry's **category filter** (a dropdown of used categories with
-  per-category skill counts) all group on, so the three never disagree. A skill
-  with no category groups under "Uncategorized" (sorted last); "Technical" is a
-  normal category only when explicitly chosen. Categories can be **cleared** to
-  make skills auto-categorizable again: a per-chip "x" in the By-category view
-  removes one skill's category, and the filtered list offers a bulk **"Clear all
-  skills from category (N)"** for the shown group (`clearSkillCategories`).
+  auto-saved). **`category` is a skill's SINGLE grouping concept** — the old
+  `skill_type` enum was fully removed (there is no "type" control or field; only
+  importers/backups may carry legacy leftovers, ignored on read).
+  `effectiveSkillCategory(skill)` (explicit `category`, else **"Uncategorized"**)
+  is what the list card subtitle, the By-category grouping, and the registry's
+  **category filter** (a dropdown of used categories with per-category skill
+  counts) all group on, so the three never disagree. A skill with no category
+  groups under "Uncategorized" (sorted last); "Technical" is a normal category
+  only when explicitly chosen. Categories can be **cleared** to make skills
+  auto-categorizable again: a per-chip "x" in the By-category view removes one
+  skill's category, and the filtered list offers a bulk **"Clear all skills from
+  category (N)"** for the shown group (`clearSkillCategories`).
 - **Freshness & expiry warnings** — the Overview's "Needs attention" panel
   flags expired/expiring certifications and long-running "ongoing" items, and
   the picker badges resumes not updated in 6+ months (`lib/freshness.ts`). The
@@ -165,7 +165,7 @@ What works today:
   via the Category field in the editor; the distinct values form the headers.
   Both editors share the generic `RegistryCategoryView` / `CatGroup` /
   `CatChip` / `RegistryLightbox` (a skill's category is the consultant's own
-  organisation, distinct from `skill_type` and the Quadim `classification`).
+  organisation; distinct from the Quadim `classification`).
 - **React error boundary** around the editor so a crashed view never traps the
   user.
 - **Downloadable desktop build** — a portable folder (bundled Node + esbuild'd
@@ -294,7 +294,7 @@ src/
 │   ├── contentSearch.ts        ← PURE: global content search (F16) — recursive string collector over the store + ranked hits with snippet + authoritative Category (F12 pt4)
 │   ├── skillTaxonomy.ts        ← Quadim skill-library data (F12): lazy generated JSON (names/relations/classifications/domains) + PURE matchTaxonomy / relatedSkillSuggestions (regen: scripts/build-skill-taxonomy.mjs)
 │   ├── skillNormalize.ts       ← PURE: canonicalize imported skill names to library spelling + stamp classifications (F12 pt2/4); free-text importers only, not backups
-│   ├── skillCategorize.ts      ← PURE: offline auto-categorization of the Skill registry — Tier 1 exact name→domain match + Tier 2 relations-graph majority vote; fills BLANK `category` only (never overwrites manual). `clearSkillCategories()` strips explicit categories (per-chip "x" or the filtered list's bulk "Clear category") so skills are auto-categorizable again. Source: generated/skillDomains.json. Also `effectiveSkillCategory()` — explicit `category` else "Uncategorized" (no type fallback); category is unified with `skill_type` (no separate type control). Used by the list subtitle, By-category grouping + the category filter
+│   ├── skillCategorize.ts      ← PURE: offline auto-categorization of the Skill registry — Tier 1 exact name→domain match + Tier 2 relations-graph majority vote; fills BLANK `category` only (never overwrites manual). `clearSkillCategories()` strips explicit categories (per-chip "x" or the filtered list's bulk "Clear category") so skills are auto-categorizable again. Source: generated/skillDomains.json. Also `effectiveSkillCategory()` — explicit `category` else "Uncategorized". `category` is the single grouping concept; the `skill_type` enum was removed entirely. Used by the list subtitle, By-category grouping + the category filter
 │   ├── freshness.ts            ← PURE: freshness/expiry warnings (F3) — expired/expiring certs, stale 'ongoing' items, isResumeStale; deterministic via injected `now`
 │   ├── importerLinkedIn.ts     ← PURE: LinkedIn data-export (CSV map) → ResumeStore; RFC4180 parseCsv. ZIP extraction lives in ImportScreen (lazy fflate)
 │   ├── importerEuropass.ts     ← Europass import: SkillsPassport XML (DOMParser) + profile JSON → ResumeStore

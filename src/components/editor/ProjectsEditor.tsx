@@ -331,7 +331,7 @@ function ProjectSkillsEditor({ project }: { project: Project }) {
     const reg: Skill = {
       id: newId(), resume_id: data.resume!.id,
       name: { [primaryLocale]: text },
-      default_category: null, skill_type: 'technical',
+      default_category: null,
       total_duration_in_years: 0, proficiency: 0,
       is_highlighted: false, created_at: new Date().toISOString(),
     }
@@ -363,7 +363,7 @@ function ProjectSkillsEditor({ project }: { project: Project }) {
           .map((reg) => ({
             id: reg.id,
             label: resolve(reg.name, primaryLocale) || '(unnamed skill)',
-            sublabel: reg.skill_type,
+            sublabel: reg.category?.trim() || undefined,
           }))}
         onPick={linkExisting}
         onAddNew={createAndLink}

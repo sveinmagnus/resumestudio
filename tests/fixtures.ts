@@ -162,7 +162,6 @@ export function makeSkill(over: Partial<Skill> = {}): Skill {
     resume_id: 'resume-1',
     name: { en: 'TypeScript' },
     default_category: null,
-    skill_type: 'technical',
     total_duration_in_years: 0,
     proficiency: 0,
     is_highlighted: false,

@@ -14,22 +14,16 @@
 import type { ResumeStore, ResumeView, YearMonth } from '../types'
 import { resolve, fmtDate } from './locales'
 
-/** Title-case the registry skill_type enum for display ('technical' → 'Technical'). */
-function prettyType(t: string): string {
-  return t ? t.charAt(0).toUpperCase() + t.slice(1) : ''
-}
-
 export interface SkillMatrixRow {
   /** Skill registry id (excludable via the view's item list). */
   id: string
   name: string
   /**
    * Display category: the authoritative Quadim classification stamped at
-   * import (F12 pt4) when present, else the registry skill_type, prettified.
+   * import (F12 pt4) when present, else the skill's free-text `category`.
+   * '' when the skill is uncategorized.
    */
   category: string
-  /** skill_type from the registry ('technical', …) — '' when unset. */
-  type: string
   /** Experience in years, one decimal. 0 = unknown. */
   years: number
   /** 0–5; 0 = unknown (CVpartner imports often carry no proficiency). */
@@ -111,8 +105,7 @@ export function skillMatrixRows(
       return {
         id: s.id,
         name: resolve(s.name, locale),
-        category: s.classification?.trim() || prettyType(s.skill_type ?? ''),
-        type: s.skill_type ?? '',
+        category: s.classification?.trim() || s.category?.trim() || '',
         years,
         proficiency: Math.max(0, Math.min(5, Math.round(s.proficiency || 0))),
         lastUsed: u?.ongoing ? null : u?.lastUsed ?? null,

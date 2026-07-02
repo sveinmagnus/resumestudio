@@ -213,7 +213,7 @@ export function importFromLinkedIn(files: Record<string, string>): ResumeStore {
     const skill: Skill = {
       id: uuidv4(), resume_id: resumeId,
       name: { [loc]: name },
-      default_category: null, skill_type: 'technical',
+      default_category: null,
       total_duration_in_years: 0, proficiency: 0,
       is_highlighted: false, created_at: now,
     }

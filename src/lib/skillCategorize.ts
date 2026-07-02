@@ -30,23 +30,9 @@ import type { SkillDomains, SkillRelations } from './skillTaxonomy'
 export const UNCATEGORIZED_LABEL = 'Uncategorized'
 
 /**
- * The four legacy `skill_type` values, offered as ready-made category names in
- * the editor's datalist. `skill_type` is NOT a separate concept from category —
- * it's just a convenient default label a user can pick; a skill with no
- * explicit category reads as "Uncategorized" everywhere, not as its type.
- */
-export const SKILL_TYPE_LABELS: Record<Skill['skill_type'], string> = {
-  technical: 'Technical',
-  methodology: 'Methodology',
-  domain: 'Domain',
-  soft: 'Soft',
-}
-
-/**
  * The category a skill groups under across the list card, the By-category view
  * and the category filter: its explicit `category`, or "Uncategorized" when
- * empty. There is no type fallback — an uncategorized skill is uncategorized,
- * and "Technical" is a normal category only when explicitly chosen.
+ * empty. Category is the single grouping concept — there is no `skill_type`.
  */
 export function effectiveSkillCategory(
   skill: Pick<Skill, 'category'>,
