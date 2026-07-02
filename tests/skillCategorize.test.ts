@@ -6,15 +6,16 @@ import { emptyStore, makeSkill } from './fixtures'
 import type { SkillDomains, SkillRelations } from '../src/lib/skillTaxonomy'
 
 describe('effectiveSkillCategory', () => {
-  it('returns the explicit category when set', () => {
-    expect(effectiveSkillCategory({ category: 'Cloud', skill_type: 'technical' })).toBe('Cloud')
+  it('returns the explicit category when set (including a literal "Technical")', () => {
+    expect(effectiveSkillCategory({ category: 'Cloud' })).toBe('Cloud')
+    expect(effectiveSkillCategory({ category: 'Technical' })).toBe('Technical')
   })
 
-  it('falls back to the title-cased type label when no category', () => {
-    expect(effectiveSkillCategory({ category: null, skill_type: 'technical' })).toBe('Technical')
-    expect(effectiveSkillCategory({ category: '', skill_type: 'methodology' })).toBe('Methodology')
-    expect(effectiveSkillCategory({ category: '  ', skill_type: 'soft' })).toBe('Soft')
-    expect(effectiveSkillCategory({ category: undefined, skill_type: 'domain' })).toBe('Domain')
+  it('reads as "Uncategorized" when the category is empty (no type fallback)', () => {
+    expect(effectiveSkillCategory({ category: null })).toBe('Uncategorized')
+    expect(effectiveSkillCategory({ category: '' })).toBe('Uncategorized')
+    expect(effectiveSkillCategory({ category: '  ' })).toBe('Uncategorized')
+    expect(effectiveSkillCategory({ category: undefined })).toBe('Uncategorized')
   })
 })
 

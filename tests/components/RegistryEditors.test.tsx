@@ -92,12 +92,12 @@ describe('<SkillsEditor> — add + merge', () => {
     })
     render(<SkillsEditor />)
 
-    // Dropdown lists each used effective category with a count (Soft = the
-    // type-derived fallback for the uncategorized skill).
+    // Dropdown lists each used category with a count; the skill with no
+    // category counts under "Uncategorized" (no type fallback).
     const select = screen.getByLabelText('Category') as HTMLSelectElement
     const optionText = [...select.options].map((o) => o.textContent)
     expect(optionText).toEqual(expect.arrayContaining([
-      'All categories (4)', 'Data (1)', 'Frontend (2)', 'Soft (1)',
+      'All categories (4)', 'Data (1)', 'Frontend (2)', 'Uncategorized (1)',
     ]))
 
     // Selecting "Frontend" narrows the list to its two skills.
@@ -119,7 +119,7 @@ describe('<SkillsEditor> — add + merge', () => {
     render(<SkillsEditor />)
     await userEvent.click(screen.getByRole('button', { name: /by category/i }))
 
-    // The "x" clears the explicit category (React falls back to its type).
+    // The "x" clears the explicit category (React becomes Uncategorized).
     await userEvent.click(screen.getByRole('button', { name: /remove category from React/i }))
     expect(useStore.getState().data.skills.find((s) => s.id === 's1')!.category).toBeNull()
     expect(useStore.getState().data.skills.find((s) => s.id === 's2')!.category).toBe('Frontend')
@@ -138,7 +138,7 @@ describe('<SkillsEditor> — add + merge', () => {
 
     // Filter to Frontend, then clear its two skills' categories in one action.
     await userEvent.selectOptions(screen.getByLabelText('Category'), 'Frontend')
-    await userEvent.click(screen.getByRole('button', { name: /clear category \(2\)/i }))
+    await userEvent.click(screen.getByRole('button', { name: /clear all skills from category \(2\)/i }))
 
     const skills = useStore.getState().data.skills
     expect(skills.find((s) => s.id === 's1')!.category).toBeNull()
@@ -391,15 +391,15 @@ describe('<SkillsEditor> — category view', () => {
     })
   }
 
-  it('groups skills by effective category — uncategorized skills fall back to their type', async () => {
+  it('groups skills by category — skills with no category go under "Uncategorized"', async () => {
     seedSkills()
     render(<SkillsEditor />)
     await userEvent.click(screen.getByRole('button', { name: /by category/i }))
     expect(screen.getByText('Frontend')).toBeInTheDocument()
     expect(screen.getByText('Data')).toBeInTheDocument()
-    // Docker has no explicit category; its type ('technical') is the grouping.
-    expect(screen.getByText('Technical')).toBeInTheDocument()
-    expect(screen.queryByText('Uncategorized')).not.toBeInTheDocument()
+    // Docker has no explicit category → "Uncategorized" (no type fallback).
+    expect(screen.getByText('Uncategorized')).toBeInTheDocument()
+    expect(screen.queryByText('Technical')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'React' })).toBeInTheDocument()
   })
 
@@ -412,8 +412,8 @@ describe('<SkillsEditor> — category view', () => {
     const dialog = await screen.findByRole('dialog', { name: /edit skill/i })
     expect(within(dialog).getByLabelText(/Skill name/i)).toBeInTheDocument()
 
-    // The category input's placeholder is the type-derived default ('Technical').
-    await userEvent.type(within(dialog).getByPlaceholderText('Technical'), 'DevOps')
+    // The category input's placeholder is the empty-state label ('Uncategorized').
+    await userEvent.type(within(dialog).getByPlaceholderText('Uncategorized'), 'DevOps')
     expect(useStore.getState().data.skills.find((s) => s.id === 's3')!.category).toBe('DevOps')
   })
 })

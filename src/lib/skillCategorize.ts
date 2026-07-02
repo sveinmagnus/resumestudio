@@ -26,13 +26,14 @@
 import type { ResumeStore, Skill } from '../types'
 import type { SkillDomains, SkillRelations } from './skillTaxonomy'
 
+/** Label for a skill with no explicit `category` (the list card + filter). */
+export const UNCATEGORIZED_LABEL = 'Uncategorized'
+
 /**
- * A skill's category and its (legacy) `skill_type` are ONE concept in the UI —
- * there is no separate "type". `skill_type` is just the coarse default a skill
- * carries until it's given (or auto-assigned) a real category. The effective
- * category is therefore the explicit `category` if set, else the title-cased
- * type label. Everything user-facing — the list card, the By-category view, the
- * category filter — groups on this so the three never disagree.
+ * The four legacy `skill_type` values, offered as ready-made category names in
+ * the editor's datalist. `skill_type` is NOT a separate concept from category —
+ * it's just a convenient default label a user can pick; a skill with no
+ * explicit category reads as "Uncategorized" everywhere, not as its type.
  */
 export const SKILL_TYPE_LABELS: Record<Skill['skill_type'], string> = {
   technical: 'Technical',
@@ -41,11 +42,16 @@ export const SKILL_TYPE_LABELS: Record<Skill['skill_type'], string> = {
   soft: 'Soft',
 }
 
+/**
+ * The category a skill groups under across the list card, the By-category view
+ * and the category filter: its explicit `category`, or "Uncategorized" when
+ * empty. There is no type fallback — an uncategorized skill is uncategorized,
+ * and "Technical" is a normal category only when explicitly chosen.
+ */
 export function effectiveSkillCategory(
-  skill: Pick<Skill, 'category' | 'skill_type'>,
+  skill: Pick<Skill, 'category'>,
 ): string {
-  const explicit = skill.category?.trim()
-  return explicit || SKILL_TYPE_LABELS[skill.skill_type]
+  return skill.category?.trim() || UNCATEGORIZED_LABEL
 }
 
 export interface CategoryAssignment {

@@ -7,7 +7,8 @@ import {
   type SkillRelations, type SkillDomains,
 } from '../../lib/skillTaxonomy'
 import {
-  autoCategorizeSkills, clearSkillCategories, effectiveSkillCategory, SKILL_TYPE_LABELS,
+  autoCategorizeSkills, clearSkillCategories, effectiveSkillCategory,
+  SKILL_TYPE_LABELS, UNCATEGORIZED_LABEL,
 } from '../../lib/skillCategorize'
 import { DualField } from '../ui/DualField'
 import { TextField } from '../ui/Fields'
@@ -235,7 +236,7 @@ function SkillEditBody({ skill, allSkills, categories, onMerge }: {
           <span className="pf-label">Category</span>
           <input
             className="pf-input" list={catListId} value={skill.category ?? ''}
-            placeholder={SKILL_TYPE_LABELS[skill.skill_type]}
+            placeholder="Uncategorized"
             onChange={(e) => updateItem('skills', skill.id, { category: e.target.value.trim() || null })}
           />
           <datalist id={catListId}>
@@ -346,10 +347,13 @@ export function SkillsEditor() {
     skill_type: 'technical', total_duration_in_years: 0, proficiency: 0, is_highlighted: false,
     category: null, created_at: new Date().toISOString(),
   })
-  // Datalist for the editor: every effective category in use, plus the four
-  // type labels as ready-made defaults.
+  // Datalist for the editor: every real category in use (never "Uncategorized",
+  // which is the empty state, not an assignable label), plus the four type
+  // labels as ready-made defaults.
   const categories = useMemo(() => {
-    const set = new Set<string>(categoryCounts.map(([c]) => c))
+    const set = new Set<string>(
+      categoryCounts.map(([c]) => c).filter((c) => c !== UNCATEGORIZED_LABEL),
+    )
     for (const label of Object.values(SKILL_TYPE_LABELS)) set.add(label)
     return [...set].sort((a, b) => a.localeCompare(b))
   }, [categoryCounts])
@@ -387,8 +391,8 @@ export function SkillsEditor() {
               </select>
               {clearableIds.length > 0 && (
                 <button type="button" className="scf-clear" onClick={clearCategories}
-                  title="Clear the category from these skills so they can be auto-categorized again">
-                  Clear category ({clearableIds.length})
+                  title="Remove this category from these skills so they can be auto-categorized again">
+                  Clear all skills from category ({clearableIds.length})
                 </button>
               )}
             </div>
@@ -424,12 +428,11 @@ export function SkillsEditor() {
         </>
       ) : (
         <>
-          <p className="registry-note rcv-hint">Drag a skill onto another category header to recategorize it. Click a skill to edit it. Skills with no explicit category are grouped by their type.</p>
+          <p className="registry-note rcv-hint">Drag a skill onto another category header to recategorize it. Click a skill to edit it. Skills with no category are grouped under "Uncategorized".</p>
           <AutoCategorizePanel />
           <RegistryCategoryView
             items={allItems.map((s) => ({
               ...s,
-              category: effectiveSkillCategory(s),
               removable: !!(s.category && s.category.trim()),
             }))}
             unnamed="(unnamed skill)"
