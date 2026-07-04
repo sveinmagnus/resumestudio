@@ -203,6 +203,19 @@ units:
     hints:
       token_estimate: 4400
 
+  - id: plan-unify-showcase
+    path: plans/unify-showcase-into-categories.md
+    intent: "How will the Skills Showcase be unified into the skill-category system? Approved implementation plan — SkillCategory entities, Skill.category_id, virtual showcase section, shape v6 migration. NOT yet implemented."
+    scope: project
+    audience: [developer, agent]
+    validated: "2026-07-04"
+    update_frequency: on-implementation
+    depends_on: [claude-instructions]
+    triggers: [showcase, technology-categories, skill-categories, unification, shape-v6, migration]
+    hints:
+      token_estimate: 3800
+      priority: active
+
   - id: plan-multi-resume
     path: plans/multi-resume.md
     intent: "Why is multi-resume designed the way it is? Historical design plan — the feature has shipped."
