@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useStore } from '../../store/useStore'
+import { Link } from '../../lib/router'
 import { SECTIONS, GROUP_LABELS, GROUP_ORDER, canonicalSectionKey } from '../../lib/sections'
 import {
   LayoutDashboard, User, FileText, Briefcase, Building2, Users,
@@ -88,9 +89,9 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps = {}) {
       >
         {/* ── Brand header ────────────────────────────────────────────── */}
         <div className="sb-brand">
-          <div className="sb-mark">
+          <Link to="/" className="sb-mark" aria-label="All resumes" title="All resumes" onClick={() => onClose?.()}>
             <img src="/cartavio-symbol.png" alt="" className="sb-mark-img" />
-          </div>
+          </Link>
           <div className="sb-brand-text">
             <div className="sb-title">Cartavio Resume Studio</div>
             <div className="sb-sub">{data.resume?.full_name || 'New resume'}</div>
@@ -207,7 +208,10 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps = {}) {
           .sb-mark {
             width: 38px; height: 38px; border-radius: 8px; flex-shrink: 0;
             background: #fff; display: grid; place-items: center; padding: 4px;
+            cursor: pointer; text-decoration: none;
+            transition: box-shadow .13s, transform .13s;
           }
+          .sb-mark:hover { box-shadow: 0 0 0 2px var(--secondary-ink); transform: translateY(-1px); }
           .sb-mark-img { width: 100%; height: 100%; object-fit: contain; }
           .sb-brand-text { min-width: 0; flex: 1; }
           .sb-title {
