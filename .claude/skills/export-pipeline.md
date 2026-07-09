@@ -23,12 +23,14 @@ sections, excluded items, and — if set — non-starred items). Then:
 - **DOCX** → `exporter.ts → exportDocx()` builds a `docx` `Document` from the
   same filtered store.
 
-There is also a **third** consumer of section knowledge: `getItemTitle` /
-`getItemSubtitle` in `viewFilter.ts`, which feed the View-editor's item-toggle
-list. So "support a section in exports" touches **three** switch statements:
-`renderItem` (viewFilter), `renderSection` (exporter), and the title/subtitle
-pair (viewFilter). CLAUDE.md §12.3 proposes collapsing these into one section
-descriptor — until then, change all three together.
+Both paths (plus a third consumer — `getItemTitle` / `getItemSubtitle` in
+`viewFilter.ts`, which feed the View-editor's item-toggle list) are driven by a
+**single section-descriptor catalog** (`lib/sectionCatalog.ts`, one descriptor
+per section with `summary()` / `full()` data views). `renderItem` (viewFilter),
+`renderSection` (exporter), and the title/subtitle pair all read `SECTION_CATALOG`
+— there are no per-section switch statements left. So "support a section in
+exports" means **adding one descriptor**, not editing three renderers; the
+adapters own escaping/layout. See CLAUDE.md §7 step 7.
 
 **Rule:** if a section/field renders in one path, it renders in the other (or
 there's a deliberate, commented reason it doesn't — e.g. the `skills`/`roles`
@@ -51,8 +53,9 @@ there's a deliberate, commented reason it doesn't — e.g. the `skills`/`roles`
   `002E6E`), `HEADING_FONT` (`Open Sans Condensed`), `BODY_FONT` (`Ubuntu`), A4
   page size in twips. Keep DOCX output visually aligned with the HTML/PDF brand
   (see the cartavio-brand skill).
-- `view.template_id` is **reserved/unused** — don't wire behavior to it without
-  building the template system first (CLAUDE.md §12.1).
+- `view.template_id` seeds a named **export template** (`lib/viewTemplates.ts`)
+  — style/header/footer + section detail presets. It's applied at view-edit
+  time, not at render; the renderers see only the resulting concrete config.
 
 ## 3. HTML/PDF specifics (`viewFilter.ts`) — escaping is mandatory
 

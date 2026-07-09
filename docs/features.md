@@ -30,9 +30,30 @@ you open the app — nothing here is buried behind config files.
 - **Drag-and-drop reordering** on every section, with keyboard up/down
   buttons retained for accessibility.
 - **Undo / Redo** with debounced history (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z).
-- **Skill / role registry merge.** The "Løsningarkitekt" vs
-  "Løsningsarkitekt" problem: pick one as canonical, the other gets rewritten
-  everywhere it's referenced and removed.
+- **Global search** (Ctrl/Cmd+K) across every section, skill, role, and the
+  header — jump straight to any item.
+- **Career timeline.** An overview chart of employments, education, and
+  projects, with work-history-gap detection and a full-width zoom.
+- **Freshness warnings.** The overview flags expired or expiring
+  certifications and suspiciously long "ongoing" items; anything you've
+  checked can be snoozed for a year.
+
+## Skills, roles & categories
+
+- **Shared registries.** Skills, roles, and industries live once and are
+  referenced everywhere — rename a skill and every project updates.
+- **Registry merge.** The "Løsningarkitekt" vs "Løsningsarkitekt" problem:
+  pick one as canonical, the other gets rewritten everywhere it's referenced
+  and removed.
+- **Skill categories & showcase.** Group skills into your own categories
+  (drag-and-drop between them), highlight the ones to showcase, and the
+  exported "Skills Showcase" section builds itself from those choices.
+- **Curated skill library.** Autocomplete against 1,200+ canonical skill
+  names so imports and typing don't mint near-duplicates; related-skill
+  suggestions; one-click **auto-categorization** of uncategorized skills —
+  offline, no service involved.
+- **Skill matrix.** An exportable skill × years × proficiency × last-used
+  table derived from your project history.
 
 ## Multi-resume
 
@@ -55,8 +76,19 @@ you open the app — nothing here is buried behind config files.
   and a footer note.
 - **Live preview pane.** The document re-renders as you tune the view, with a
   page-count estimate against your page limit.
-- **Promoted Projects** as a synthetic section — surface your starred
-  projects without restructuring the master.
+- **Export templates.** Named presets (compact technical, formal management,
+  minimal one-pager) that seed a view's style, header/footer, and section
+  detail in one click.
+- **Job-posting tailoring — bring your own AI.** Paste a job posting, get a
+  prompt to run in any LLM you already use, paste the answer back, and the
+  view reorders and trims itself for that role. No API key, no data sent
+  anywhere by the app.
+- **Anonymized variants.** A per-view toggle that anonymizes customers and
+  redacts references to initials — for tenders and broker submissions.
+- **Per-view export language** — the same view can ship in English to one
+  client and Norwegian to another.
+- **Promoted Projects** and **Skill Matrix** as synthetic sections — surface
+  starred projects or a skills table without restructuring the master.
 
 ## Export
 
@@ -64,6 +96,8 @@ you open the app — nothing here is buried behind config files.
   Save-as-PDF, so the result matches what you see in the preview.
 - **DOCX** (`.docx`) via the [`docx`](https://docx.js.org/) library, lazy-
   loaded so the bundle only grows when you actually export.
+- **Plain text & Markdown** — ATS-friendly exports for application portals
+  that mangle formatted documents.
 
 ## Import & backup
 
@@ -71,6 +105,14 @@ you open the app — nothing here is buried behind config files.
   emits (object and interleaved-array localized values), normalises `int` →
   `en`, scans content for under-declared locales, and links projects to work
   experiences through the source IDs.
+- **LinkedIn import.** Drop the LinkedIn data-export `.zip` on the picker and
+  get a working resume.
+- **Europass import.** Reads both SkillsPassport XML and Europass profile
+  JSON.
+- **AI-assisted import from PDF or Word — bring your own AI.** Download the
+  instruction template, run it with your CV in any LLM, paste the JSON back,
+  and preview the result before it becomes a resume. Your CV goes only to the
+  AI *you* chose.
 - **Portable JSON backup.** Per-resume export from the editor; versioned
   format with a migration scaffold so older backups keep loading.
 - **Server-side snapshot history.** Every save is snapshotted (last 50 per
@@ -97,6 +139,9 @@ you open the app — nothing here is buried behind config files.
   drops a snapshot first, so it's reversible from History.
 - **No real-time multi-writer.** Designed for one person hopping between
   computers, not for two people editing the same CV at once.
+- **Automatic updates.** The desktop app checks GitHub Releases daily (or on
+  demand from the tray / Settings) and installs a new version in place with
+  one click — no reinstall, your data untouched.
 
 ## Privacy & security posture
 

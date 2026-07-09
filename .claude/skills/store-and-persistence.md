@@ -26,9 +26,12 @@ silently (a) never enters the undo stack and (b) may never auto-save —
 exactly the bug that made registry merges non-undoable until they were switched
 to `replaceData`.
 
-`loadStore` also runs the on-load migration (`foldRoleDescriptions`) and seeds
+`loadStore` also runs the data-shape migration chain (`lib/migrate.ts →
+migrateStore()` — the single choke point for data entering from outside; the
+snapshot-restore site calls it manually before `replaceData`) and seeds
 primary/secondary locale (from the caller's `locales` arg, else from
-`supported_locales`). `replaceData` does neither — the data is assumed current.
+`supported_locales`). `replaceData` never migrates — in-app computed data is
+current by construction.
 
 Other loads (also reset `mutationCount`): `loadFromCVPartner`, `startFresh`,
 `unloadStore`.
@@ -69,31 +72,71 @@ The app is now multi-resume (router-driven, `/r/:id`):
   resumes never fight over one slot. `clearAllCaches()` on logout,
   `dropLegacyCache()` once on boot for the pre-multi-resume key.
 
-## 4. Boot sequence (server-first, cache fallback)
+## 4. The server API (all auth-gated, under `/api/resumes`)
 
-In `useResumePersistence`:
-1. `api.loadResume(id)` succeeds → `loadStore` with server locales, clear that
-   id's cache, `ready`.
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/resumes` | Metadata list, newest first. `{resumes: []}` (never 404) — empty = fresh install. |
+| `POST` | `/api/resumes` | `{name, data?, primary_locale?, secondary_locale?}` → 201 `{resume}`. |
+| `GET` | `/api/resumes/:id` | `{data, meta}` (incl. `version`) or 404. `ETag: "<version>"`. |
+| `PUT` | `/api/resumes/:id` | `{data, primary_locale?, secondary_locale?, base_version?}` — locales in pairs (400 if only one). 404 unknown; **409** `{error, current}` if `base_version` stale; else `{ok, saved_at, version}`. |
+| `PATCH` | `/api/resumes/:id` | Rename only (`{name}`). |
+| `DELETE` | `/api/resumes/:id` | Hard delete; snapshots cascade. |
+| `GET` | `/api/resumes/:id/snapshots[/:sid]` | Snapshot metadata list / one snapshot's data. |
+
+The `resumes` row carries a **`version`** column — an optimistic-concurrency
+token. Every save sends the client's `base_version`; a stale one gets a 409
+with the server's current state (nothing written).
+
+## 5. Boot sequence (server-first; dirty queue wins)
+
+In `useResumePersistence` (pure decisions in `lib/syncEngine.ts → decideBoot`):
+1. `api.loadResume(id)` succeeds → seed base `version` + locales. **If a dirty
+   `PendingRecord` also exists, trust IT over the server copy**: load the local
+   data and flush it with its stored `base_version` (clean push syncs; stale
+   base raises the non-blocking conflict). Otherwise `loadStore` the server
+   copy and drop any clean local record.
 2. Server reachable but **no such id** → `not-found`. **Do NOT fall back to
    cache here** — that would resurrect ghost data for a deleted/foreign id.
-3. Server **unreachable** → restore the per-id cache if present (`offline`),
-   else `not-found`.
+3. Server **unreachable** → restore `loadPending(id)` (+ its `base_version`)
+   if present (`offline`), else `not-found`; kick a connectivity recheck.
 4. `401` → `auth`. `404` mid-session (deleted under us) → `navigate('/')`.
 
-## 5. Save sequence
+## 6. Save sequence (per mutation)
 
-- **Local cache:** 250 ms debounce after a mutation (cheap, but not
-  per-keystroke). Reads `data` via `useStore.getState()`.
-- **Server:** 1 s debounce. `AbortController` so a newer mutation supersedes an
-  in-flight PUT. Sends data **+ current locales** together. On success: clear
-  the cache (now matches server), flash "Saved" 2 s. On failure: `error` state +
-  Retry (which calls the same `flushToServer`). Abort errors are swallowed.
+- **Durable queue:** 250 ms debounce → `savePending(id, {…, dirty:true})` — a
+  localStorage copy carrying the current `base_version`. A dirty record is both
+  the offline fallback and the reconnect outbox.
+- **Server:** 1 s debounce → `PUT` with `{data, locales, base_version}`
+  together (locale-only changes ride along because the locale setters go
+  through `mutate()`). `AbortController` so a newer mutation supersedes an
+  in-flight PUT. On success: `clearPending(id)`, advance the base `version`.
+- **Failure routing:** 404 → redirect `/`. 401 → auth modal. **409 → keep the
+  local edits, pause auto-save, raise `conflict`.** Network failure →
+  `offline` (connectivity down) or `queued` (nominally online); the edit stays
+  in the dirty queue either way.
 
 `flushToServer` reads `data`/`mutationCount`/locales from `getState()` at call
 time, so the callback isn't rebuilt on every keystroke (only `resumeId` is a
 dep). Keep it that way.
 
-## 6. Undo / redo
+## 7. Offline, reconnect drain, and conflicts
+
+- **Connectivity** (`lib/connectivity.ts`): `navigator.onLine` + events, but
+  recovery is confirmed by polling `api.health()` (NIC up ≠ server answering).
+- **Reconnect drain**: on a real offline→online transition (and online boot)
+  the active resume re-flushes via `flushToServer`; **every other dirty
+  resume** drains via `backgroundFlush` (`selectDrainTargets`); a 409 there is
+  left dirty so the conflict surfaces when that resume is next opened.
+- **Conflict UX**: `ConflictModal` shows a `lib/diffResume.ts` summary and
+  offers **keep mine** (re-PUT at the server's version) or **discard mine**.
+  Non-blocking — the editor stays usable; the `conflict` SaveStatus badge
+  re-opens it.
+- **Guards**: `beforeunload` fires while `listDirty()` is non-empty; logout
+  confirms before wiping unsynced work; a mid-session 401 clears plaintext
+  caches only when nothing is unsynced.
+
+## 8. Undo / redo
 
 `useUndoRedo` subscribes to `mutationCount`, debounces 500 ms, and pushes the
 **pre-mutation** snapshot to a pure `UndoHistory` (`src/lib/undoHistory.ts`).
@@ -102,21 +145,23 @@ Apply happens via `replaceData` (so the undone state saves), with a one-shot
 undo step per typing burst) lives in `UndoHistory` and is unit-tested — if you
 touch undo, change `UndoHistory` and its tests, not the timing glue.
 
-## 7. When you touch this — checklist
+## 9. When you touch this — checklist
 
 1. New data action? Route it through `mutate()`; return `null` for no-ops.
 2. Computing a new whole store in-app? `replaceData`, never `loadStore`.
 3. Added a field that should persist? Confirm it's inside `data` (or the locale
    pair) so the PUT carries it; check the boot path restores it.
-4. Touched the save/boot effects? Re-verify the cache-vs-server debounce and the
-   not-found-vs-offline distinction (§4) — these are easy to invert.
+4. Touched the save/boot effects? Re-verify the cache-vs-server debounce, the
+   not-found-vs-offline distinction (§5), and the dirty-queue-wins boot rule —
+   these are easy to invert. The boot/drain matrix is unit-tested in
+   `tests/syncEngine.test.ts`; change the pure functions, not the glue.
 5. Run `npm test` — `tests/store.test.ts` is the contract net:
    - every mutator bumps exactly once,
    - **no-ops do NOT bump** (the assertion that catches over-eager mutation),
    - `loadStore` resets to 0, `replaceData` bumps.
    Add a case for your action, including its no-op.
 
-## 8. Gotcha for live verification
+## 10. Gotcha for live verification
 
 Auto-save can't be verified inside the Claude preview tool as-is: it injects
 `PORT=5173`, which the Express server also tries to bind, colliding with Vite →

@@ -7,11 +7,9 @@ title: Download
 Resume Studio is a portable, double-clickable folder — no installer, no admin
 rights, no Node.js install needed. Unzip and run.
 
-Builds are published as assets on the GitHub Releases page.
-
-> **No release yet?** Until the first release is cut, the download links
-> below 404. In the meantime you can [build from source](#build-from-source)
-> on your own machine — it takes about a minute.
+Builds are published as assets on the GitHub Releases page. Once installed,
+the app keeps itself current: it checks GitHub Releases daily (and on demand
+from the system tray or Settings) and offers a one-click in-place update.
 
 ## Latest release
 

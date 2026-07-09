@@ -14,7 +14,8 @@ You edit your full master CV once — in any language you've added — and the a
 shows every translatable field side-by-side in two languages so translations
 never drift out of sync. When you need to send something out, you build a
 **Resume View**: pick the sections that matter to this audience, exclude the
-items that don't, add a custom intro, and export to PDF or `.docx`.
+items that don't, add a custom intro, and export to PDF, `.docx`, or
+ATS-friendly plain text / Markdown.
 
 It runs as a local desktop app on Windows, macOS, and Linux — your data stays
 on your own machine. A multi-machine sync option uses a folder in Google
