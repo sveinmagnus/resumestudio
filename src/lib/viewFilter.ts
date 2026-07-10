@@ -248,6 +248,10 @@ function renderItem(sectionKey: string, item: unknown, ctx: RenderCtx): string {
     const s = desc.summary?.(item as AnyItem, cctx)
     if (!s) return ''
     const metaTxt = s.meta.filter(Boolean).join(' · ')
+    // Tabulated: title + meta as two aligned grid cells (the section is a grid).
+    if (ctx.style.tabulate) {
+      return `<div class="ve-item ve-tab-row"><span class="ve-tab-title">${escapeHtml(s.title)}</span><span class="ve-tab-meta">${escapeHtml(metaTxt)}</span></div>`
+    }
     const metaHtml = !metaTxt
       ? ''
       : s.sep === ':'
@@ -277,9 +281,14 @@ function renderItem(sectionKey: string, item: unknown, ctx: RenderCtx): string {
         .map((p) => `<li>${p.label ? `<strong>${escapeHtml(p.label)}</strong>: ` : ''}${renderRichHtml(p.body, escapeHtml)}</li>`)
         .join('')}</ul>`
     : ''
+  const titleHtml = v.title ? `<h3>${escapeHtml(v.title)}</h3>` : ''
+  const metaLine = metaTxt ? `<div class="ve-meta">${escapeHtml(metaTxt)}</div>` : ''
+  // 'leading' puts the date/details line above the title.
+  const head = ctx.style.date_position === 'leading'
+    ? `${metaLine}${titleHtml}`
+    : `${titleHtml}${metaLine}`
   return `<div class="ve-item">
-        <h3>${escapeHtml(v.title)}</h3>
-        ${metaTxt ? `<div class="ve-meta">${escapeHtml(metaTxt)}</div>` : ''}
+        ${head}
         ${v.body ? `<div class="ve-desc">${renderRichHtml(v.body, escapeHtml)}</div>` : ''}
         ${pointsHtml}
         ${renderTagsHtml(v.tags, ctx.style)}
@@ -396,7 +405,9 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
       // s.label is a hardcoded constant from SECTIONS; the custom heading is
       // untrusted view config. Both go through escapeHtml here.
       const heading = resolved.hide_heading ? '' : `<h2>${escapeHtml(sectionHeadingText(resolved, s.label, locale))}</h2>`
-      return `<section class="ve-section ve-sec-${s.key}">
+      // Tabulation only applies to the one-line summary layout.
+      const tabCls = resolved.tabulate && s.detail === 'summary' ? ' ve-tabulated' : ''
+      return `<section class="ve-section ve-sec-${s.key}${tabCls}">
   ${heading}
   ${itemsHtml}
 </section>`
@@ -562,6 +573,12 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
                 line-height: ${tokens.lineHeight}; color: #1f2937; white-space: pre-line; }
     .ve-section { margin-bottom: 8px; }
     .ve-item { margin-bottom: ${tokens.itemGapPx}px; padding-bottom: ${tokens.itemGapPx}px; border-bottom: 1px solid ${tokens.accentCss}1A; }
+    /* Tabulated summary: the section is a 2-column grid; each row's title and
+       meta drop into aligned columns (title column sized to the widest entry). */
+    .ve-tabulated { display: grid; grid-template-columns: max-content 1fr; column-gap: 18px; row-gap: ${Math.max(2, Math.round(tokens.itemGapPx / 2))}px; }
+    .ve-tabulated .ve-tab-row { display: contents; }
+    .ve-tabulated .ve-tab-title { font-weight: 600; }
+    .ve-tabulated .ve-tab-meta { color: #4B5563; }
     .ve-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
     .ve-item-line { padding-bottom: 0; border-bottom: none; margin-bottom: 4px; font-size: ${tokens.smallFontSizePt}pt; }
     .ve-meta-inline { color: #6B7280; }

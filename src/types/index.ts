@@ -506,6 +506,17 @@ export interface SectionStyle {
   item_divider?: boolean
   /** Override the divider style for this section. Undefined = inherit the view default. */
   divider_style?: DividerStyle
+  /**
+   * Where the date/details line sits on a full item:
+   *  - 'default' — title first, then the details line (with the date)
+   *  - 'leading' — the details line (date first) above the title
+   */
+  date_position?: 'default' | 'leading'
+  /**
+   * Lay the section's SUMMARY items out as aligned columns (title column sized
+   * to the widest entry) instead of free-flowing lines. HTML/PDF only.
+   */
+  tabulate?: boolean
   // ── Professional-summary (key_qualifications) part toggles ──
   // Which parts of each profile block render. Only read by the
   // key_qualifications renderer. Undefined defaults: label/tagline/long shown,

@@ -79,6 +79,14 @@ export function SectionStylePanel({ sectionKey, style, onChange, onReset, hasSty
             />
             <span>Hide dates</span>
           </label>
+          <label className="rv-toggle">
+            <input
+              type="checkbox"
+              checked={!!s.tabulate}
+              onChange={(e) => onChange({ tabulate: e.target.checked || undefined })}
+            />
+            <span>Tabulate summary</span>
+          </label>
           {sectionKey === 'key_qualifications' && (
             <>
               <label className="rv-toggle">
@@ -119,6 +127,18 @@ export function SectionStylePanel({ sectionKey, style, onChange, onReset, hasSty
               <option value="compact">Compact</option>
               <option value="normal">Normal</option>
               <option value="spacious">Spacious</option>
+            </select>
+          </div>
+          <div className="rv-sel">
+            <span>Item layout</span>
+            <select
+              aria-label="Section item layout"
+              value={s.date_position ?? ''}
+              onChange={(e) => onChange({ date_position: (e.target.value || undefined) as 'default' | 'leading' | undefined })}
+            >
+              <option value="">— view default —</option>
+              <option value="default">Title first</option>
+              <option value="leading">Date &amp; details first</option>
             </select>
           </div>
           {showTag && (

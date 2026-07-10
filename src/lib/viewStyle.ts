@@ -202,6 +202,10 @@ export interface ResolvedSectionStyle extends ViewStyle {
   divider_style: DividerStyle
   /** Custom heading text (localized), or undefined to use the section label. */
   heading_text?: LocalizedString
+  /** Full-item date/details placement (see SectionStyle.date_position). */
+  date_position?: 'default' | 'leading'
+  /** Lay summary items out in aligned columns (HTML/PDF). */
+  tabulate?: boolean
   /** Professional-summary part toggles (see SectionStyle.kq_show_*). */
   kq_show_label?: boolean
   kq_show_tagline?: boolean
@@ -262,6 +266,8 @@ export function resolveSectionStyle(
     hide_heading: section?.hide_heading ?? false,
     hide_dates: section?.hide_dates ?? false,
     heading_text: section?.heading_text,
+    date_position: section?.date_position,
+    tabulate: section?.tabulate,
     kq_show_label: section?.kq_show_label,
     kq_show_tagline: section?.kq_show_tagline,
     kq_show_short: section?.kq_show_short,

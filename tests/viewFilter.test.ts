@@ -327,6 +327,32 @@ describe('buildViewHtml()', () => {
     expect(html).toContain('My custom intro')
   })
 
+  it('tabulate lays summary items out in aligned grid rows', () => {
+    const store = emptyStore()
+    store.spoken_languages.push(makeSpokenLanguage({ id: 'l1', name: { en: 'English' }, level: { en: 'Fluent' } }))
+    const view = makeView({
+      sections: [{ key: 'spoken_languages', detail: 'summary' as const, sort_order: 0, style: { tabulate: true } }],
+    })
+    const html = buildViewHtml(store, view, 'en')
+    expect(html).toContain('ve-tabulated')
+    expect(html).toContain('ve-tab-title')
+    expect(html).toContain('English')
+  })
+
+  it("date_position:'leading' puts the meta line before the item title", () => {
+    const store = emptyStore()
+    store.work_experiences.push(makeWork({
+      id: 'w1', employer: { en: 'BigCo' }, role_title: { en: 'Engineer' },
+      start: { year: 2020, month: 1 }, end: null,
+    }))
+    const view = makeView({
+      sections: [{ key: 'work_experiences', detail: 'full' as const, sort_order: 0, style: { date_position: 'leading' } }],
+    })
+    const html = buildViewHtml(store, view, 'en')
+    // The meta div (role · dates) appears before the <h3> employer title.
+    expect(html.indexOf('ve-meta')).toBeLessThan(html.indexOf('<h3>BigCo</h3>'))
+  })
+
   // ─── XSS — escape every interpolated user value ────────────────────────────
 
   describe('HTML escaping (XSS)', () => {
