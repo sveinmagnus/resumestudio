@@ -23,19 +23,36 @@ export interface RelationshipOption {
   labels: LocalizedString
 }
 
+// Ordered in display clusters: hierarchy → mentoring → teams/peers →
+// business/external → education → personal. Every directional relationship has
+// both directions (manager/reported-to-me, senior/junior, mentor/mentee,
+// client/supplier, teacher/student). Existing labels must never be reworded —
+// a stored pick is matched back to its option BY LABEL (`matchRelationshipKey`),
+// so a reword orphans previously saved values into free-text; add a new option
+// instead.
 export const RELATIONSHIP_OPTIONS: RelationshipOption[] = [
+  // Hierarchy
   { key: 'manager',          labels: { en: 'Was my manager',                       no: 'Var min leder',                     se: 'Var min chef',                          dk: 'Var min leder' } },
   { key: 'reported_to_me',   labels: { en: 'Reported to me',                       no: 'Rapporterte til meg',               se: 'Rapporterade till mig',                 dk: 'Rapporterede til mig' } },
+  { key: 'senior_colleague', labels: { en: 'Was a senior colleague',               no: 'Var en senior kollega',             se: 'Var en senior kollega',                 dk: 'Var en senior kollega' } },
+  { key: 'junior_colleague', labels: { en: 'Was a junior colleague',               no: 'Var en junior kollega',             se: 'Var en junior kollega',                 dk: 'Var en junior kollega' } },
+  // Mentoring
+  { key: 'mentor',           labels: { en: 'Was my mentor',                        no: 'Var min mentor',                    se: 'Var min mentor',                        dk: 'Var min mentor' } },
+  { key: 'mentee',           labels: { en: 'Was my mentee',                        no: 'Var min mentee',                    se: 'Var min adept',                         dk: 'Var min mentee' } },
+  // Teams / peers
   { key: 'same_team',        labels: { en: 'Worked in the same team',              no: 'Jobbet i samme team',               se: 'Arbetade i samma team',                 dk: 'Arbejdede i samme team' } },
   { key: 'same_group',       labels: { en: 'Worked in the same group',             no: 'Jobbet i samme gruppe',             se: 'Arbetade i samma grupp',                dk: 'Arbejdede i samme gruppe' } },
   { key: 'different_team',   labels: { en: 'Worked in a different team',           no: 'Jobbet i et annet team',            se: 'Arbetade i ett annat team',             dk: 'Arbejdede i et andet team' } },
-  { key: 'senior_colleague', labels: { en: 'Was a senior colleague',              no: 'Var en senior kollega',             se: 'Var en senior kollega',                 dk: 'Var en senior kollega' } },
   { key: 'executive_team',   labels: { en: 'Was on the same executive team / board', no: 'Satt i samme ledergruppe/styre',  se: 'Satt i samma ledningsgrupp/styrelse',   dk: 'Sad i samme ledelsesgruppe/bestyrelse' } },
+  // Business / external
   { key: 'client',           labels: { en: 'Was my client',                        no: 'Var min kunde',                     se: 'Var min kund',                          dk: 'Var min kunde' } },
   { key: 'service_provider', labels: { en: 'Was a supplier / service provider to me', no: 'Var en leverandør for meg',      se: 'Var en leverantör till mig',            dk: 'Var en leverandør for mig' } },
   { key: 'business_partner', labels: { en: 'Was my business partner',              no: 'Var min forretningspartner',        se: 'Var min affärspartner',                 dk: 'Var min forretningspartner' } },
-  { key: 'mentor',           labels: { en: 'Was my mentor',                        no: 'Var min mentor',                    se: 'Var min mentor',                        dk: 'Var min mentor' } },
+  // Education
+  { key: 'teacher',          labels: { en: 'Was my teacher or professor',          no: 'Var min lærer eller foreleser',     se: 'Var min lärare eller föreläsare',       dk: 'Var min lærer eller underviser' } },
+  { key: 'student',          labels: { en: 'Was my student',                       no: 'Var min student',                   se: 'Var min student',                       dk: 'Var min studerende' } },
   { key: 'studied_together', labels: { en: 'Studied or taught together',           no: 'Studerte eller underviste sammen',  se: 'Studerade eller undervisade tillsammans', dk: 'Studerede eller underviste sammen' } },
+  // Personal
   { key: 'friend',           labels: { en: 'A friend',                             no: 'En venn',                           se: 'En vän',                                dk: 'En ven' } },
 ]
 

@@ -17,6 +17,32 @@ describe('recommendationRelationships', () => {
     expect(new Set(keys).size).toBe(keys.length)
   })
 
+  it('keeps the clustered display order (hierarchy → mentoring → teams → business → education → personal)', () => {
+    expect(RELATIONSHIP_OPTIONS.map((o) => o.key)).toEqual([
+      'manager', 'reported_to_me', 'senior_colleague', 'junior_colleague',
+      'mentor', 'mentee',
+      'same_team', 'same_group', 'different_team', 'executive_team',
+      'client', 'service_provider', 'business_partner',
+      'teacher', 'student', 'studied_together',
+      'friend',
+    ])
+  })
+
+  it('every directional relationship has both directions', () => {
+    const keys = new Set(RELATIONSHIP_OPTIONS.map((o) => o.key))
+    const pairs: Array<[string, string]> = [
+      ['manager', 'reported_to_me'],
+      ['senior_colleague', 'junior_colleague'],
+      ['mentor', 'mentee'],
+      ['client', 'service_provider'],
+      ['teacher', 'student'],
+    ]
+    for (const [a, b] of pairs) {
+      expect(keys.has(a), a).toBe(true)
+      expect(keys.has(b), b).toBe(true)
+    }
+  })
+
   it('relationshipLabels returns a fresh copy of the label set', () => {
     const labels = relationshipLabels('manager')
     expect(labels.en).toBe('Was my manager')
