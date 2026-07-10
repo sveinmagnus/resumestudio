@@ -173,7 +173,10 @@ export interface KeyQualification {
   resume_id: string
   label: LocalizedString
   tag_line: LocalizedString
+  /** The long-form professional summary (rich text). */
   summary: LocalizedString
+  /** A shorter alternative summary (rich text) for compact views. Additive/optional. */
+  summary_short?: LocalizedString
   key_points: KeyPoint[]
   skill_tags: string[]
   sort_order: number
@@ -503,6 +506,18 @@ export interface SectionStyle {
   item_divider?: boolean
   /** Override the divider style for this section. Undefined = inherit the view default. */
   divider_style?: DividerStyle
+  // ── Professional-summary (key_qualifications) part toggles ──
+  // Which parts of each profile block render. Only read by the
+  // key_qualifications renderer. Undefined defaults: label/tagline/long shown,
+  // short hidden — so existing views are unchanged.
+  /** Show the block's "about" heading (its label). Default true. */
+  kq_show_label?: boolean
+  /** Show the tag line. Default true. */
+  kq_show_tagline?: boolean
+  /** Show the short-form summary. Default false. */
+  kq_show_short?: boolean
+  /** Show the long-form summary. Default true. */
+  kq_show_long?: boolean
 }
 
 export interface ViewSection {

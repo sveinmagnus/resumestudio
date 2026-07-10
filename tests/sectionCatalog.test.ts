@@ -200,6 +200,30 @@ describe('layout kinds', () => {
   it('technology_categories full() skips empty categories', () => {
     expect(SECTION_CATALOG.technology_categories.full!(item({ name: {}, skills: [] }), html)).toBeNull()
   })
+
+  it('professional summary renders only the enabled parts (label/tagline/short/long)', () => {
+    const kq = {
+      label: { en: 'Leadership' }, tag_line: { en: 'Builds teams' },
+      summary: { en: 'The long version.' }, summary_short: { en: 'The short version.' },
+      key_points: [],
+    } as unknown as Record<string, unknown>
+
+    // Default: label + tagline + long; short hidden.
+    const def = SECTION_CATALOG.key_qualifications.full!(kq, html)!
+    expect(def.title).toBe('Leadership')
+    expect(def.meta).toContain('Builds teams')
+    expect(def.body).toContain('The long version.')
+    expect(def.body).not.toContain('The short version.')
+
+    // Short only; heading + tagline off.
+    const shortOnly = SECTION_CATALOG.key_qualifications.full!(kq, {
+      ...html, kq: { label: false, tagline: false, short: true, long: false },
+    })!
+    expect(shortOnly.title).toBe('')
+    expect(shortOnly.meta).not.toContain('Builds teams')
+    expect(shortOnly.body).toContain('The short version.')
+    expect(shortOnly.body).not.toContain('The long version.')
+  })
 })
 
 describe('editor titles and subtitles (parity with the old switches)', () => {

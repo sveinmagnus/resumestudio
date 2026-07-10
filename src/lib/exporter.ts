@@ -33,7 +33,7 @@ import { skillMatrixRows, fmtLastUsed, fmtProficiency, type SkillMatrixRow } fro
 import { applyView, isExportableSection, defaultViewDetail, promotedProjectItems } from './viewFilter'
 import { showcaseGroups } from './showcase'
 import { parseRichBlocks, type RichRun } from './richText'
-import { deriveTokens, resolveSectionStyle, sectionHeadingText, withDefaults, resolveFontDocx, type ResolvedSectionStyle, type StyleTokens } from './viewStyle'
+import { deriveTokens, resolveSectionStyle, sectionHeadingText, kqVisibility, withDefaults, resolveFontDocx, type ResolvedSectionStyle, type StyleTokens } from './viewStyle'
 import { withHeaderDefaults, withFooterDefaults, buildHeaderLines, buildCopyrightLine } from './viewHeader'
 import { imageInfoFromDataUrl, applyShapeMaskToDataUrl, type ImageInfo } from './image'
 import { exportFilename } from './exportFilename'
@@ -452,7 +452,7 @@ export async function exportDocx(store: ResumeStore, view: ResumeView, locale: s
 function renderSection(key: string, label: string, items: unknown[], ctx: ExportCtx): Paragraph[] {
   const desc = SECTION_CATALOG[key]
   if (!desc || (!desc.full && !desc.summary)) return []
-  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.resolved.hide_dates, target: 'docx' }
+  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.resolved.hide_dates, target: 'docx', kq: kqVisibility(ctx.resolved) }
   let list = items as CatalogItem[]
   if (desc.docxSortByStart) list = [...list].sort(byStartDescending)
   const out: Paragraph[] = []

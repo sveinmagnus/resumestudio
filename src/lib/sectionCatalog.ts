@@ -31,6 +31,9 @@ export interface CatalogCtx {
   hideDates: boolean
   /** Which render pipeline is asking. Keeps deliberate per-path differences explicit. */
   target: 'html' | 'docx'
+  /** Professional-summary (key_qualifications) part visibility. Only the KQ
+   *  descriptor reads this; absent → its documented defaults. */
+  kq?: { label: boolean; tagline: boolean; short: boolean; long: boolean }
 }
 
 /** One bullet point under an item. `label` is plain text, `body` is rich text. */
@@ -209,19 +212,31 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
 
   key_qualifications: {
     title: (it, locale) => ls(it, 'label', locale) || 'Untitled profile',
-    summary: (it, ctx) =>
-      summaryOf(ls(it, 'label', ctx.locale) || 'Profile', [ls(it, 'tag_line', ctx.locale)]),
+    summary: (it, ctx) => {
+      const kq = ctx.kq ?? { label: true, tagline: true, short: false, long: true }
+      return summaryOf(
+        (kq.label && ls(it, 'label', ctx.locale)) || 'Profile',
+        [kq.tagline ? ls(it, 'tag_line', ctx.locale) : ''],
+      )
+    },
     full(it, ctx) {
       const { locale } = ctx
+      const kq = ctx.kq ?? { label: true, tagline: true, short: false, long: true }
       const points = ((it.key_points as Array<AnyItem & { disabled?: boolean }> | undefined) ?? [])
         .filter((kp) => !kp.disabled)
         .map((kp) => ({ label: ls(kp, 'name', locale), body: ls(kp, 'long_description', locale) }))
         .filter((p) => p.label || p.body)
-      // DOCX historically renders the tag line instead of the label heading.
+      // Body = the enabled summary variant(s); short precedes long when both show.
+      const body = [
+        kq.short ? ls(it, 'summary_short', locale) : '',
+        kq.long ? ls(it, 'summary', locale) : '',
+      ].filter(Boolean).join('')
+      const tagMeta = kq.tagline ? [ls(it, 'tag_line', locale)].filter(Boolean) : []
+      // DOCX historically renders the tag line as meta rather than a heading.
       if (ctx.target === 'docx') {
-        return view({ meta: [ls(it, 'tag_line', locale)].filter(Boolean), body: ls(it, 'summary', locale), points })
+        return view({ meta: tagMeta, body, points })
       }
-      return view({ title: ls(it, 'label', locale), body: ls(it, 'summary', locale), points })
+      return view({ title: kq.label ? ls(it, 'label', locale) : '', meta: tagMeta, body, points })
     },
   },
 

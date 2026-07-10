@@ -652,8 +652,9 @@ export function ProfileEditor() {
   return (
     <div className="section-pane">
       <SectionIntro>
-        The opening statement of your CV — a short summary and tag line that
-        lead every export.
+        The opening statement of your CV — a tag line plus a short and a long
+        summary. Each Resume View chooses which parts to show, so a compact
+        view can lead with the short version and a detailed one with the long.
       </SectionIntro>
       <SortBar section="key_qualifications" count={items.length} />
       <SortableList section="key_qualifications" ids={items.map((x) => x.id)} addLabel="Add profile block" onAdd={add}>
@@ -664,7 +665,8 @@ export function ProfileEditor() {
           starred={kq.starred} disabled={kq.disabled}>
           <DualField label="Section label" value={kq.label} onChange={(v) => updateItem('key_qualifications', kq.id, { label: v })} />
           <DualField label="Tag line" value={kq.tag_line} onChange={(v) => updateItem('key_qualifications', kq.id, { tag_line: v })} />
-          <RichField label="Summary" value={kq.summary} onChange={(v) => updateItem('key_qualifications', kq.id, { summary: v })} />
+          <RichField label="Short summary" value={kq.summary_short ?? {}} onChange={(v) => updateItem('key_qualifications', kq.id, { summary_short: v })} />
+          <RichField label="Long summary" value={kq.summary} onChange={(v) => updateItem('key_qualifications', kq.id, { summary: v })} />
         </EditorCard>
       ))}
       </SortableList>

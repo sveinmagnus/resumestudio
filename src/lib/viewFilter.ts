@@ -7,7 +7,7 @@ import { SECTION_CATALOG, type AnyItem, type CatalogCtx } from './sectionCatalog
 import { skillMatrixRows, fmtLastUsed, fmtProficiency } from './skillMatrix'
 import { showcaseGroups } from './showcase'
 import { renderRichHtml } from './richText'
-import { deriveTokens, resolveSectionStyle, sectionHeadingText, withDefaults, resolveFontCss, type ResolvedSectionStyle, type StyleTokens } from './viewStyle'
+import { deriveTokens, resolveSectionStyle, sectionHeadingText, kqVisibility, withDefaults, resolveFontCss, type ResolvedSectionStyle, type StyleTokens } from './viewStyle'
 import { withHeaderDefaults, withFooterDefaults, buildHeaderLines, buildCopyrightLine } from './viewHeader'
 
 // ─── Section helpers ──────────────────────────────────────────────────────────
@@ -242,7 +242,7 @@ function renderTagsHtml(names: string[], style: ResolvedSectionStyle): string {
 function renderItem(sectionKey: string, item: unknown, ctx: RenderCtx): string {
   const desc = SECTION_CATALOG[sectionKey]
   if (!desc) return ''
-  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.style.hide_dates, target: 'html' }
+  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.style.hide_dates, target: 'html', kq: kqVisibility(ctx.style) }
 
   if (ctx.detail === 'summary' && !desc.alwaysFull) {
     const s = desc.summary?.(item as AnyItem, cctx)
@@ -555,8 +555,11 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
     .ve-footer-dashed { border-top: 2px dashed ${tokens.accentCss}66; }
     .ve-footer-thick  { border-top: 3px solid ${tokens.accentCss}; }
     .ve-copyright { text-align: center; font-size: ${tokens.metaFontSizePt}pt; color: #9097A1; margin-top: 8px; }
-    .ve-intro { background: ${tokens.accentCss}10; border-left: 3px solid ${tokens.accentCss};
-                padding: 12px 18px; margin: 20px 0; font-size: ${tokens.smallFontSizePt}pt; white-space: pre-line; }
+    /* Intro reads like the profile/summary prose — same body size and colour,
+       no callout box — so a view's introduction and its professional summary
+       share one look and feel. */
+    .ve-intro { margin: 14px 0 18px; font-size: ${tokens.bodyFontSizePt}pt;
+                line-height: ${tokens.lineHeight}; color: #1f2937; white-space: pre-line; }
     .ve-section { margin-bottom: 8px; }
     .ve-item { margin-bottom: ${tokens.itemGapPx}px; padding-bottom: ${tokens.itemGapPx}px; border-bottom: 1px solid ${tokens.accentCss}1A; }
     .ve-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }

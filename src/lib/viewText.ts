@@ -19,7 +19,7 @@ import {
 import { SECTION_CATALOG, type CatalogCtx, type ItemView } from './sectionCatalog'
 import { skillMatrixRows, fmtLastUsed, fmtProficiency } from './skillMatrix'
 import { showcaseGroups } from './showcase'
-import { resolveSectionStyle, sectionHeadingText, withDefaults } from './viewStyle'
+import { resolveSectionStyle, sectionHeadingText, kqVisibility, withDefaults } from './viewStyle'
 import { withHeaderDefaults, withFooterDefaults, buildHeaderLines, buildCopyrightLine } from './viewHeader'
 import { parseRichBlocks, type RichRun } from './richText'
 import { resolve } from './locales'
@@ -165,7 +165,7 @@ function buildViewDoc(store: ResumeStore, view: ResumeView, locale: string, fmt:
     const desc = SECTION_CATALOG[renderKey]
     if (!desc || (!desc.full && !desc.summary)) continue
     const resolved = resolveSectionStyle(viewStyle, s.sectionStyle)
-    const cctx: CatalogCtx = { locale, hideDates: !!resolved.hide_dates, target: 'html' }
+    const cctx: CatalogCtx = { locale, hideDates: !!resolved.hide_dates, target: 'html', kq: kqVisibility(resolved) }
 
     const body: string[] = []
     for (const item of items as Array<Record<string, unknown>>) {

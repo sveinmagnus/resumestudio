@@ -202,6 +202,21 @@ export interface ResolvedSectionStyle extends ViewStyle {
   divider_style: DividerStyle
   /** Custom heading text (localized), or undefined to use the section label. */
   heading_text?: LocalizedString
+  /** Professional-summary part toggles (see SectionStyle.kq_show_*). */
+  kq_show_label?: boolean
+  kq_show_tagline?: boolean
+  kq_show_short?: boolean
+  kq_show_long?: boolean
+}
+
+/** Which professional-summary parts to render, with the documented defaults. */
+export function kqVisibility(r: ResolvedSectionStyle): { label: boolean; tagline: boolean; short: boolean; long: boolean } {
+  return {
+    label: r.kq_show_label ?? true,
+    tagline: r.kq_show_tagline ?? true,
+    short: r.kq_show_short ?? false,
+    long: r.kq_show_long ?? true,
+  }
 }
 
 /**
@@ -247,5 +262,9 @@ export function resolveSectionStyle(
     hide_heading: section?.hide_heading ?? false,
     hide_dates: section?.hide_dates ?? false,
     heading_text: section?.heading_text,
+    kq_show_label: section?.kq_show_label,
+    kq_show_tagline: section?.kq_show_tagline,
+    kq_show_short: section?.kq_show_short,
+    kq_show_long: section?.kq_show_long,
   }
 }
