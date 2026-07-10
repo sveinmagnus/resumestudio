@@ -1,4 +1,4 @@
-import type { SectionKey } from '../types'
+import type { SectionKey, LocalizedString } from '../types'
 
 export interface SectionDef {
   key: string
@@ -98,6 +98,45 @@ export const GROUP_ORDER: Array<SectionDef['group']> = [
  */
 export function sectionLabel(key: string): string {
   return SECTIONS.find((s) => s.key === key)?.label ?? key
+}
+
+/**
+ * Localized DEFAULT export heading per section, so a Norwegian resume gets
+ * Norwegian section headings without the user hand-typing each one. `en` matches
+ * the English `SECTIONS.label` so English output is unchanged. A view's custom
+ * per-section `heading_text` still overrides these. Locales: en / no / se / dk.
+ */
+export const SECTION_HEADINGS: Record<string, LocalizedString> = {
+  key_qualifications:    { en: 'Professional summary', no: 'Sammendrag', se: 'Sammanfattning', dk: 'Resumé' },
+  key_competencies:      { en: 'Key competencies', no: 'Nøkkelkompetanse', se: 'Nyckelkompetenser', dk: 'Nøglekompetencer' },
+  projects:              { en: 'Projects', no: 'Prosjekter', se: 'Projekt', dk: 'Projekter' },
+  promoted_projects:     { en: 'Promoted Projects', no: 'Utvalgte prosjekter', se: 'Utvalda projekt', dk: 'Udvalgte projekter' },
+  work_experiences:      { en: 'Employment', no: 'Arbeidserfaring', se: 'Arbetslivserfarenhet', dk: 'Erhvervserfaring' },
+  positions:             { en: 'Other roles', no: 'Andre verv', se: 'Andra uppdrag', dk: 'Andre hverv' },
+  educations:            { en: 'Education', no: 'Utdanning', se: 'Utbildning', dk: 'Uddannelse' },
+  courses:               { en: 'Courses', no: 'Kurs', se: 'Kurser', dk: 'Kurser' },
+  certifications:        { en: 'Certifications', no: 'Sertifiseringer', se: 'Certifieringar', dk: 'Certificeringer' },
+  technology_categories: { en: 'Skills Showcase', no: 'Ferdigheter', se: 'Färdigheter', dk: 'Kompetencer' },
+  spoken_languages:      { en: 'Languages', no: 'Språk', se: 'Språk', dk: 'Sprog' },
+  presentations:         { en: 'Presentations', no: 'Presentasjoner', se: 'Presentationer', dk: 'Præsentationer' },
+  publications:          { en: 'Publications', no: 'Publikasjoner', se: 'Publikationer', dk: 'Publikationer' },
+  honor_awards:          { en: 'Awards', no: 'Utmerkelser', se: 'Utmärkelser', dk: 'Priser' },
+  recommendations:       { en: 'Recommendations', no: 'Anbefalinger', se: 'Rekommendationer', dk: 'Anbefalinger' },
+  references:            { en: 'References', no: 'Referanser', se: 'Referenser', dk: 'Referencer' },
+  skill_matrix:          { en: 'Skill Matrix', no: 'Kompetansematrise', se: 'Kompetensmatris', dk: 'Kompetencematrix' },
+  // `industries` renders as an export section too (only views/skills/roles are
+  // excluded). `en` matches the label so English exports are unchanged.
+  industries:            { en: 'Industry Registry', no: 'Bransjer', se: 'Branscher', dk: 'Brancher' },
+}
+
+/**
+ * The default export heading for a section in a given locale: the localized
+ * heading if we have one (falling back to English), else the section label.
+ */
+export function localizedSectionHeading(key: string, locale: string): string {
+  const t = SECTION_HEADINGS[key]
+  if (t) return t[locale]?.trim() || t.en || sectionLabel(key)
+  return sectionLabel(key)
 }
 
 export function canonicalSectionKey(key: string): string {

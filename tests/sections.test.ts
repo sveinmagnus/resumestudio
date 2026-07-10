@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SECTIONS, GROUP_ORDER, canonicalSectionKey } from '../src/lib/sections'
+import { SECTIONS, GROUP_ORDER, canonicalSectionKey, localizedSectionHeading, SECTION_HEADINGS } from '../src/lib/sections'
 import { isExportableSection } from '../src/lib/viewFilter'
 
 describe('sections', () => {
@@ -25,5 +25,29 @@ describe('sections', () => {
     // The underlying content sections remain exportable.
     expect(isExportableSection(SECTIONS.find((s) => s.key === 'key_qualifications')!)).toBe(true)
     expect(isExportableSection(SECTIONS.find((s) => s.key === 'key_competencies')!)).toBe(true)
+  })
+
+  describe('localizedSectionHeading', () => {
+    it('returns the locale-specific default heading', () => {
+      expect(localizedSectionHeading('work_experiences', 'no')).toBe('Arbeidserfaring')
+      expect(localizedSectionHeading('projects', 'se')).toBe('Projekt')
+      expect(localizedSectionHeading('key_qualifications', 'dk')).toBe('Resumé')
+    })
+    it('falls back to English, then the section label', () => {
+      expect(localizedSectionHeading('work_experiences', 'de')).toBe('Employment') // unknown locale → en
+      expect(localizedSectionHeading('nonexistent', 'no')).toBe('nonexistent')     // no map → label/key
+    })
+    it("en matches the section label so English output doesn't change", () => {
+      for (const [key, ls] of Object.entries(SECTION_HEADINGS)) {
+        const def = SECTIONS.find((s) => s.key === key)
+        if (def) expect(ls.en, key).toBe(def.label)
+      }
+    })
+    it('every exportable content section has a heading translation', () => {
+      for (const s of SECTIONS.filter(isExportableSection)) {
+        expect(SECTION_HEADINGS[s.key], s.key).toBeDefined()
+        expect(SECTION_HEADINGS[s.key].no, s.key).toBeTruthy()
+      }
+    })
   })
 })

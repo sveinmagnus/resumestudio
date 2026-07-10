@@ -327,6 +327,23 @@ describe('buildViewHtml()', () => {
     expect(html).toContain('My custom intro')
   })
 
+  it('uses localized section headings for the export locale', () => {
+    const store = emptyStore()
+    store.work_experiences.push(makeWork({ id: 'w1', employer: { en: 'BigCo', no: 'BigCo' } }))
+    const view = makeView({ sections: [{ key: 'work_experiences', detail: 'full' as const, sort_order: 0 }] })
+    expect(buildViewHtml(store, view, 'no')).toContain('<h2>Arbeidserfaring</h2>')
+    expect(buildViewHtml(store, view, 'en')).toContain('<h2>Employment</h2>')
+  })
+
+  it('a per-section custom heading still overrides the localized default', () => {
+    const store = emptyStore()
+    store.work_experiences.push(makeWork({ id: 'w1' }))
+    const view = makeView({
+      sections: [{ key: 'work_experiences', detail: 'full' as const, sort_order: 0, style: { heading_text: { no: 'Erfaring' } } }],
+    })
+    expect(buildViewHtml(store, view, 'no')).toContain('<h2>Erfaring</h2>')
+  })
+
   it('tabulate lays summary items out in aligned grid rows', () => {
     const store = emptyStore()
     store.spoken_languages.push(makeSpokenLanguage({ id: 'l1', name: { en: 'English' }, level: { en: 'Fluent' } }))

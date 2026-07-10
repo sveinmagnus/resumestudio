@@ -26,7 +26,7 @@ import type {
   ResumeStore, ResumeView, Resume, LocalizedString, SectionDetail, SectionStyle,
   ViewHeaderConfig, FooterSeparator,
 } from '../types'
-import { SECTIONS } from './sections'
+import { SECTIONS, localizedSectionHeading } from './sections'
 import { resolve } from './locales'
 import { SECTION_CATALOG, type AnyItem as CatalogItem, type CatalogCtx, type ItemView } from './sectionCatalog'
 import { skillMatrixRows, fmtLastUsed, fmtProficiency, type SkillMatrixRow } from './skillMatrix'
@@ -360,7 +360,7 @@ export async function exportDocx(store: ResumeStore, view: ResumeView, locale: s
       const rows = skillMatrixRows(store, view, locale, { highlightedOnly: def.detail === 'summary' })
       if (!rows.length) continue
       const tokens = deriveTokens(resolved)
-      if (!resolved.hide_heading) children.push(sectionHeading(sectionHeadingText(resolved, def.label, locale), tokens))
+      if (!resolved.hide_heading) children.push(sectionHeading(sectionHeadingText(resolved, localizedSectionHeading(def.key, locale), locale), tokens))
       children.push(skillMatrixTable(rows, !resolved.hide_dates, tokens))
       continue
     }
@@ -381,7 +381,7 @@ export async function exportDocx(store: ResumeStore, view: ResumeView, locale: s
       tokens: deriveTokens(resolved),
     }
     const renderKey = def.key === 'promoted_projects' ? 'projects' : def.key
-    const block = renderSection(renderKey, sectionHeadingText(resolved, def.label, locale), items, ctx)
+    const block = renderSection(renderKey, sectionHeadingText(resolved, localizedSectionHeading(def.key, locale), locale), items, ctx)
     if (block.length) children.push(...block)
   }
 

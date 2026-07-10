@@ -1,7 +1,7 @@
 import type {
   ResumeStore, ResumeView, ViewSection, LocalizedString, SectionDetail,
 } from '../types'
-import { SECTIONS } from './sections'
+import { SECTIONS, localizedSectionHeading } from './sections'
 import { resolve } from './locales'
 import { SECTION_CATALOG, type AnyItem, type CatalogCtx } from './sectionCatalog'
 import { skillMatrixRows, fmtLastUsed, fmtProficiency } from './skillMatrix'
@@ -373,7 +373,7 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
         const resolved = resolveSectionStyle(viewStyle, s.sectionStyle)
         const rows = skillMatrixRows(store, view, locale, { highlightedOnly: s.detail === 'summary' })
         if (!rows.length) return ''
-        const heading = resolved.hide_heading ? '' : `<h2>${escapeHtml(sectionHeadingText(resolved, s.label, locale))}</h2>`
+        const heading = resolved.hide_heading ? '' : `<h2>${escapeHtml(sectionHeadingText(resolved, localizedSectionHeading(s.key, locale), locale))}</h2>`
         const showDates = !resolved.hide_dates
         // Show the Category column only if at least one row has a category.
         const showCategory = rows.some((row) => row.category)
@@ -404,7 +404,7 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
       if (!itemsHtml) return ''
       // s.label is a hardcoded constant from SECTIONS; the custom heading is
       // untrusted view config. Both go through escapeHtml here.
-      const heading = resolved.hide_heading ? '' : `<h2>${escapeHtml(sectionHeadingText(resolved, s.label, locale))}</h2>`
+      const heading = resolved.hide_heading ? '' : `<h2>${escapeHtml(sectionHeadingText(resolved, localizedSectionHeading(s.key, locale), locale))}</h2>`
       // Tabulation only applies to the one-line summary layout.
       const tabCls = resolved.tabulate && s.detail === 'summary' ? ' ve-tabulated' : ''
       return `<section class="ve-section ve-sec-${s.key}${tabCls}">

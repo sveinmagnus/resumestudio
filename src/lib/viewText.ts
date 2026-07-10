@@ -12,7 +12,7 @@
  */
 
 import type { ResumeStore, ResumeView } from '../types'
-import { SECTIONS } from './sections'
+import { SECTIONS, localizedSectionHeading } from './sections'
 import {
   applyView, isExportableSection, defaultViewDetail, promotedProjectItems,
 } from './viewFilter'
@@ -135,7 +135,7 @@ function buildViewDoc(store: ResumeStore, view: ResumeView, locale: string, fmt:
       if (!rows.length) continue
       const showCategory = rows.some((r) => r.category)
       const showDates = !resolved.hide_dates
-      const heading = resolved.hide_heading ? '' : sectionHeadingText(resolved, s.label, locale)
+      const heading = resolved.hide_heading ? '' : sectionHeadingText(resolved, localizedSectionHeading(s.key, locale), locale)
       if (md) {
         if (heading) out.push(`## ${heading}`)
         const cols = ['Skill', ...(showCategory ? ['Category'] : []), 'Experience', 'Proficiency', ...(showDates ? ['Last used'] : [])]
@@ -182,7 +182,7 @@ function buildViewDoc(store: ResumeStore, view: ResumeView, locale: string, fmt:
     while (body.length && body[body.length - 1] === '') body.pop()
     if (!body.length) continue
 
-    const heading = resolved.hide_heading ? '' : sectionHeadingText(resolved, s.label, locale)
+    const heading = resolved.hide_heading ? '' : sectionHeadingText(resolved, localizedSectionHeading(s.key, locale), locale)
     if (md) {
       if (heading) out.push(`## ${heading}`)
     } else if (heading) {
