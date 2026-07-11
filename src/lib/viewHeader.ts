@@ -128,6 +128,7 @@ export function withHeaderDefaults(header: Partial<ViewHeaderConfig> | undefined
     separator: typeof header.separator === 'string' ? header.separator : DEFAULT_VIEW_HEADER.separator,
     name_style: safeTextStyle(header.name_style, DEFAULT_VIEW_HEADER.name_style),
     title_style: safeTextStyle(header.title_style, DEFAULT_VIEW_HEADER.title_style),
+    title_override: header.title_override,
     photo_placement: safePhotoPlacement(header.photo_placement),
     photo_override: header.photo_override ?? null,
     photo_shape: safeProfileImageShape(header.photo_shape),

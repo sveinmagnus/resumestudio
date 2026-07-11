@@ -45,17 +45,29 @@ export function resolve(ls: LocalizedString | undefined, locale: string, fallbac
   return ''
 }
 
-/** Format a YearMonth as e.g. "Mar 2021" or "2021". */
-export function fmtDate(ym: { year: number; month: number | null } | null): string {
+/** Date format for exported views. See the DateFormat type. */
+export type DateFormat = 'month-year' | 'year-month' | 'year-only'
+
+/** Format a YearMonth per the chosen format — e.g. "Mar 2021" / "2021 Mar" / "2021". */
+export function fmtDate(
+  ym: { year: number; month: number | null } | null,
+  format: DateFormat = 'month-year',
+): string {
   if (!ym) return ''
+  if (format === 'year-only' || !ym.month) return `${ym.year}`
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  return ym.month ? `${months[ym.month - 1]} ${ym.year}` : `${ym.year}`
+  const mon = months[ym.month - 1]
+  return format === 'year-month' ? `${ym.year} ${mon}` : `${mon} ${ym.year}`
 }
 
 /** Format a date range. */
-export function fmtRange(start: { year: number; month: number | null } | null, end: { year: number; month: number | null } | null): string {
-  const s = fmtDate(start)
-  const e = end ? fmtDate(end) : 'Present'
+export function fmtRange(
+  start: { year: number; month: number | null } | null,
+  end: { year: number; month: number | null } | null,
+  format: DateFormat = 'month-year',
+): string {
+  const s = fmtDate(start, format)
+  const e = end ? fmtDate(end, format) : 'Present'
   if (!s) return e === 'Present' ? '' : e
   return `${s} – ${e}`
 }

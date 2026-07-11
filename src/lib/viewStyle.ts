@@ -16,7 +16,7 @@
 
 import type {
   ViewStyle, SectionStyle, Density, BodySize, HeadingFont, PageMargin, TagStyle, DividerStyle,
-  SummaryLayout, FullLayout, LocalizedString,
+  SummaryLayout, FullLayout, DateFormat, LocalizedString,
 } from '../types'
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -208,6 +208,8 @@ export interface ResolvedSectionStyle extends ViewStyle {
   date_position: FullLayout
   /** Lay summary items out in aligned columns (resolved: section → view → false). */
   tabulate: boolean
+  /** Date format (resolved: section → view → 'month-year'). */
+  date_format: DateFormat
   /** Professional-summary part toggles (see SectionStyle.kq_show_*). */
   kq_show_label?: boolean
   kq_show_tagline?: boolean
@@ -272,6 +274,7 @@ export function resolveSectionStyle(
     summary_layout: section?.summary_layout ?? view.summary_layout ?? 'title-org-date',
     date_position: section?.date_position ?? view.date_position ?? 'default',
     tabulate: section?.tabulate ?? view.tabulate ?? false,
+    date_format: section?.date_format ?? view.date_format ?? 'month-year',
     kq_show_label: section?.kq_show_label,
     kq_show_tagline: section?.kq_show_tagline,
     kq_show_short: section?.kq_show_short,

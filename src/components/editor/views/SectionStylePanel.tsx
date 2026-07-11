@@ -1,4 +1,4 @@
-import type { SectionStyle, SectionDetail, Density, TagStyle, DividerStyle, SummaryLayout, FullLayout, LocalizedString } from '../../../types'
+import type { SectionStyle, SectionDetail, Density, TagStyle, DividerStyle, SummaryLayout, FullLayout, DateFormat, LocalizedString } from '../../../types'
 import { Sliders, RotateCcw } from 'lucide-react'
 import { DualField } from '../../ui/DualField'
 
@@ -15,6 +15,11 @@ export const SUMMARY_LAYOUT_OPTIONS: Array<[SummaryLayout, string]> = [
 export const FULL_LAYOUT_OPTIONS: Array<[FullLayout, string]> = [
   ['default', 'Title first'],
   ['leading', 'Date & details first'],
+]
+export const DATE_FORMAT_OPTIONS: Array<[DateFormat, string]> = [
+  ['month-year', 'Month Year (Mar 2021)'],
+  ['year-month', 'Year Month (2021 Mar)'],
+  ['year-only',  'Year only (2021)'],
 ]
 
 // Sections whose items actually render skill tags — the only place a per-section
@@ -192,6 +197,19 @@ export function SectionStylePanel({ sectionKey, detail, style, onChange, onReset
               <option value="dotted">Dotted</option>
               <option value="double">Double</option>
               <option value="space">Space only</option>
+            </select>
+          </div>
+          <div className="rv-sel">
+            <span>Date format</span>
+            <select
+              aria-label="Section date format"
+              value={s.date_format ?? ''}
+              onChange={(e) => onChange({ date_format: (e.target.value || undefined) as DateFormat | undefined })}
+            >
+              <option value="">— view default —</option>
+              {DATE_FORMAT_OPTIONS.map(([v, label]) => (
+                <option key={v} value={v}>{label}</option>
+              ))}
             </select>
           </div>
         </div>

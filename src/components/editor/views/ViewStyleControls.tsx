@@ -1,8 +1,8 @@
 import { DEFAULT_VIEW_STYLE } from '../../../lib/viewStyle'
-import type { ViewStyle, Density, BodySize, HeadingFont, PageMargin, TagStyle, DividerStyle, SummaryLayout, FullLayout } from '../../../types'
+import type { ViewStyle, Density, BodySize, HeadingFont, PageMargin, TagStyle, DividerStyle, SummaryLayout, FullLayout, DateFormat } from '../../../types'
 import { RotateCcw } from 'lucide-react'
 import { Select } from './Select'
-import { SUMMARY_LAYOUT_OPTIONS, FULL_LAYOUT_OPTIONS } from './SectionStylePanel'
+import { SUMMARY_LAYOUT_OPTIONS, FULL_LAYOUT_OPTIONS, DATE_FORMAT_OPTIONS } from './SectionStylePanel'
 
 // ─── View styling controls ──────────────────────────────────────────────────
 
@@ -97,6 +97,12 @@ export function ViewStyleControls({ style, onChange }: { style: ViewStyle; onCha
             ['on',  'Aligned columns'],
           ]}
           onChange={(v) => onChange({ tabulate: v === 'on' })}
+        />
+        <Select<DateFormat>
+          label="Date format"
+          value={style.date_format ?? 'month-year'}
+          options={DATE_FORMAT_OPTIONS}
+          onChange={(date_format) => onChange({ date_format })}
         />
         <div className="rv-vs-field">
           <span className="rv-vs-label">Accent colour</span>

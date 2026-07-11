@@ -40,6 +40,8 @@ describe('<ResumeViewsEditor>', () => {
     render(<ResumeViewsEditor />)
     await userEvent.click(screen.getByRole('button', { name: /new view/i }))
 
+    // The name is display-only until opened with the edit pencil.
+    await userEvent.click(screen.getByRole('button', { name: /edit view name/i }))
     const nameInput = screen.getByDisplayValue('New View')
     await userEvent.clear(nameInput)
     await userEvent.type(nameInput, 'Board CV')

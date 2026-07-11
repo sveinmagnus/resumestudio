@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { ImageField } from '../../ui/ImageField'
+import { DualField } from '../../ui/DualField'
 import type {
-  ViewHeaderConfig, HeaderField, HeaderTextStyle,
+  ViewHeaderConfig, HeaderField, HeaderTextStyle, LocalizedString,
   PhotoPlacement, ProfileImageShape, LogoPlacement,
 } from '../../../types'
 import { ChevronUp, ChevronDown, Loader2, Link2 } from 'lucide-react'
 import { Select } from './Select'
 import { imageUrlToResizedDataUrl } from '../../../lib/image'
+
+const anyLocale = (v: LocalizedString): boolean => Object.values(v).some((x) => (x ?? '').trim() !== '')
 
 // ─── Header field display labels ──────────────────────────────────────────────
 const HEADER_FIELD_LABELS: Record<HeaderField['key'], string> = {
@@ -88,6 +91,14 @@ export function ViewHeaderControls({
           onChange={(title_style) => onChange({ title_style })}
         />
       </div>
+      <div className="rv-hdr-title-override">
+        <DualField
+          label="Title override (this view)"
+          value={header.title_override ?? {}}
+          onChange={(v) => onChange({ title_override: anyLocale(v) ? v : undefined })}
+          placeholder="Leave blank to use the Personal Details title"
+        />
+      </div>
 
       {/* Detail rows */}
       <div className="rv-hdr-sub">
@@ -141,33 +152,10 @@ export function ViewHeaderControls({
         ))}
       </div>
 
-      {/* Photo */}
+      {/* Photo — override upload on the left, its placement + shape settings on
+          the right, mirroring the company-logo block below. */}
       <div className="rv-hdr-sub">Profile photo</div>
       <div className="rv-hdr-img-grid">
-        <Select<PhotoPlacement>
-          label="Placement"
-          value={header.photo_placement}
-          options={[
-            ['none', 'Hidden'],
-            ['left', 'Left of details'],
-            ['right', 'Right of details'],
-            ['above', 'Above details'],
-            ['below', 'Below details'],
-            ['left_of_name', 'Left of name & title'],
-            ['right_of_name', 'Right of name & title'],
-          ]}
-          onChange={(photo_placement) => onChange({ photo_placement })}
-        />
-        <Select<ProfileImageShape>
-          label="Shape"
-          value={header.photo_shape}
-          options={[
-            ['square',  'Square (original)'],
-            ['rounded', 'Square, rounded corners'],
-            ['circle',  'Circular'],
-          ]}
-          onChange={(photo_shape) => onChange({ photo_shape })}
-        />
         <div className="rv-hdr-override">
           <ImageField
             label="Photo override (this view)"
@@ -190,22 +178,37 @@ export function ViewHeaderControls({
             </div>
           )}
         </div>
+        <div className="rv-hdr-img-settings">
+          <Select<PhotoPlacement>
+            label="Placement"
+            value={header.photo_placement}
+            options={[
+              ['none', 'Hidden'],
+              ['left', 'Left of details'],
+              ['right', 'Right of details'],
+              ['above', 'Above details'],
+              ['below', 'Below details'],
+              ['left_of_name', 'Left of name & title'],
+              ['right_of_name', 'Right of name & title'],
+            ]}
+            onChange={(photo_placement) => onChange({ photo_placement })}
+          />
+          <Select<ProfileImageShape>
+            label="Shape"
+            value={header.photo_shape}
+            options={[
+              ['square',  'Square (original)'],
+              ['rounded', 'Square, rounded corners'],
+              ['circle',  'Circular'],
+            ]}
+            onChange={(photo_shape) => onChange({ photo_shape })}
+          />
+        </div>
       </div>
 
-      {/* Logo */}
+      {/* Logo — override upload on the left, placement on the right. */}
       <div className="rv-hdr-sub">Company logo</div>
       <div className="rv-hdr-img-grid">
-        <Select<LogoPlacement>
-          label="Placement"
-          value={header.logo_placement}
-          options={[
-            ['none', 'Hidden'],
-            ['left', 'Top left'],
-            ['center', 'Top center'],
-            ['right', 'Top right'],
-          ]}
-          onChange={(logo_placement) => onChange({ logo_placement })}
-        />
         <div className="rv-hdr-override">
           <ImageField
             label="Logo override (this view)"
@@ -215,6 +218,19 @@ export function ViewHeaderControls({
             maxDim={600}
             shape="wide"
             hint={masterLogo ? 'Leave empty to use the master logo.' : 'No master logo set — upload one here or in Personal Details.'}
+          />
+        </div>
+        <div className="rv-hdr-img-settings">
+          <Select<LogoPlacement>
+            label="Placement"
+            value={header.logo_placement}
+            options={[
+              ['none', 'Hidden'],
+              ['left', 'Top left'],
+              ['center', 'Top center'],
+              ['right', 'Top right'],
+            ]}
+            onChange={(logo_placement) => onChange({ logo_placement })}
           />
         </div>
       </div>

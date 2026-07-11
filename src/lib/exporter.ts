@@ -200,7 +200,7 @@ function buildIdentityParagraphs(
       color: baseTokens.accentHex,
     })],
   }))
-  const titleText = L(r.title, locale)
+  const titleText = L(header.title_override, locale) || L(r.title, locale)
   if (titleText) {
     out.push(new Paragraph({
       spacing: { after: 120 },
@@ -452,7 +452,7 @@ export async function exportDocx(store: ResumeStore, view: ResumeView, locale: s
 function renderSection(key: string, label: string, items: unknown[], ctx: ExportCtx): Paragraph[] {
   const desc = SECTION_CATALOG[key]
   if (!desc || (!desc.full && !desc.summary)) return []
-  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.resolved.hide_dates, target: 'docx', kq: kqVisibility(ctx.resolved) }
+  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.resolved.hide_dates, dateFormat: ctx.resolved.date_format, target: 'docx', kq: kqVisibility(ctx.resolved) }
   let list = items as CatalogItem[]
   if (desc.docxSortByStart) list = [...list].sort(byStartDescending)
   const out: Paragraph[] = []

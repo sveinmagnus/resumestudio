@@ -306,7 +306,7 @@ function summaryColumns(summaries: SummaryView[], layout: SummaryLayout): Summar
 function renderTabulatedSummary(sectionKey: string, items: unknown[], ctx: RenderCtx): string {
   const desc = SECTION_CATALOG[sectionKey]
   if (!desc?.summary) return ''
-  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.style.hide_dates, target: 'html', kq: kqVisibility(ctx.style) }
+  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.style.hide_dates, dateFormat: ctx.style.date_format, target: 'html', kq: kqVisibility(ctx.style) }
   const summaries = items
     .map((it) => desc.summary!(it as AnyItem, cctx))
     .filter((s): s is SummaryView => !!s)
@@ -338,7 +338,7 @@ function renderTabulatedSummary(sectionKey: string, items: unknown[], ctx: Rende
 function renderItem(sectionKey: string, item: unknown, ctx: RenderCtx): string {
   const desc = SECTION_CATALOG[sectionKey]
   if (!desc) return ''
-  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.style.hide_dates, target: 'html', kq: kqVisibility(ctx.style) }
+  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.style.hide_dates, dateFormat: ctx.style.date_format, target: 'html', kq: kqVisibility(ctx.style) }
 
   if (ctx.detail === 'summary' && !desc.alwaysFull) {
     const s = desc.summary?.(item as AnyItem, cctx)
@@ -535,7 +535,8 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
     })
     .join('\n')
 
-  const titleText = escapeHtml(lc(r.title))
+  // The view can override the resume's professional title/headline.
+  const titleText = escapeHtml(lc(header.title_override) || lc(r.title))
   // photo_shape is sanitised by withHeaderDefaults — only ever 'square' /
   // 'rounded' / 'circle' here, so it's safe to interpolate as a class name.
   const photoImg = showPhoto

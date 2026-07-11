@@ -23,7 +23,7 @@ import type {
   ViewHeaderConfig, ViewFooterConfig,
 } from '../../../types'
 import {
-  Trash2, ChevronUp, ChevronDown, GripVertical,
+  Trash2, ChevronUp, ChevronDown, GripVertical, Pencil,
   ArrowLeft, Star, FileText, FileDown, FileType, FileCode,
   PanelRight, PanelRightClose, ExternalLink,
 } from 'lucide-react'
@@ -234,6 +234,8 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
 
   const [docxBusy, setDocxBusy] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+  // The view name is display-only until the user opens it with the pencil.
+  const [editingName, setEditingName] = useState(false)
 
   const handleExport = () => {
     setExportError(null)
@@ -326,16 +328,38 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
       <div className={`rv-editor-grid${showPreview ? '' : ' rv-grid-solo'}`}>
         <div className="rv-editor-controls">
 
-      {/* ── Name ── */}
+      {/* ── Name — display-only until opened with the pencil ── */}
       <div className="rv-section-block">
-        <label className="rv-field-label" htmlFor="rv-name-input">View name</label>
-        <input
-          id="rv-name-input"
-          className="rv-name-input"
-          value={view.name}
-          onChange={(e) => onUpdate({ name: e.target.value })}
-          placeholder="e.g. Board CV, Consultant CV…"
-        />
+        {editingName ? (
+          <>
+            <label className="rv-field-label" htmlFor="rv-name-input">View name</label>
+            <input
+              id="rv-name-input"
+              className="rv-name-input"
+              value={view.name}
+              autoFocus
+              onChange={(e) => onUpdate({ name: e.target.value })}
+              onBlur={() => setEditingName(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); setEditingName(false) }
+              }}
+              placeholder="e.g. Board CV, Consultant CV…"
+            />
+          </>
+        ) : (
+          <div className="rv-name-display">
+            <h2 className="rv-view-name">{view.name || 'Untitled view'}</h2>
+            <button
+              type="button"
+              className="rv-name-edit-btn"
+              onClick={() => setEditingName(true)}
+              aria-label="Edit view name"
+              title="Edit view name"
+            >
+              <Pencil size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Introduction text ── */}

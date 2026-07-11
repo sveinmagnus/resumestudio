@@ -85,6 +85,15 @@ describe('fmtDate()', () => {
   it('returns empty string for null', () => {
     expect(fmtDate(null)).toBe('')
   })
+
+  it('honours the date format argument', () => {
+    const ym = { year: 2021, month: 3 }
+    expect(fmtDate(ym, 'month-year')).toBe('Mar 2021')
+    expect(fmtDate(ym, 'year-month')).toBe('2021 Mar')
+    expect(fmtDate(ym, 'year-only')).toBe('2021')
+    // year-only drops the month even when known; a month-less date is unaffected.
+    expect(fmtDate({ year: 2021, month: null }, 'year-month')).toBe('2021')
+  })
 })
 
 describe('fmtRange()', () => {
@@ -108,6 +117,13 @@ describe('fmtRange()', () => {
   it('mixes year-only with year+month dates', () => {
     expect(fmtRange({ year: 2020, month: null }, { year: 2022, month: 6 }))
       .toBe('2020 – Jun 2022')
+  })
+
+  it('applies the date format to both endpoints', () => {
+    expect(fmtRange({ year: 2020, month: 3 }, { year: 2022, month: 6 }, 'year-month'))
+      .toBe('2020 Mar – 2022 Jun')
+    expect(fmtRange({ year: 2020, month: 3 }, { year: 2022, month: 6 }, 'year-only'))
+      .toBe('2020 – 2022')
   })
 })
 

@@ -367,6 +367,35 @@ describe('buildViewHtml()', () => {
     expect(html).toMatch(/<h2>Employment<\/h2>\s*<div class="ve-tab-grid"/)
   })
 
+  it('date format applies to item dates (year-only drops the month)', () => {
+    const store = emptyStore()
+    store.work_experiences.push(makeWork({
+      id: 'w1', employer: { en: 'BigCo' },
+      start: { year: 2020, month: 1 }, end: { year: 2022, month: 6 },
+    }))
+    const view = makeView({
+      sections: [{ key: 'work_experiences', detail: 'full' as const, sort_order: 0 }],
+      style: { ...DEFAULT_VIEW_STYLE, date_format: 'year-only' },
+    })
+    const html = buildViewHtml(store, view, 'en')
+    expect(html).toContain('2020 – 2022')
+    expect(html).not.toContain('Jan 2020')
+  })
+
+  it('a per-section date format overrides the view default', () => {
+    const store = emptyStore()
+    store.work_experiences.push(makeWork({
+      id: 'w1', employer: { en: 'BigCo' },
+      start: { year: 2020, month: 1 }, end: { year: 2022, month: 6 },
+    }))
+    const view = makeView({
+      sections: [{ key: 'work_experiences', detail: 'full' as const, sort_order: 0, style: { date_format: 'year-month' } }],
+      style: { ...DEFAULT_VIEW_STYLE, date_format: 'month-year' },
+    })
+    const html = buildViewHtml(store, view, 'en')
+    expect(html).toContain('2020 Jan – 2022 Jun')
+  })
+
   it('summary item-layout reorders the slots (date first)', () => {
     const store = emptyStore()
     store.work_experiences.push(makeWork({
@@ -770,6 +799,21 @@ describe('buildViewHtml()', () => {
       })
       const html = buildViewHtml(store, view, 'en')
       expect(html).toMatch(/font-size:41pt/)
+    })
+
+    it('a view title override replaces the resume title in the header', () => {
+      const store = emptyStore()
+      store.resume = makeResume({ title: { en: 'Senior Consultant' } })
+      // Baseline: no override → the resume's Personal Details title shows.
+      expect(buildViewHtml(store, makeView({ sections: buildViewSections() }), 'en'))
+        .toContain('Senior Consultant')
+      const view = makeView({
+        sections: buildViewSections(),
+        header: withHeaderDefaults({ title_override: { en: 'Board Member' } }),
+      })
+      const html = buildViewHtml(store, view, 'en')
+      expect(html).toContain('Board Member')
+      expect(html).not.toContain('Senior Consultant')
     })
 
     it('embeds the profile photo when placement is set and a data URL exists', () => {

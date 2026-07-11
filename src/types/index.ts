@@ -476,6 +476,14 @@ export type SummaryLayout =
 export type FullLayout = 'default' | 'leading'
 
 /**
+ * How a month-precision date renders in an exported view:
+ *  - 'month-year' — "Mar 2021" (the default)
+ *  - 'year-month' — "2021 Mar"
+ *  - 'year-only'  — "2021" (month suppressed even when known)
+ */
+export type DateFormat = 'month-year' | 'year-month' | 'year-only'
+
+/**
  * Visual treatment of the hairline drawn between items in a section (HTML/PDF).
  *  - line   — full-width hairline (the default)
  *  - thick  — heavier full-width rule
@@ -504,6 +512,8 @@ export interface ViewStyle {
   date_position?: FullLayout
   /** View-wide default: lay summary items out as aligned columns (HTML/PDF). */
   tabulate?: boolean
+  /** View-wide default date format (default 'month-year'). */
+  date_format?: DateFormat
 }
 
 /**
@@ -543,6 +553,8 @@ export interface SectionStyle {
    * lines. HTML/PDF only. Overrides the view default.
    */
   tabulate?: boolean
+  /** Override the date format for this section. Undefined = inherit the view default. */
+  date_format?: DateFormat
   // ── Professional-summary (key_qualifications) part toggles ──
   // Which parts of each profile block render. Only read by the
   // key_qualifications renderer. Undefined defaults: label/tagline/long shown,
@@ -620,6 +632,12 @@ export interface ViewHeaderConfig {
   separator: string
   name_style: HeaderTextStyle
   title_style: HeaderTextStyle
+  /**
+   * Override the professional title/headline shown under the name for this view
+   * (localized). Empty/absent → the resume's Personal Details title. Lets a
+   * Board CV read "Board Member" while a Consultant CV keeps the master title.
+   */
+  title_override?: LocalizedString
   photo_placement: PhotoPlacement
   /** Override the master profile photo for this view (base64 data URL). null = use the master photo. */
   photo_override: string | null

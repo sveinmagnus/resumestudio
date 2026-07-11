@@ -73,6 +73,32 @@ describe('<DateField>', () => {
     expect(screen.getByDisplayValue('2006')).toBeInTheDocument()
     expect(screen.queryByDisplayValue('2023')).not.toBeInTheDocument()
   })
+
+  it('steps the year up and down with the arrow buttons', async () => {
+    function Wrap4() {
+      const [v, setV] = useState<YearMonth | null>({ year: 2020, month: 3 })
+      return <DateField label="Date" value={v} onChange={setV} />
+    }
+    render(<Wrap4 />)
+    await userEvent.click(screen.getByRole('button', { name: /increase year/i }))
+    expect(screen.getByDisplayValue('2021')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /decrease year/i }))
+    await userEvent.click(screen.getByRole('button', { name: /decrease year/i }))
+    expect(screen.getByDisplayValue('2019')).toBeInTheDocument()
+    // The month is preserved across steps.
+    expect(screen.getByDisplayValue('Mar')).toBeInTheDocument()
+  })
+
+  it('seeds the current year when stepping an empty field', async () => {
+    let latest: YearMonth | null | undefined
+    function Wrap5() {
+      const [v, setV] = useState<YearMonth | null>(null)
+      return <DateField label="Date" value={v} onChange={(nv) => { latest = nv; setV(nv) }} />
+    }
+    render(<Wrap5 />)
+    await userEvent.click(screen.getByRole('button', { name: /increase year/i }))
+    expect(latest).toEqual({ year: new Date().getFullYear(), month: null })
+  })
 })
 
 describe('<TagField>', () => {

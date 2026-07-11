@@ -20,7 +20,7 @@
 import type { LocalizedString } from '../types'
 import { publicationTypeLabel } from './publicationTypes'
 import { positionTypeLabel } from './positionTypes'
-import { resolve, fmtRange, fmtDate } from './locales'
+import { resolve, fmtRange, fmtDate, type DateFormat } from './locales'
 
 export type AnyItem = Record<string, unknown>
 type YM = { year: number; month: number | null } | null
@@ -29,6 +29,8 @@ export interface CatalogCtx {
   locale: string
   /** Section style's hide_dates — blank all date output when true. */
   hideDates: boolean
+  /** Resolved date format for the section (default 'month-year'). */
+  dateFormat?: DateFormat
   /** Which render pipeline is asking. Keeps deliberate per-path differences explicit. */
   target: 'html' | 'docx'
   /** Professional-summary (key_qualifications) part visibility. Only the KQ
@@ -135,16 +137,16 @@ const ls = (it: AnyItem, field: string, locale: string): string =>
   resolve(it[field] as LocalizedString | undefined, locale)
 
 const range = (it: AnyItem, ctx: CatalogCtx): string =>
-  ctx.hideDates ? '' : fmtRange(it.start as YM, it.end as YM)
+  ctx.hideDates ? '' : fmtRange(it.start as YM, it.end as YM, ctx.dateFormat)
 
 const dateAt = (it: AnyItem, field: string, ctx: CatalogCtx): string =>
-  ctx.hideDates ? '' : fmtDate(it[field] as YM)
+  ctx.hideDates ? '' : fmtDate(it[field] as YM, ctx.dateFormat)
 
 /** Split a start/end range into separately-formatted parts (for tabulation). */
 const rangeParts = (it: AnyItem, ctx: CatalogCtx): { start: string; end: string } => {
   if (ctx.hideDates) return { start: '', end: '' }
-  const start = fmtDate(it.start as YM)
-  const end = it.end ? fmtDate(it.end as YM) : (start ? 'Present' : '')
+  const start = fmtDate(it.start as YM, ctx.dateFormat)
+  const end = it.end ? fmtDate(it.end as YM, ctx.dateFormat) : (start ? 'Present' : '')
   return { start, end }
 }
 
@@ -445,7 +447,7 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
     full(it, ctx) {
       const { locale } = ctx
       const issued = dateAt(it, 'issued', ctx)
-      const expires = !ctx.hideDates && it.expires ? ` (expires ${fmtDate(it.expires as YM)})` : ''
+      const expires = !ctx.hideDates && it.expires ? ` (expires ${fmtDate(it.expires as YM, ctx.dateFormat)})` : ''
       const common = { title: ls(it, 'name', locale), body: ls(it, 'description', locale) }
       if (ctx.target === 'html') {
         return view({ ...common, meta: [ls(it, 'organiser', locale), issued].filter(Boolean) })

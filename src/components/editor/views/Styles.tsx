@@ -101,6 +101,15 @@ export function Styles() {
       .rv-name-input:focus {
         outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash);
       }
+      /* Collapsed (display) state — the name reads as a heading with an edit pencil. */
+      .rv-name-display { display: flex; align-items: center; gap: 8px; }
+      .rv-view-name { font-size: 20px; font-weight: 600; color: var(--ink); margin: 0; }
+      .rv-name-edit-btn {
+        display: grid; place-items: center; padding: 5px; color: var(--ink-faint);
+        border: 1px solid transparent; border-radius: var(--r-sm); cursor: pointer;
+        transition: color .12s, background .12s, border-color .12s;
+      }
+      .rv-name-edit-btn:hover { color: var(--accent); background: var(--accent-wash); border-color: var(--line); }
 
       /* ── Section list ── */
       .rv-section-list { display: flex; flex-direction: column; gap: 6px; }
@@ -292,9 +301,12 @@ export function Styles() {
         font-size: 11.5px; color: var(--ink-soft); cursor: pointer;
       }
       .rv-hdr-img-grid {
-        display: grid; grid-template-columns: minmax(150px, 200px) 1fr; gap: 16px; align-items: start;
+        display: grid; grid-template-columns: minmax(160px, 220px) 1fr; gap: 16px; align-items: start;
       }
       .rv-hdr-img-grid .imgf-wrap { margin-bottom: 0; }
+      /* Placement (+ shape) settings stacked to the right of the override upload. */
+      .rv-hdr-img-settings { display: flex; flex-direction: column; gap: 14px; max-width: 320px; }
+      .rv-hdr-title-override { margin-top: 14px; }
       .rv-hdr-url { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
       .rv-hdr-url-btn {
         display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;

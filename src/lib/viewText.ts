@@ -100,7 +100,7 @@ function buildViewDoc(store: ResumeStore, view: ResumeView, locale: string, fmt:
 
   // ── Identity + contact ────────────────────────────────────────────────────
   out.push(md ? `# ${r.full_name}` : r.full_name.toUpperCase())
-  const title = resolve(r.title, locale)
+  const title = resolve(header.title_override, locale) || resolve(r.title, locale)
   if (title) out.push(md ? `*${title}*` : title)
   for (const line of buildHeaderLines(header, r, store, locale)) {
     out.push(line.map((s) => `${s.label ?? ''}${s.value}`).join(header.separator))
@@ -165,7 +165,7 @@ function buildViewDoc(store: ResumeStore, view: ResumeView, locale: string, fmt:
     const desc = SECTION_CATALOG[renderKey]
     if (!desc || (!desc.full && !desc.summary)) continue
     const resolved = resolveSectionStyle(viewStyle, s.sectionStyle)
-    const cctx: CatalogCtx = { locale, hideDates: !!resolved.hide_dates, target: 'html', kq: kqVisibility(resolved) }
+    const cctx: CatalogCtx = { locale, hideDates: !!resolved.hide_dates, dateFormat: resolved.date_format, target: 'html', kq: kqVisibility(resolved) }
 
     const body: string[] = []
     for (const item of items as Array<Record<string, unknown>>) {
