@@ -28,7 +28,7 @@ import type {
 } from '../types'
 import { SECTIONS, localizedSectionHeading } from './sections'
 import { resolve } from './locales'
-import { SECTION_CATALOG, type AnyItem as CatalogItem, type CatalogCtx, type ItemView } from './sectionCatalog'
+import { SECTION_CATALOG, summaryTitleMeta, type AnyItem as CatalogItem, type CatalogCtx, type ItemView } from './sectionCatalog'
 import { skillMatrixRows, fmtLastUsed, fmtProficiency, type SkillMatrixRow } from './skillMatrix'
 import { applyView, isExportableSection, defaultViewDetail, promotedProjectItems } from './viewFilter'
 import { showcaseGroups } from './showcase'
@@ -459,7 +459,7 @@ function renderSection(key: string, label: string, items: unknown[], ctx: Export
   for (const it of list) {
     if (ctx.detail === 'summary' && !desc.alwaysFull) {
       const s = desc.summary?.(it, cctx)
-      if (s) out.push(summaryLine(s.title, s.meta.filter(Boolean).join(' · '), ctx))
+      if (s) { const { title, meta } = summaryTitleMeta(s); out.push(summaryLine(title, meta.join(' · '), ctx)) }
       continue
     }
     const v = desc.full?.(it, cctx)

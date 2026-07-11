@@ -74,8 +74,44 @@ export interface ItemView {
   spacingBefore: number
 }
 
-/** One-line summary view. `sep` only affects the HTML adapter ('—' vs ':'). */
-export interface SummaryView { title: string; meta: string[]; sep: '—' | ':' }
+/**
+ * One-line summary, expressed as ordered semantic parts rather than a fixed
+ * title + meta. The HTML adapter reorders and column-tabulates these per the
+ * view's item-layout config; the DOCX / text adapters flatten them back to a
+ * title + meta line via {@link summaryTitleMeta} (unchanged output).
+ *
+ *  - title — the item's primary name (anchor; always present)
+ *  - role  — a role / degree / position-type descriptor
+ *  - org   — the organisation / publisher / school / event / issuer
+ *  - start / end — a date range, split so tabulate can column each
+ *  - date  — a single date (sections without a range)
+ */
+export type SummaryPartKey = 'title' | 'role' | 'org' | 'date' | 'start' | 'end'
+export interface SummaryPart { key: SummaryPartKey; value: string }
+/** `sep` only affects the HTML adapter ('—' vs ':'). */
+export interface SummaryView { parts: SummaryPart[]; sep: '—' | ':' }
+
+/**
+ * Flatten a structured summary back to the legacy title + meta line, in the
+ * catalog's default part order. The DOCX and plain-text adapters use this so
+ * their output is unaffected by the HTML-only item-layout / tabulate features.
+ * A start/end pair is re-joined into a single "start – end" range segment.
+ */
+export function summaryTitleMeta(v: SummaryView): { title: string; meta: string[] } {
+  let title = ''
+  let start = ''
+  let end = ''
+  const meta: string[] = []
+  for (const p of v.parts) {
+    if (p.key === 'title') { title = p.value; continue }
+    if (p.key === 'start') { start = p.value; continue }
+    if (p.key === 'end') { end = p.value; continue }
+    if (p.value) meta.push(p.value)
+  }
+  const range = [start, end].filter(Boolean).join(' – ')
+  if (range) meta.push(range)
+  return { title, meta }
+}
 
 export interface SectionDescriptor {
   /** Editor-facing title (View editor item list). Shows raw data — no anonymization. */
@@ -104,6 +140,14 @@ const range = (it: AnyItem, ctx: CatalogCtx): string =>
 const dateAt = (it: AnyItem, field: string, ctx: CatalogCtx): string =>
   ctx.hideDates ? '' : fmtDate(it[field] as YM)
 
+/** Split a start/end range into separately-formatted parts (for tabulation). */
+const rangeParts = (it: AnyItem, ctx: CatalogCtx): { start: string; end: string } => {
+  if (ctx.hideDates) return { start: '', end: '' }
+  const start = fmtDate(it.start as YM)
+  const end = it.end ? fmtDate(it.end as YM) : (start ? 'Present' : '')
+  return { start, end }
+}
+
 const rawRange = (it: AnyItem): string => fmtRange(it.start as YM, it.end as YM)
 
 const view = (partial: Partial<ItemView>): ItemView => ({
@@ -112,8 +156,28 @@ const view = (partial: Partial<ItemView>): ItemView => ({
   attributionMeta: [], titleStyle: 'body', spacingBefore: 0, ...partial,
 })
 
-const summaryOf = (title: string, meta: Array<string | null | undefined>, sep: '—' | ':' = '—'): SummaryView =>
-  ({ title, meta: meta.filter((m): m is string => !!m), sep })
+/**
+ * Build a structured summary from named slots. Emits parts in the catalog's
+ * DEFAULT order (title, role, org, then date/range); the HTML renderer reorders
+ * them per the view's item-layout config. Empty slots are dropped.
+ */
+const summaryOf = (opts: {
+  title: string
+  role?: string
+  org?: string
+  date?: string
+  start?: string
+  end?: string
+  sep?: '—' | ':'
+}): SummaryView => {
+  const parts: SummaryPart[] = [{ key: 'title', value: opts.title }]
+  if (opts.role)  parts.push({ key: 'role',  value: opts.role })
+  if (opts.org)   parts.push({ key: 'org',   value: opts.org })
+  if (opts.start) parts.push({ key: 'start', value: opts.start })
+  if (opts.end)   parts.push({ key: 'end',   value: opts.end })
+  if (opts.date)  parts.push({ key: 'date',  value: opts.date })
+  return { parts, sep: opts.sep ?? '—' }
+}
 
 /** Publication publisher with its type in parentheses, e.g. "IEEE (Research Publication)". */
 const publisherWithType = (it: AnyItem, locale: string): string => {
@@ -169,7 +233,8 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
     docxSortByStart: true,
     summary(it, ctx) {
       const title = projectCustomer(it, ctx.locale) || ls(it, 'description', ctx.locale) || 'Untitled project'
-      return summaryOf(title, [range(it, ctx), projectRoleNames(it, ctx.locale).join(', ')])
+      const { start, end } = rangeParts(it, ctx)
+      return summaryOf({ title, role: projectRoleNames(it, ctx.locale).join(', '), start, end })
     },
     full(it, ctx) {
       const { locale } = ctx
@@ -214,10 +279,10 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
     title: (it, locale) => ls(it, 'label', locale) || 'Untitled profile',
     summary: (it, ctx) => {
       const kq = ctx.kq ?? { label: true, tagline: true, short: false, long: true }
-      return summaryOf(
-        (kq.label && ls(it, 'label', ctx.locale)) || 'Profile',
-        [kq.tagline ? ls(it, 'tag_line', ctx.locale) : ''],
-      )
+      return summaryOf({
+        title: (kq.label && ls(it, 'label', ctx.locale)) || 'Profile',
+        org: kq.tagline ? ls(it, 'tag_line', ctx.locale) : '',
+      })
     },
     full(it, ctx) {
       const { locale } = ctx
@@ -242,7 +307,7 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
 
   key_competencies: {
     title: (it, locale) => ls(it, 'title', locale) || 'Untitled competency',
-    summary: (it, ctx) => summaryOf(ls(it, 'title', ctx.locale) || 'Competency', []),
+    summary: (it, ctx) => summaryOf({ title: ls(it, 'title', ctx.locale) || 'Competency' }),
     full(it, ctx) {
       const title = ls(it, 'title', ctx.locale)
       const body = ls(it, 'description', ctx.locale)
@@ -262,10 +327,11 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
       // Relationship trails the title/company in parentheses, mirroring the
       // full quote's attribution meta.
       const attribWithRel = rel ? `${attrib}${attrib ? ' ' : ''}(${rel})` : attrib
-      return summaryOf(
-        String(it.recommender_name ?? '') || 'Recommendation',
-        [attribWithRel, dateAt(it, 'date', ctx)],
-      )
+      return summaryOf({
+        title: String(it.recommender_name ?? '') || 'Recommendation',
+        org: attribWithRel,
+        date: dateAt(it, 'date', ctx),
+      })
     },
     full(it, ctx) {
       const attrib = [ls(it, 'recommender_title', ctx.locale), it.recommender_company as string]
@@ -287,9 +353,14 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
       return `${ls(it, 'role_title', locale)}${r ? ' · ' + r : ''}`
     },
     docxSortByStart: true,
-    summary: (it, ctx) =>
-      summaryOf(ls(it, 'employer', ctx.locale) || 'Employer',
-        [ls(it, 'role_title', ctx.locale), range(it, ctx)]),
+    summary: (it, ctx) => {
+      const { start, end } = rangeParts(it, ctx)
+      return summaryOf({
+        title: ls(it, 'employer', ctx.locale) || 'Employer',
+        role: ls(it, 'role_title', ctx.locale),
+        start, end,
+      })
+    },
     full(it, ctx) {
       const { locale } = ctx
       const employer = ls(it, 'employer', locale)
@@ -315,9 +386,14 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
       const r = rawRange(it)
       return `${ls(it, 'degree', locale)}${r ? ' · ' + r : ''}`
     },
-    summary: (it, ctx) =>
-      summaryOf(ls(it, 'school', ctx.locale) || 'School',
-        [ls(it, 'degree', ctx.locale), range(it, ctx)]),
+    summary: (it, ctx) => {
+      const { start, end } = rangeParts(it, ctx)
+      return summaryOf({
+        title: ls(it, 'school', ctx.locale) || 'School',
+        role: ls(it, 'degree', ctx.locale),
+        start, end,
+      })
+    },
     full(it, ctx) {
       const { locale } = ctx
       const common = { title: ls(it, 'school', locale), body: ls(it, 'description', locale) }
@@ -338,8 +414,11 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
     title: (it, locale) => ls(it, 'name', locale) || 'Untitled',
     subtitle: (it, locale) => ls(it, 'program', locale),
     summary: (it, ctx) =>
-      summaryOf(ls(it, 'name', ctx.locale) || 'Course',
-        [ls(it, 'program', ctx.locale), dateAt(it, 'completed', ctx)]),
+      summaryOf({
+        title: ls(it, 'name', ctx.locale) || 'Course',
+        org: ls(it, 'program', ctx.locale),
+        date: dateAt(it, 'completed', ctx),
+      }),
     full(it, ctx) {
       const { locale } = ctx
       const common = { title: ls(it, 'name', locale), body: ls(it, 'description', locale) }
@@ -358,8 +437,11 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
     title: (it, locale) => ls(it, 'name', locale) || 'Untitled',
     subtitle: (it, locale) => ls(it, 'organiser', locale),
     summary: (it, ctx) =>
-      summaryOf(ls(it, 'name', ctx.locale) || 'Certification',
-        [ls(it, 'organiser', ctx.locale), dateAt(it, 'issued', ctx)]),
+      summaryOf({
+        title: ls(it, 'name', ctx.locale) || 'Certification',
+        org: ls(it, 'organiser', ctx.locale),
+        date: dateAt(it, 'issued', ctx),
+      }),
     full(it, ctx) {
       const { locale } = ctx
       const issued = dateAt(it, 'issued', ctx)
@@ -384,9 +466,15 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
       const org = [positionTypeLabel(it.position_type as string | undefined), ls(it, 'organisation', locale)].filter(Boolean).join(' · ')
       return `${org}${r ? ' · ' + r : ''}`
     },
-    summary: (it, ctx) =>
-      summaryOf(ls(it, 'name', ctx.locale) || 'Role',
-        [positionTypeLabel(it.position_type as string | undefined), ls(it, 'organisation', ctx.locale), range(it, ctx)]),
+    summary: (it, ctx) => {
+      const { start, end } = rangeParts(it, ctx)
+      return summaryOf({
+        title: ls(it, 'name', ctx.locale) || 'Role',
+        role: positionTypeLabel(it.position_type as string | undefined),
+        org: ls(it, 'organisation', ctx.locale),
+        start, end,
+      })
+    },
     full(it, ctx) {
       const { locale } = ctx
       const type = positionTypeLabel(it.position_type as string | undefined)
@@ -420,8 +508,11 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
   technology_categories: {
     title: (it, locale) => ls(it, 'name', locale) || 'Untitled',
     summary: (it, ctx) =>
-      summaryOf(ls(it, 'name', ctx.locale) || 'Category',
-        [skillNames(it, ctx.locale).join(', ')], ':'),
+      summaryOf({
+        title: ls(it, 'name', ctx.locale) || 'Category',
+        org: skillNames(it, ctx.locale).join(', '),
+        sep: ':',
+      }),
     full(it, ctx) {
       const name = ls(it, 'name', ctx.locale)
       const tags = skillNames(it, ctx.locale)
@@ -434,8 +525,11 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
     title: (it, locale) => ls(it, 'title', locale) || 'Untitled',
     subtitle: (it, locale) => ls(it, 'event', locale),
     summary: (it, ctx) =>
-      summaryOf(ls(it, 'title', ctx.locale) || 'Presentation',
-        [ls(it, 'event', ctx.locale), dateAt(it, 'date', ctx)]),
+      summaryOf({
+        title: ls(it, 'title', ctx.locale) || 'Presentation',
+        org: ls(it, 'event', ctx.locale),
+        date: dateAt(it, 'date', ctx),
+      }),
     full(it, ctx) {
       const { locale } = ctx
       const common = { title: ls(it, 'title', locale), body: ls(it, 'description', locale) }
@@ -454,8 +548,11 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
   honor_awards: {
     title: (it, locale) => ls(it, 'name', locale) || 'Untitled',
     summary: (it, ctx) =>
-      summaryOf(ls(it, 'name', ctx.locale) || 'Award',
-        [ls(it, 'issuer', ctx.locale), dateAt(it, 'date', ctx)]),
+      summaryOf({
+        title: ls(it, 'name', ctx.locale) || 'Award',
+        org: ls(it, 'issuer', ctx.locale),
+        date: dateAt(it, 'date', ctx),
+      }),
     full(it, ctx) {
       const { locale } = ctx
       const common = { title: ls(it, 'name', locale), body: ls(it, 'description', locale) }
@@ -474,8 +571,11 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
     title: (it, locale) => ls(it, 'title', locale) || 'Untitled',
     subtitle: (it, locale) => publisherWithType(it, locale),
     summary: (it, ctx) =>
-      summaryOf(ls(it, 'title', ctx.locale) || 'Publication',
-        [publisherWithType(it, ctx.locale), dateAt(it, 'date', ctx)]),
+      summaryOf({
+        title: ls(it, 'title', ctx.locale) || 'Publication',
+        org: publisherWithType(it, ctx.locale),
+        date: dateAt(it, 'date', ctx),
+      }),
     full(it, ctx) {
       const { locale } = ctx
       const common = { title: ls(it, 'title', locale), body: ls(it, 'abstract', locale) }
@@ -496,8 +596,10 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
     title: (it) => (it.name as string) || 'Unnamed',
     summary(it) {
       if (!it.include_in_exports) return null
-      return summaryOf(String(it.name ?? '') || 'Reference',
-        [[it.title as string, it.company as string].filter(Boolean).join(', ')])
+      return summaryOf({
+        title: String(it.name ?? '') || 'Reference',
+        org: [it.title as string, it.company as string].filter(Boolean).join(', '),
+      })
     },
     full(it, ctx) {
       if (!it.include_in_exports) return null

@@ -14,14 +14,21 @@
 import type { YearMonth } from '../types'
 import { getItemTitle } from './viewFilter'
 
-export type SortMode = 'custom' | 'alpha' | 'start' | 'end' | 'date'
+export type SortMode =
+  | 'custom' | 'alpha'
+  | 'start' | 'start_asc'
+  | 'end' | 'end_asc'
+  | 'date' | 'date_asc'
 
 export const SORT_LABELS: Record<SortMode, string> = {
-  custom: 'Custom order',
-  alpha:  'Alphabetical (A–Z)',
-  start:  'Start date (newest)',
-  end:    'End date (newest)',
-  date:   'Date (newest)',
+  custom:    'Custom order',
+  alpha:     'Alphabetical (A–Z)',
+  start:     'Start date (newest)',
+  start_asc: 'Start date (oldest)',
+  end:       'End date (newest)',
+  end_asc:   'End date (oldest)',
+  date:      'Date (newest)',
+  date_asc:  'Date (oldest)',
 }
 
 /**
@@ -42,13 +49,14 @@ const DATE_CAPS: Record<string, { start?: boolean; end?: boolean; single?: strin
   recommendations:  { single: 'date' },
 }
 
-/** Which sort modes a section offers, in display order. */
+/** Which sort modes a section offers, in display order. Each date mode is
+ *  offered newest-first then oldest-first. */
 export function availableSortModes(section: string): SortMode[] {
   const modes: SortMode[] = ['custom', 'alpha']
   const cap = DATE_CAPS[section]
-  if (cap?.start)  modes.push('start')
-  if (cap?.end)    modes.push('end')
-  if (cap?.single) modes.push('date')
+  if (cap?.start)  modes.push('start', 'start_asc')
+  if (cap?.end)    modes.push('end', 'end_asc')
+  if (cap?.single) modes.push('date', 'date_asc')
   return modes
 }
 
@@ -61,18 +69,19 @@ function ymKey(ym: unknown): number | null {
 }
 
 /**
- * Descending comparison by date key. A missing date (`null`) always sorts to
- * the TOP: for end dates that means "ongoing = most recent", and for start /
- * single dates it means "not dated yet" — a freshly added item stays on top
- * until the user sets its date, at which point it drops into its chronological
- * place. (The `nullIsRecent` flag is kept for callers that ever need the old
- * "nulls last" behaviour; all current call sites want nulls on top.)
+ * Comparison by date key. A missing date (`null`) always sorts to the TOP
+ * regardless of direction: for end dates that means "ongoing = most recent",
+ * and for start / single dates it means "not dated yet" — a freshly added item
+ * stays on top until the user sets its date, at which point it drops into its
+ * chronological place. `dir` only orders the *dated* items: 'desc' = newest
+ * first, 'asc' = oldest first.
  */
-function byDateDesc(a: number | null, b: number | null, nullIsRecent = true): number {
-  const av = a ?? (nullIsRecent ? Infinity : -Infinity)
-  const bv = b ?? (nullIsRecent ? Infinity : -Infinity)
-  if (av === bv) return 0
-  return bv > av ? 1 : -1
+function byDate(a: number | null, b: number | null, dir: 'asc' | 'desc' = 'desc'): number {
+  if (a === null && b === null) return 0
+  if (a === null) return -1  // nulls float to top
+  if (b === null) return 1
+  if (a === b) return 0
+  return dir === 'desc' ? (b - a > 0 ? 1 : -1) : (a - b > 0 ? 1 : -1)
 }
 
 /**
@@ -94,29 +103,36 @@ export function sortItems<T extends Sortable>(
         ),
       )
     case 'start':
+    case 'start_asc': {
+      const dir = mode === 'start_asc' ? 'asc' : 'desc'
       // Undated items float to the top (new items surface until dated).
-      return arr.sort((a, b) => byDateDesc(ymKey(a.start), ymKey(b.start)))
+      return arr.sort((a, b) => byDate(ymKey(a.start), ymKey(b.start), dir))
+    }
     case 'end':
+    case 'end_asc': {
+      const dir = mode === 'end_asc' ? 'asc' : 'desc'
       // Ongoing items (null end) all rank as "most recent" by end date, so
       // they tie with each other. Without a secondary key the input order
       // wins — which means a freshly added ongoing role can hide below an
-      // older one. Tie-break ongoing items by start date descending instead,
-      // so the most recently started ongoing entry shows first. Items with
-      // a real end date are still compared purely by that end date.
+      // older one. Tie-break ongoing items by start date (same direction), so
+      // the entry ordering is stable. Items with a real end date are still
+      // compared purely by that end date.
       return arr.sort((a, b) => {
         const ae = ymKey(a.end), be = ymKey(b.end)
-        const primary = byDateDesc(ae, be)
+        const primary = byDate(ae, be, dir)
         if (primary !== 0) return primary
         if (ae === null && be === null) {
-          // Both ongoing: newest start first; an undated (new) one stays on top.
-          return byDateDesc(ymKey(a.start), ymKey(b.start))
+          return byDate(ymKey(a.start), ymKey(b.start), dir)
         }
         return 0
       })
-    case 'date': {
+    }
+    case 'date':
+    case 'date_asc': {
+      const dir = mode === 'date_asc' ? 'asc' : 'desc'
       const field = DATE_CAPS[section]?.single ?? 'date'
       // Undated items float to the top (new items surface until dated).
-      return arr.sort((a, b) => byDateDesc(ymKey(a[field]), ymKey(b[field])))
+      return arr.sort((a, b) => byDate(ymKey(a[field]), ymKey(b[field]), dir))
     }
     case 'custom':
     default:

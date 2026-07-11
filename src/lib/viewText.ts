@@ -16,7 +16,7 @@ import { SECTIONS, localizedSectionHeading } from './sections'
 import {
   applyView, isExportableSection, defaultViewDetail, promotedProjectItems,
 } from './viewFilter'
-import { SECTION_CATALOG, type CatalogCtx, type ItemView } from './sectionCatalog'
+import { SECTION_CATALOG, summaryTitleMeta, type CatalogCtx, type ItemView } from './sectionCatalog'
 import { skillMatrixRows, fmtLastUsed, fmtProficiency } from './skillMatrix'
 import { showcaseGroups } from './showcase'
 import { resolveSectionStyle, sectionHeadingText, kqVisibility, withDefaults } from './viewStyle'
@@ -171,7 +171,7 @@ function buildViewDoc(store: ResumeStore, view: ResumeView, locale: string, fmt:
     for (const item of items as Array<Record<string, unknown>>) {
       if (s.detail === 'summary' && !desc.alwaysFull) {
         const sum = desc.summary?.(item, cctx)
-        if (sum) body.push(summaryLine(sum.title, sum.meta.filter(Boolean).join(' · '), sum.sep, fmt))
+        if (sum) { const { title, meta } = summaryTitleMeta(sum); body.push(summaryLine(title, meta.join(' · '), sum.sep, fmt)) }
         continue
       }
       const v = desc.full?.(item, cctx)

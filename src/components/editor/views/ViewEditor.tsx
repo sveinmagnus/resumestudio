@@ -484,6 +484,7 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
                   {!off && (
                     <SectionStylePanel
                       sectionKey={vs.key}
+                      detail={vs.detail}
                       style={vs.style}
                       onChange={(patch) => setSectionStyle(vs.key, patch)}
                       onReset={() => setSectionStyle(vs.key, null)}

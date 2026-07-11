@@ -42,6 +42,37 @@ describe('<DateField>', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Clear' }))
     expect(screen.getByRole('button', { name: 'Ongoing' })).toBeInTheDocument()
   })
+
+  // Regression: a single-date field (no allowOngoing — e.g. publications) used
+  // to REJECT an emptied year and revert the controlled input to the prior
+  // year, so select-all → delete → retype silently restored the old value.
+  it('clears the year to empty when the field is emptied (no allowOngoing)', async () => {
+    let latest: YearMonth | null | undefined
+    function Wrap2() {
+      const [v, setV] = useState<YearMonth | null>({ year: 2023, month: null })
+      latest = v
+      return <DateField label="Date" value={v} onChange={(nv) => { latest = nv; setV(nv) }} />
+    }
+    render(<Wrap2 />)
+    const year = screen.getByPlaceholderText('Year')
+    await userEvent.clear(year)
+    // The field actually empties (no revert to 2023) and the date becomes null.
+    expect((year as HTMLInputElement).value).toBe('')
+    expect(latest).toBeNull()
+  })
+
+  it('a fresh year replaces the old one after emptying (no stale revert)', async () => {
+    function Wrap3() {
+      const [v, setV] = useState<YearMonth | null>({ year: 2023, month: null })
+      return <DateField label="Date" value={v} onChange={setV} />
+    }
+    render(<Wrap3 />)
+    const year = screen.getByPlaceholderText('Year')
+    await userEvent.clear(year)
+    await userEvent.type(year, '2006')
+    expect(screen.getByDisplayValue('2006')).toBeInTheDocument()
+    expect(screen.queryByDisplayValue('2023')).not.toBeInTheDocument()
+  })
 })
 
 describe('<TagField>', () => {

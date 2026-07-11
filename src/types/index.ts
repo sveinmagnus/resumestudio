@@ -458,6 +458,24 @@ export type PageMargin = 'tight' | 'normal' | 'generous'
 export type TagStyle = 'chips' | 'inline'
 
 /**
+ * Order of the three summary-line slots — Title, Organization, Date — on a
+ * section rendered at `summary` detail (HTML/PDF). "Organization" is the item's
+ * secondary descriptor (employer / publisher / school / event / role); "Date"
+ * is its date or start–end range. Only affects the one-line summary layout.
+ */
+export type SummaryLayout =
+  | 'title-org-date' | 'title-date-org'
+  | 'org-title-date' | 'org-date-title'
+  | 'date-title-org' | 'date-org-title'
+
+/**
+ * Placement of the date/details block on a `full`-detail item (HTML/PDF):
+ *  - 'default' — title first, then the details line (with the date)
+ *  - 'leading' — the details line (date first) above the title
+ */
+export type FullLayout = 'default' | 'leading'
+
+/**
  * Visual treatment of the hairline drawn between items in a section (HTML/PDF).
  *  - line   — full-width hairline (the default)
  *  - thick  — heavier full-width rule
@@ -480,6 +498,12 @@ export interface ViewStyle {
   item_divider?: boolean
   /** View-wide divider style (default 'line'). Additive — consumers default to 'line'. */
   divider_style?: DividerStyle
+  /** View-wide default order of a summary line's slots (default 'title-org-date'). */
+  summary_layout?: SummaryLayout
+  /** View-wide default placement of a full item's date block (default 'default'). */
+  date_position?: FullLayout
+  /** View-wide default: lay summary items out as aligned columns (HTML/PDF). */
+  tabulate?: boolean
 }
 
 /**
@@ -506,15 +530,17 @@ export interface SectionStyle {
   item_divider?: boolean
   /** Override the divider style for this section. Undefined = inherit the view default. */
   divider_style?: DividerStyle
+  /** Order of a summary line's slots for this section (overrides the view default). */
+  summary_layout?: SummaryLayout
   /**
-   * Where the date/details line sits on a full item:
-   *  - 'default' — title first, then the details line (with the date)
-   *  - 'leading' — the details line (date first) above the title
+   * Where the date/details block sits on a full item (overrides the view
+   * default). See {@link FullLayout}.
    */
-  date_position?: 'default' | 'leading'
+  date_position?: FullLayout
   /**
-   * Lay the section's SUMMARY items out as aligned columns (title column sized
-   * to the widest entry) instead of free-flowing lines. HTML/PDF only.
+   * Lay the section's SUMMARY items out as aligned columns (one column per
+   * field — title, role, organization, start, end) instead of free-flowing
+   * lines. HTML/PDF only. Overrides the view default.
    */
   tabulate?: boolean
   // ── Professional-summary (key_qualifications) part toggles ──

@@ -1,6 +1,21 @@
-import type { SectionStyle, SectionDetail, Density, TagStyle, DividerStyle, LocalizedString } from '../../../types'
+import type { SectionStyle, SectionDetail, Density, TagStyle, DividerStyle, SummaryLayout, FullLayout, LocalizedString } from '../../../types'
 import { Sliders, RotateCcw } from 'lucide-react'
 import { DualField } from '../../ui/DualField'
+
+// Item-layout option lists, shared with the view-wide controls. "Org" is the
+// item's organisation/role descriptor; "Date" its date or start–end range.
+export const SUMMARY_LAYOUT_OPTIONS: Array<[SummaryLayout, string]> = [
+  ['title-org-date', 'Title → Org → Date'],
+  ['title-date-org', 'Title → Date → Org'],
+  ['org-title-date', 'Org → Title → Date'],
+  ['org-date-title', 'Org → Date → Title'],
+  ['date-title-org', 'Date → Title → Org'],
+  ['date-org-title', 'Date → Org → Title'],
+]
+export const FULL_LAYOUT_OPTIONS: Array<[FullLayout, string]> = [
+  ['default', 'Title first'],
+  ['leading', 'Date & details first'],
+]
 
 // Sections whose items actually render skill tags — the only place a per-section
 // "Tag style" override is meaningful (see lib/sectionCatalog.ts: projects,
@@ -35,15 +50,17 @@ export function DetailToggle({ value, onChange }: { value: SectionDetail; onChan
 
 interface SectionStylePanelProps {
   sectionKey: string
+  detail: SectionDetail
   style: SectionStyle | undefined
   onChange: (patch: SectionStyle) => void
   onReset: () => void
   hasStyle: boolean
 }
 
-export function SectionStylePanel({ sectionKey, style, onChange, onReset, hasStyle }: SectionStylePanelProps) {
+export function SectionStylePanel({ sectionKey, detail, style, onChange, onReset, hasStyle }: SectionStylePanelProps) {
   const s: SectionStyle = style ?? {}
   const showTag = TAG_SECTIONS.has(sectionKey)
+  const isSummary = detail === 'summary'
   return (
     <details className="rv-secstyle">
       <summary className="rv-secstyle-summary">
@@ -79,14 +96,17 @@ export function SectionStylePanel({ sectionKey, style, onChange, onReset, hasSty
             />
             <span>Hide dates</span>
           </label>
-          <label className="rv-toggle">
-            <input
-              type="checkbox"
-              checked={!!s.tabulate}
-              onChange={(e) => onChange({ tabulate: e.target.checked || undefined })}
-            />
-            <span>Tabulate summary</span>
-          </label>
+          {/* Tabulation is a summary-only layout — hidden for full sections. */}
+          {isSummary && (
+            <label className="rv-toggle">
+              <input
+                type="checkbox"
+                checked={!!s.tabulate}
+                onChange={(e) => onChange({ tabulate: e.target.checked || undefined })}
+              />
+              <span>Tabulate summary</span>
+            </label>
+          )}
         </div>
         {/* Dropdowns on the right. Labelled by their visible span (not a wrapping
             <label>) so they don't collide with the identically-named view-wide
@@ -105,18 +125,38 @@ export function SectionStylePanel({ sectionKey, style, onChange, onReset, hasSty
               <option value="spacious">Spacious</option>
             </select>
           </div>
-          <div className="rv-sel">
-            <span>Item layout</span>
-            <select
-              aria-label="Section item layout"
-              value={s.date_position ?? ''}
-              onChange={(e) => onChange({ date_position: (e.target.value || undefined) as 'default' | 'leading' | undefined })}
-            >
-              <option value="">— view default —</option>
-              <option value="default">Title first</option>
-              <option value="leading">Date &amp; details first</option>
-            </select>
-          </div>
+          {/* Item layout — its options depend on the section's detail level:
+              summary sections reorder the Title/Org/Date slots; full sections
+              choose where the date/details block sits. */}
+          {isSummary ? (
+            <div className="rv-sel">
+              <span>Item layout</span>
+              <select
+                aria-label="Section summary layout"
+                value={s.summary_layout ?? ''}
+                onChange={(e) => onChange({ summary_layout: (e.target.value || undefined) as SummaryLayout | undefined })}
+              >
+                <option value="">— view default —</option>
+                {SUMMARY_LAYOUT_OPTIONS.map(([v, label]) => (
+                  <option key={v} value={v}>{label}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="rv-sel">
+              <span>Item layout</span>
+              <select
+                aria-label="Section item layout"
+                value={s.date_position ?? ''}
+                onChange={(e) => onChange({ date_position: (e.target.value || undefined) as FullLayout | undefined })}
+              >
+                <option value="">— view default —</option>
+                {FULL_LAYOUT_OPTIONS.map(([v, label]) => (
+                  <option key={v} value={v}>{label}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {showTag && (
             <div className="rv-sel">
               <span>Tag style</span>

@@ -1,7 +1,8 @@
 import { DEFAULT_VIEW_STYLE } from '../../../lib/viewStyle'
-import type { ViewStyle, Density, BodySize, HeadingFont, PageMargin, TagStyle, DividerStyle } from '../../../types'
+import type { ViewStyle, Density, BodySize, HeadingFont, PageMargin, TagStyle, DividerStyle, SummaryLayout, FullLayout } from '../../../types'
 import { RotateCcw } from 'lucide-react'
 import { Select } from './Select'
+import { SUMMARY_LAYOUT_OPTIONS, FULL_LAYOUT_OPTIONS } from './SectionStylePanel'
 
 // ─── View styling controls ──────────────────────────────────────────────────
 
@@ -75,6 +76,27 @@ export function ViewStyleControls({ style, onChange }: { style: ViewStyle; onCha
           onChange={(v) => onChange(v === 'off'
             ? { item_divider: false }
             : { item_divider: true, divider_style: v as DividerStyle })}
+        />
+        <Select<SummaryLayout>
+          label="Summary layout"
+          value={style.summary_layout ?? 'title-org-date'}
+          options={SUMMARY_LAYOUT_OPTIONS}
+          onChange={(summary_layout) => onChange({ summary_layout })}
+        />
+        <Select<FullLayout>
+          label="Full-item layout"
+          value={style.date_position ?? 'default'}
+          options={FULL_LAYOUT_OPTIONS}
+          onChange={(date_position) => onChange({ date_position })}
+        />
+        <Select<string>
+          label="Summaries"
+          value={style.tabulate ? 'on' : 'off'}
+          options={[
+            ['off', 'Free-flowing lines'],
+            ['on',  'Aligned columns'],
+          ]}
+          onChange={(v) => onChange({ tabulate: v === 'on' })}
         />
         <div className="rv-vs-field">
           <span className="rv-vs-label">Accent colour</span>

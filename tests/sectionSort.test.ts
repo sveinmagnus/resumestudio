@@ -10,23 +10,23 @@ describe('availableSortModes()', () => {
     expect(availableSortModes('roles')).toEqual(['custom', 'alpha'])
   })
 
-  it('adds start + end for date-range sections', () => {
-    expect(availableSortModes('projects')).toEqual(['custom', 'alpha', 'start', 'end'])
-    expect(availableSortModes('work_experiences')).toEqual(['custom', 'alpha', 'start', 'end'])
+  it('adds start + end (newest and oldest) for date-range sections', () => {
+    expect(availableSortModes('projects')).toEqual(['custom', 'alpha', 'start', 'start_asc', 'end', 'end_asc'])
+    expect(availableSortModes('work_experiences')).toEqual(['custom', 'alpha', 'start', 'start_asc', 'end', 'end_asc'])
   })
 
-  it('adds a single date mode for single-date sections', () => {
-    expect(availableSortModes('courses')).toEqual(['custom', 'alpha', 'date'])
-    expect(availableSortModes('certifications')).toEqual(['custom', 'alpha', 'date'])
-    expect(availableSortModes('honor_awards')).toEqual(['custom', 'alpha', 'date'])
-    expect(availableSortModes('presentations')).toEqual(['custom', 'alpha', 'date'])
-    expect(availableSortModes('publications')).toEqual(['custom', 'alpha', 'date'])
+  it('adds both single date directions for single-date sections', () => {
+    expect(availableSortModes('courses')).toEqual(['custom', 'alpha', 'date', 'date_asc'])
+    expect(availableSortModes('certifications')).toEqual(['custom', 'alpha', 'date', 'date_asc'])
+    expect(availableSortModes('honor_awards')).toEqual(['custom', 'alpha', 'date', 'date_asc'])
+    expect(availableSortModes('presentations')).toEqual(['custom', 'alpha', 'date', 'date_asc'])
+    expect(availableSortModes('publications')).toEqual(['custom', 'alpha', 'date', 'date_asc'])
     // recommendations carry a date too — they must offer date sorting.
-    expect(availableSortModes('recommendations')).toEqual(['custom', 'alpha', 'date'])
+    expect(availableSortModes('recommendations')).toEqual(['custom', 'alpha', 'date', 'date_asc'])
   })
 
   it('has a label for every mode', () => {
-    const modes: SortMode[] = ['custom', 'alpha', 'start', 'end', 'date']
+    const modes: SortMode[] = ['custom', 'alpha', 'start', 'start_asc', 'end', 'end_asc', 'date', 'date_asc']
     for (const m of modes) expect(SORT_LABELS[m]).toBeTruthy()
   })
 })
@@ -108,6 +108,28 @@ describe('sortItems()', () => {
     const b = makeCourse({ id: 'b', completed: { year: 2023, month: 1 } })
     const out = sortItems('courses', [a, b], 'date', 'en')
     expect(out.map((x) => x.id)).toEqual(['b', 'a'])
+  })
+
+  it('date_asc mode orders single dates oldest first', () => {
+    const a = makeCourse({ id: 'a', completed: { year: 2019, month: 1 } })
+    const b = makeCourse({ id: 'b', completed: { year: 2023, month: 1 } })
+    const out = sortItems('courses', [a, b], 'date_asc', 'en')
+    expect(out.map((x) => x.id)).toEqual(['a', 'b'])
+  })
+
+  it('start_asc mode orders oldest start first, undated still floats to the top', () => {
+    const older   = makeWork({ id: 'old', start: { year: 2018, month: 1 } })
+    const newer   = makeWork({ id: 'new', start: { year: 2022, month: 6 } })
+    const undated = makeWork({ id: 'undated', start: null })
+    const out = sortItems('work_experiences', [newer, older, undated], 'start_asc', 'en')
+    expect(out.map((x) => x.id)).toEqual(['undated', 'old', 'new'])
+  })
+
+  it('end_asc mode orders oldest end first', () => {
+    const early = makeWork({ id: 'early', end: { year: 2019, month: 1 } })
+    const late  = makeWork({ id: 'late',  end: { year: 2023, month: 1 } })
+    const out = sortItems('work_experiences', [late, early], 'end_asc', 'en')
+    expect(out.map((x) => x.id)).toEqual(['early', 'late'])
   })
 
   it('does not mutate the input array', () => {

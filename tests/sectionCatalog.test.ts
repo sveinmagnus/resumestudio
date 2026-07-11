@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SECTION_CATALOG, type CatalogCtx } from '../src/lib/sectionCatalog'
+import { SECTION_CATALOG, summaryTitleMeta, type CatalogCtx } from '../src/lib/sectionCatalog'
 import {
   makeProject, makeWork, makeEducation, makeKQ, makeReference,
   makeSpokenLanguage, makeKeyCompetency, makeRecommendation,
@@ -51,7 +51,7 @@ describe('projects — anonymization (both render paths)', () => {
 
   it('summary() uses the anonymized customer too', () => {
     const s = SECTION_CATALOG.projects.summary!(anonProject, html)!
-    expect(s.title).toBe('Large Nordic Bank')
+    expect(summaryTitleMeta(s).title).toBe('Large Nordic Bank')
   })
 
   it('never falls back to the real name when the alias is missing', () => {
@@ -130,7 +130,7 @@ describe('hideDates blanks all date output', () => {
     const v = SECTION_CATALOG.work_experiences.full!(w, noDates)!
     expect(v.meta.join(' ')).not.toContain('2020')
     const s = SECTION_CATALOG.work_experiences.summary!(w, noDates)!
-    expect(s.meta.join(' ')).not.toContain('2020')
+    expect(summaryTitleMeta(s).meta.join(' ')).not.toContain('2020')
   })
 })
 
@@ -176,7 +176,7 @@ describe('layout kinds', () => {
       recommender_name: 'Jane Boss', recommender_title: { en: 'CTO' },
       recommender_company: 'BigCo', relationship: { en: 'Was my manager' },
     }) as unknown as Record<string, unknown>
-    const s = SECTION_CATALOG.recommendations.summary!(r, html)!
+    const s = summaryTitleMeta(SECTION_CATALOG.recommendations.summary!(r, html)!)
     expect(s.title).toBe('Jane Boss')
     expect(s.meta[0]).toBe('CTO, BigCo (Was my manager)')
   })
@@ -186,7 +186,7 @@ describe('layout kinds', () => {
       recommender_name: 'Jane Boss', recommender_title: { en: 'CTO' },
       recommender_company: 'BigCo', relationship: {},
     }) as unknown as Record<string, unknown>
-    const s = SECTION_CATALOG.recommendations.summary!(r, html)!
+    const s = summaryTitleMeta(SECTION_CATALOG.recommendations.summary!(r, html)!)
     expect(s.meta[0]).toBe('CTO, BigCo')
   })
 
@@ -194,7 +194,7 @@ describe('layout kinds', () => {
     const cat = item({ name: { en: 'Languages' }, skills: [{ name: { en: 'TS' } }, { name: { en: 'Go' } }] })
     const s = SECTION_CATALOG.technology_categories.summary!(cat, html)!
     expect(s.sep).toBe(':')
-    expect(s.meta).toEqual(['TS, Go'])
+    expect(summaryTitleMeta(s).meta).toEqual(['TS, Go'])
   })
 
   it('technology_categories full() skips empty categories', () => {

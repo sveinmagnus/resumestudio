@@ -16,7 +16,7 @@
 
 import type {
   ViewStyle, SectionStyle, Density, BodySize, HeadingFont, PageMargin, TagStyle, DividerStyle,
-  LocalizedString,
+  SummaryLayout, FullLayout, LocalizedString,
 } from '../types'
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -202,10 +202,12 @@ export interface ResolvedSectionStyle extends ViewStyle {
   divider_style: DividerStyle
   /** Custom heading text (localized), or undefined to use the section label. */
   heading_text?: LocalizedString
-  /** Full-item date/details placement (see SectionStyle.date_position). */
-  date_position?: 'default' | 'leading'
-  /** Lay summary items out in aligned columns (HTML/PDF). */
-  tabulate?: boolean
+  /** Summary-line slot order (resolved: section → view → 'title-org-date'). */
+  summary_layout: SummaryLayout
+  /** Full-item date/details placement (resolved: section → view → 'default'). */
+  date_position: FullLayout
+  /** Lay summary items out in aligned columns (resolved: section → view → false). */
+  tabulate: boolean
   /** Professional-summary part toggles (see SectionStyle.kq_show_*). */
   kq_show_label?: boolean
   kq_show_tagline?: boolean
@@ -266,8 +268,10 @@ export function resolveSectionStyle(
     hide_heading: section?.hide_heading ?? false,
     hide_dates: section?.hide_dates ?? false,
     heading_text: section?.heading_text,
-    date_position: section?.date_position,
-    tabulate: section?.tabulate,
+    // Item-layout controls resolve section override → view-wide default → base.
+    summary_layout: section?.summary_layout ?? view.summary_layout ?? 'title-org-date',
+    date_position: section?.date_position ?? view.date_position ?? 'default',
+    tabulate: section?.tabulate ?? view.tabulate ?? false,
     kq_show_label: section?.kq_show_label,
     kq_show_tagline: section?.kq_show_tagline,
     kq_show_short: section?.kq_show_short,

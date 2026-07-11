@@ -39,7 +39,7 @@ describe('<SortBar> + reorder guard (via WorkEditor)', () => {
     render(<WorkEditor />)
     const select = screen.getByLabelText('Sort') as HTMLSelectElement
     const opts = Array.from(select.options).map((o) => o.value)
-    expect(opts).toEqual(['custom', 'alpha', 'start', 'end'])
+    expect(opts).toEqual(['custom', 'alpha', 'start', 'start_asc', 'end', 'end_asc'])
   })
 
   it('reorders the displayed list when a computed mode is selected', async () => {

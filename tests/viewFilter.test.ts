@@ -344,16 +344,41 @@ describe('buildViewHtml()', () => {
     expect(buildViewHtml(store, view, 'no')).toContain('<h2>Erfaring</h2>')
   })
 
-  it('tabulate lays summary items out in aligned grid rows', () => {
+  it('tabulate lays summary items out in an aligned column grid (one column per field)', () => {
     const store = emptyStore()
-    store.spoken_languages.push(makeSpokenLanguage({ id: 'l1', name: { en: 'English' }, level: { en: 'Fluent' } }))
+    store.work_experiences.push(makeWork({
+      id: 'w1', employer: { en: 'BigCo' }, role_title: { en: 'Engineer' },
+      start: { year: 2020, month: 1 }, end: { year: 2022, month: 6 },
+    }))
     const view = makeView({
-      sections: [{ key: 'spoken_languages', detail: 'summary' as const, sort_order: 0, style: { tabulate: true } }],
+      sections: [{ key: 'work_experiences', detail: 'summary' as const, sort_order: 0, style: { tabulate: true } }],
     })
     const html = buildViewHtml(store, view, 'en')
-    expect(html).toContain('ve-tabulated')
+    // Grid wraps just the item rows; the heading stays outside it.
+    expect(html).toContain('ve-tab-grid')
     expect(html).toContain('ve-tab-title')
-    expect(html).toContain('English')
+    // Title, role, start and end each land in their own column (4 columns).
+    expect(html).toContain('grid-template-columns:repeat(4, max-content)')
+    expect(html).toContain('BigCo')
+    expect(html).toContain('Engineer')
+    expect(html).toContain('Jan 2020')
+    expect(html).toContain('Jun 2022')
+    // The section heading must NOT be swallowed into the grid.
+    expect(html).toMatch(/<h2>Employment<\/h2>\s*<div class="ve-tab-grid"/)
+  })
+
+  it('summary item-layout reorders the slots (date first)', () => {
+    const store = emptyStore()
+    store.work_experiences.push(makeWork({
+      id: 'w1', employer: { en: 'BigCo' }, role_title: { en: 'Engineer' },
+      start: { year: 2020, month: 1 }, end: { year: 2022, month: 6 },
+    }))
+    const view = makeView({
+      sections: [{ key: 'work_experiences', detail: 'summary' as const, sort_order: 0, style: { summary_layout: 'date-title-org' } }],
+    })
+    const html = buildViewHtml(store, view, 'en')
+    // Date slot leads the line, before the (bold) employer title.
+    expect(html).toMatch(/Jan 2020[\s\S]*<strong>BigCo<\/strong>/)
   })
 
   it("date_position:'leading' puts the meta line before the item title", () => {

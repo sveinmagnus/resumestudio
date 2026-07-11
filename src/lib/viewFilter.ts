@@ -3,7 +3,8 @@ import type {
 } from '../types'
 import { SECTIONS, localizedSectionHeading } from './sections'
 import { resolve } from './locales'
-import { SECTION_CATALOG, type AnyItem, type CatalogCtx } from './sectionCatalog'
+import { SECTION_CATALOG, type AnyItem, type CatalogCtx, type SummaryView, type SummaryPartKey } from './sectionCatalog'
+import type { SummaryLayout } from '../types'
 import { skillMatrixRows, fmtLastUsed, fmtProficiency } from './skillMatrix'
 import { showcaseGroups } from './showcase'
 import { renderRichHtml } from './richText'
@@ -232,6 +233,101 @@ function renderTagsHtml(names: string[], style: ResolvedSectionStyle): string {
   return `<div class="ve-tags">${names.map((n) => `<span class="ve-tag">${escapeHtml(n)}</span>`).join('')}</div>`
 }
 
+// ─── Summary item layout (ordering + tabulation) ─────────────────────────────
+// The summary line is composed of three ordered slots — Title, Organization
+// (role + org), Date (start/end or single date). A view's item-layout config
+// picks the slot order; tabulate spreads each part into its own aligned column.
+
+type Slot = 'title' | 'org' | 'date'
+
+const LAYOUT_SLOTS: Record<SummaryLayout, Slot[]> = {
+  'title-org-date': ['title', 'org', 'date'],
+  'title-date-org': ['title', 'date', 'org'],
+  'org-title-date': ['org', 'title', 'date'],
+  'org-date-title': ['org', 'date', 'title'],
+  'date-title-org': ['date', 'title', 'org'],
+  'date-org-title': ['date', 'org', 'title'],
+}
+
+/** Which slot each part belongs to. */
+const SLOT_OF: Record<SummaryPartKey, Slot> = {
+  title: 'title', role: 'org', org: 'org', start: 'date', end: 'date', date: 'date',
+}
+
+/** Per-slot column order for tabulation (each key becomes its own column). */
+const SLOT_KEYS: Record<Slot, SummaryPartKey[]> = {
+  title: ['title'], org: ['role', 'org'], date: ['start', 'end', 'date'],
+}
+
+const slotsFor = (layout: SummaryLayout): Slot[] => LAYOUT_SLOTS[layout] ?? LAYOUT_SLOTS['title-org-date']
+
+/** Render a summary as a single free-flowing line, slots in the chosen order. */
+function renderSummaryInline(s: SummaryView, layout: SummaryLayout): string {
+  const slots = slotsFor(layout)
+  const groups = slots
+    .map((slot) => ({
+      slot,
+      text: s.parts.filter((p) => SLOT_OF[p.key] === slot).map((p) => p.value).filter(Boolean).join(' · '),
+    }))
+    .filter((g) => g.text)
+  if (!groups.length) return ''
+  const titleFirst = slots[0] === 'title'
+  const html = groups
+    .map((g, i) => {
+      const inner = g.slot === 'title'
+        ? `<strong>${escapeHtml(g.text)}</strong>`
+        : `<span class="ve-meta-inline">${escapeHtml(g.text)}</span>`
+      if (i === 0) return inner
+      // Keep the classic "Title — meta" / "Category: skills" look when the title
+      // leads; otherwise a neutral middot between reordered slots.
+      const joiner = i === 1 && titleFirst ? (s.sep === ':' ? ': ' : ' — ') : ' · '
+      return `${joiner}${inner}`
+    })
+    .join('')
+  return `<div class="ve-item ve-item-line">${html}</div>`
+}
+
+/** The tabulation columns for a set of summaries: every part key present, in slot order. */
+function summaryColumns(summaries: SummaryView[], layout: SummaryLayout): SummaryPartKey[] {
+  const present = new Set<SummaryPartKey>()
+  for (const s of summaries) for (const p of s.parts) if (p.value) present.add(p.key)
+  const cols: SummaryPartKey[] = []
+  for (const slot of slotsFor(layout)) for (const k of SLOT_KEYS[slot]) if (present.has(k)) cols.push(k)
+  return cols
+}
+
+/**
+ * Render a summary-detail section as an aligned column grid — one column per
+ * present part (title · role · org · start · end / date). The heading stays
+ * OUTSIDE the grid (the grid is its own element), so it isn't pulled into a
+ * column. Every value goes through escapeHtml; the grid template is a computed
+ * integer count, never user data.
+ */
+function renderTabulatedSummary(sectionKey: string, items: unknown[], ctx: RenderCtx): string {
+  const desc = SECTION_CATALOG[sectionKey]
+  if (!desc?.summary) return ''
+  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.style.hide_dates, target: 'html', kq: kqVisibility(ctx.style) }
+  const summaries = items
+    .map((it) => desc.summary!(it as AnyItem, cctx))
+    .filter((s): s is SummaryView => !!s)
+  if (!summaries.length) return ''
+  const cols = summaryColumns(summaries, ctx.style.summary_layout)
+  if (!cols.length) return ''
+  const rows = summaries
+    .map((s) => {
+      const map = new Map(s.parts.map((p) => [p.key, p.value]))
+      const cells = cols
+        .map((k) => {
+          const cls = k === 'title' ? 've-tab-title' : 've-tab-cell'
+          return `<span class="${cls}">${escapeHtml(map.get(k) ?? '')}</span>`
+        })
+        .join('')
+      return `<div class="ve-tab-row">${cells}</div>`
+    })
+    .join('')
+  return `<div class="ve-tab-grid" style="grid-template-columns:repeat(${cols.length}, max-content)">${rows}</div>`
+}
+
 /**
  * The HTML render adapter (roadmap A5): turns a section descriptor's data view
  * into markup. This function and renderTagsHtml are the ONLY places item data
@@ -247,17 +343,7 @@ function renderItem(sectionKey: string, item: unknown, ctx: RenderCtx): string {
   if (ctx.detail === 'summary' && !desc.alwaysFull) {
     const s = desc.summary?.(item as AnyItem, cctx)
     if (!s) return ''
-    const metaTxt = s.meta.filter(Boolean).join(' · ')
-    // Tabulated: title + meta as two aligned grid cells (the section is a grid).
-    if (ctx.style.tabulate) {
-      return `<div class="ve-item ve-tab-row"><span class="ve-tab-title">${escapeHtml(s.title)}</span><span class="ve-tab-meta">${escapeHtml(metaTxt)}</span></div>`
-    }
-    const metaHtml = !metaTxt
-      ? ''
-      : s.sep === ':'
-        ? `: <span class="ve-meta-inline">${escapeHtml(metaTxt)}</span>`
-        : ` <span class="ve-meta-inline">— ${escapeHtml(metaTxt)}</span>`
-    return `<div class="ve-item ve-item-line"><strong>${escapeHtml(s.title)}</strong>${metaHtml}</div>`
+    return renderSummaryInline(s, ctx.style.summary_layout)
   }
 
   const v = desc.full?.(item as AnyItem, cctx)
@@ -397,17 +483,24 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
           : (filtered[s.storeKey] as unknown[])
       if (!items.length) return ''
       const resolved = resolveSectionStyle(viewStyle, s.sectionStyle)
-      perSectionCss.push(sectionStyleCss(s.key, resolved, tokens))
       const ctx: RenderCtx = { locale, detail: s.detail, style: resolved }
       const renderKey = renderKeyFor(s.key)
-      const itemsHtml = items.map((item) => renderItem(renderKey, item, ctx)).filter(Boolean).join('\n')
+      const desc = SECTION_CATALOG[renderKey]
+      // Tabulation only applies to the one-line summary layout (never full or
+      // always-full sections like spoken languages).
+      const tabulated = resolved.tabulate && s.detail === 'summary' && !!desc?.summary && !desc?.alwaysFull
+      let itemsHtml: string
+      if (tabulated) {
+        itemsHtml = renderTabulatedSummary(renderKey, items, ctx)
+      } else {
+        perSectionCss.push(sectionStyleCss(s.key, resolved, tokens))
+        itemsHtml = items.map((item) => renderItem(renderKey, item, ctx)).filter(Boolean).join('\n')
+      }
       if (!itemsHtml) return ''
       // s.label is a hardcoded constant from SECTIONS; the custom heading is
       // untrusted view config. Both go through escapeHtml here.
       const heading = resolved.hide_heading ? '' : `<h2>${escapeHtml(sectionHeadingText(resolved, localizedSectionHeading(s.key, locale), locale))}</h2>`
-      // Tabulation only applies to the one-line summary layout.
-      const tabCls = resolved.tabulate && s.detail === 'summary' ? ' ve-tabulated' : ''
-      return `<section class="ve-section ve-sec-${s.key}${tabCls}">
+      return `<section class="ve-section ve-sec-${s.key}">
   ${heading}
   ${itemsHtml}
 </section>`
@@ -573,12 +666,14 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
                 line-height: ${tokens.lineHeight}; color: #1f2937; white-space: pre-line; }
     .ve-section { margin-bottom: 8px; }
     .ve-item { margin-bottom: ${tokens.itemGapPx}px; padding-bottom: ${tokens.itemGapPx}px; border-bottom: 1px solid ${tokens.accentCss}1A; }
-    /* Tabulated summary: the section is a 2-column grid; each row's title and
-       meta drop into aligned columns (title column sized to the widest entry). */
-    .ve-tabulated { display: grid; grid-template-columns: max-content 1fr; column-gap: 18px; row-gap: ${Math.max(2, Math.round(tokens.itemGapPx / 2))}px; }
-    .ve-tabulated .ve-tab-row { display: contents; }
-    .ve-tabulated .ve-tab-title { font-weight: 600; }
-    .ve-tabulated .ve-tab-meta { color: #4B5563; }
+    /* Tabulated summary: an aligned column grid holding just the item rows (the
+       section heading stays outside it). Each part — title, role, org, start,
+       end — lands in its own column, sized to the widest entry. */
+    .ve-tab-grid { display: grid; column-gap: 18px; row-gap: ${Math.max(2, Math.round(tokens.itemGapPx / 2))}px;
+                   align-items: baseline; font-size: ${tokens.smallFontSizePt}pt; margin-top: 2px; }
+    .ve-tab-row { display: contents; }
+    .ve-tab-title { font-weight: 600; }
+    .ve-tab-cell { color: #4B5563; }
     .ve-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
     .ve-item-line { padding-bottom: 0; border-bottom: none; margin-bottom: 4px; font-size: ${tokens.smallFontSizePt}pt; }
     .ve-meta-inline { color: #6B7280; }

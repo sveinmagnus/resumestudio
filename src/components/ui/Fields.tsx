@@ -33,8 +33,16 @@ export function DateField({ label, value, onChange, allowOngoing }: {
         <input id={yearId} className="pf-input" type="text" inputMode="numeric" placeholder="Year" style={{ width: 80 }}
           aria-label={`${label} — year`}
           value={value?.year || ''} onChange={(e) => {
-            const y = parseInt(e.target.value)
-            if (!y) { if (allowOngoing) onChange(null); return }
+            // Clearing the field always means "no date" (null is valid for every
+            // YearMonth|null field). Returning early here — the old behaviour —
+            // left the field un-clearable and, worse, reverted a controlled
+            // input to its PRIOR year, so an edit that passed through the empty
+            // state (select-all → delete → retype) silently restored the
+            // original value. See the publications date-rewrite bug.
+            const raw = e.target.value.trim()
+            if (raw === '') { onChange(null); return }
+            const y = parseInt(raw, 10)
+            if (Number.isNaN(y)) return
             onChange({ year: y, month: value?.month ?? null })
           }} />
         <select className="pf-input" style={{ width: 90 }} value={value?.month ?? 0}
