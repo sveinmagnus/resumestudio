@@ -57,6 +57,32 @@ describe('positions — type excluded from summary, kept in full', () => {
   })
 })
 
+describe('work / education summary — Title = role/degree, Org = employer/school', () => {
+  it('work summary puts the position title in Title and the employer in Org', () => {
+    const w = makeWork({
+      employer: { en: 'BigCo' }, role_title: { en: 'Engineer' },
+      start: { year: 2020, month: 1 }, end: { year: 2022, month: 6 },
+    })
+    const s = SECTION_CATALOG.work_experiences.summary!(w, html)!
+    expect(s.parts.find((p) => p.key === 'title')?.value).toBe('Engineer')
+    expect(s.parts.find((p) => p.key === 'org')?.value).toBe('BigCo')
+  })
+
+  it('work summary falls back to the employer as Title when no role is recorded', () => {
+    const w = makeWork({ employer: { en: 'BigCo' }, role_title: {} })
+    const s = SECTION_CATALOG.work_experiences.summary!(w, html)!
+    expect(s.parts.find((p) => p.key === 'title')?.value).toBe('BigCo')
+    expect(s.parts.find((p) => p.key === 'org')).toBeUndefined()
+  })
+
+  it('education summary puts the degree in Title and the school in Org', () => {
+    const e = makeEducation({ school: { en: 'NTNU' }, degree: { en: 'MSc Computer Science' } })
+    const s = SECTION_CATALOG.educations.summary!(e, html)!
+    expect(s.parts.find((p) => p.key === 'title')?.value).toBe('MSc Computer Science')
+    expect(s.parts.find((p) => p.key === 'org')?.value).toBe('NTNU')
+  })
+})
+
 describe('projects — anonymization (both render paths)', () => {
   const anonProject = makeProject({
     customer: { en: 'Real Client AS' },

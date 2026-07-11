@@ -357,9 +357,14 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
     docxSortByStart: true,
     summary: (it, ctx) => {
       const { start, end } = rangeParts(it, ctx)
+      // Slots follow their labels: the position title is the Title, the employer
+      // is the Organisation. Fall back to the employer as Title when no role is
+      // recorded, so the line is never anchorless.
+      const role = ls(it, 'role_title', ctx.locale)
+      const employer = ls(it, 'employer', ctx.locale)
       return summaryOf({
-        title: ls(it, 'employer', ctx.locale) || 'Employer',
-        role: ls(it, 'role_title', ctx.locale),
+        title: role || employer || 'Role',
+        org: role ? employer : '',
         start, end,
       })
     },
@@ -390,9 +395,12 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
     },
     summary: (it, ctx) => {
       const { start, end } = rangeParts(it, ctx)
+      // Degree is the Title, school the Organisation (matching the slot labels).
+      const degree = ls(it, 'degree', ctx.locale)
+      const school = ls(it, 'school', ctx.locale)
       return summaryOf({
-        title: ls(it, 'school', ctx.locale) || 'School',
-        role: ls(it, 'degree', ctx.locale),
+        title: degree || school || 'Education',
+        org: degree ? school : '',
         start, end,
       })
     },

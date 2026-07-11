@@ -406,8 +406,8 @@ describe('buildViewHtml()', () => {
       sections: [{ key: 'work_experiences', detail: 'summary' as const, sort_order: 0, style: { summary_layout: 'date-title-org' } }],
     })
     const html = buildViewHtml(store, view, 'en')
-    // Date slot leads the line, before the (bold) employer title.
-    expect(html).toMatch(/Jan 2020[\s\S]*<strong>BigCo<\/strong>/)
+    // Date slot leads the line, before the (bold) position-title anchor.
+    expect(html).toMatch(/Jan 2020[\s\S]*<strong>Engineer<\/strong>/)
   })
 
   it('every summary item-layout renders the slots in its declared order', () => {
@@ -417,7 +417,8 @@ describe('buildViewHtml()', () => {
       id: 'w1', employer: { en: 'BigCo' }, role_title: { en: 'Engineer' },
       start: { year: 2020, month: 1 }, end: { year: 2022, month: 6 },
     }))
-    const TITLE = 'BigCo', ORG = 'Engineer', DATE = 'Jan 2020'
+    // Title slot = the position title (role); Org slot = the employer.
+    const TITLE = 'Engineer', ORG = 'BigCo', DATE = 'Jan 2020'
     const order = (html: string): string[] =>
       [['title', html.indexOf(TITLE)], ['org', html.indexOf(ORG)], ['date', html.indexOf(DATE)]]
         .sort((a, b) => (a[1] as number) - (b[1] as number))
@@ -444,7 +445,8 @@ describe('buildViewHtml()', () => {
       id: 'w1', employer: { en: 'BigCo' }, role_title: { en: 'Engineer' },
       start: { year: 2020, month: 1 }, end: { year: 2022, month: 6 },
     }))
-    const TITLE = 'BigCo', ORG = 'Engineer', DATE = 'Jan 2020'
+    // Title slot = the position title (role); Org slot = the employer.
+    const TITLE = 'Engineer', ORG = 'BigCo', DATE = 'Jan 2020'
     const order = (html: string): string[] =>
       [['title', html.indexOf(TITLE)], ['org', html.indexOf(ORG)], ['date', html.indexOf(DATE)]]
         .sort((a, b) => (a[1] as number) - (b[1] as number))
