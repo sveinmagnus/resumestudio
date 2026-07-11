@@ -476,12 +476,18 @@ export type SummaryLayout =
 export type FullLayout = 'default' | 'leading'
 
 /**
- * How a month-precision date renders in an exported view:
- *  - 'month-year' — "Mar 2021" (the default)
- *  - 'year-month' — "2021 Mar"
- *  - 'year-only'  — "2021" (month suppressed even when known)
+ * How a month-precision date renders in an exported view. The month is either a
+ * word ("Mar") or a zero-padded number ("03"); the year can lead or trail:
+ *  - 'month-year'     — "Mar 2021" (the default)
+ *  - 'year-month'     — "2021 Mar"
+ *  - 'month-year-num' — "03/2021"
+ *  - 'year-month-num' — "2021/03"
+ *  - 'year-only'      — "2021" (month suppressed even when known)
  */
-export type DateFormat = 'month-year' | 'year-month' | 'year-only'
+export type DateFormat =
+  | 'month-year' | 'year-month'
+  | 'month-year-num' | 'year-month-num'
+  | 'year-only'
 
 /**
  * Visual treatment of the hairline drawn between items in a section (HTML/PDF).

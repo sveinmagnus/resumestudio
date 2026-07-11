@@ -94,6 +94,15 @@ describe('fmtDate()', () => {
     // year-only drops the month even when known; a month-less date is unaffected.
     expect(fmtDate({ year: 2021, month: null }, 'year-month')).toBe('2021')
   })
+
+  it('formats numeric months zero-padded, year leading or trailing', () => {
+    const ym = { year: 2021, month: 3 }
+    expect(fmtDate(ym, 'month-year-num')).toBe('03/2021')
+    expect(fmtDate(ym, 'year-month-num')).toBe('2021/03')
+    expect(fmtDate({ year: 2021, month: 12 }, 'month-year-num')).toBe('12/2021')
+    // A month-less date is still just the year in numeric formats.
+    expect(fmtDate({ year: 2021, month: null }, 'month-year-num')).toBe('2021')
+  })
 })
 
 describe('fmtRange()', () => {
@@ -124,6 +133,8 @@ describe('fmtRange()', () => {
       .toBe('2020 Mar – 2022 Jun')
     expect(fmtRange({ year: 2020, month: 3 }, { year: 2022, month: 6 }, 'year-only'))
       .toBe('2020 – 2022')
+    expect(fmtRange({ year: 2020, month: 3 }, { year: 2022, month: 6 }, 'month-year-num'))
+      .toBe('03/2020 – 06/2022')
   })
 })
 

@@ -17,9 +17,11 @@ export const FULL_LAYOUT_OPTIONS: Array<[FullLayout, string]> = [
   ['leading', 'Date & details first'],
 ]
 export const DATE_FORMAT_OPTIONS: Array<[DateFormat, string]> = [
-  ['month-year', 'Month Year (Mar 2021)'],
-  ['year-month', 'Year Month (2021 Mar)'],
-  ['year-only',  'Year only (2021)'],
+  ['month-year',     'Month Year (Mar 2021)'],
+  ['year-month',     'Year Month (2021 Mar)'],
+  ['month-year-num', 'Month/Year numeric (03/2021)'],
+  ['year-month-num', 'Year/Month numeric (2021/03)'],
+  ['year-only',      'Year only (2021)'],
 ]
 
 // Sections whose items actually render skill tags — the only place a per-section

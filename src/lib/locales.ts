@@ -46,18 +46,31 @@ export function resolve(ls: LocalizedString | undefined, locale: string, fallbac
 }
 
 /** Date format for exported views. See the DateFormat type. */
-export type DateFormat = 'month-year' | 'year-month' | 'year-only'
+export type DateFormat =
+  | 'month-year' | 'year-month'
+  | 'month-year-num' | 'year-month-num'
+  | 'year-only'
 
-/** Format a YearMonth per the chosen format — e.g. "Mar 2021" / "2021 Mar" / "2021". */
+/**
+ * Format a YearMonth per the chosen format — e.g. "Mar 2021" / "2021 Mar" /
+ * "03/2021" / "2021/03" / "2021". A month-less date always renders as the bare
+ * year regardless of format.
+ */
 export function fmtDate(
   ym: { year: number; month: number | null } | null,
   format: DateFormat = 'month-year',
 ): string {
   if (!ym) return ''
   if (format === 'year-only' || !ym.month) return `${ym.year}`
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  const mon = months[ym.month - 1]
-  return format === 'year-month' ? `${ym.year} ${mon}` : `${mon} ${ym.year}`
+  switch (format) {
+    case 'month-year-num': return `${String(ym.month).padStart(2, '0')}/${ym.year}`
+    case 'year-month-num': return `${ym.year}/${String(ym.month).padStart(2, '0')}`
+    default: {
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      const mon = months[ym.month - 1]
+      return format === 'year-month' ? `${ym.year} ${mon}` : `${mon} ${ym.year}`
+    }
+  }
 }
 
 /** Format a date range. */
