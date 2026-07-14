@@ -64,7 +64,7 @@ Wishlist: §12.
 | Tests | Vitest (+ jsdom for browser-tied tests) | `npm test`, `npm run test:watch`, `npm run test:coverage` |
 | Icons | lucide-react | **Tree-shaken**: import each icon by name, never `import * as` |
 | DOCX export | `docx` npm package | **Lazy-loaded** (~352 kB chunk) — only fetched when the user clicks Export DOCX |
-| PDF export | Browser print pipeline | HTML → `window.print()` → system Save-as-PDF |
+| PDF export | `pdfmake` (vector) | **Lazy-loaded** (~1.2 MB lib + ~0.9 MB font vfs) — one-click `.pdf` download built from the section catalog in `lib/pdfExporter.ts`, mirroring the DOCX exporter. Its own render engine, so ~matches (not pixel-identical to) the HTML preview |
 | Drag-and-drop | `@dnd-kit/core` + `@dnd-kit/sortable` | Pointer + keyboard sensors |
 | Styling | Inline `<style>` blocks per component + CSS custom properties in `src/index.css` | No Tailwind, no CSS-in-JS lib — keep it that way |
 
@@ -408,7 +408,7 @@ After any significant change: 1. `npm run typecheck` (clean) → 2. `npm test` (
 
 ### Known quirks
 - The preview tool injects `PORT=5173`, but Express reads `process.env.PORT` and collides with Vite. To verify auto-save inside the preview, run the server manually with `PORT=3001 npx tsx server/index.ts`.
-- `.pdf` export uses `window.open()` + `window.print()` — **pop-ups must be allowed**.
+- `.pdf` export is a **vector one-click download** via lazy-loaded `pdfmake` (`lib/pdfExporter.ts`) — no print dialog, no pop-up. Like the DOCX path it's a *separate* render engine (bundled Roboto font, not the brand Open Sans Condensed/Ubuntu), so its layout is close to but not pixel-identical with the HTML preview. Don't statically import `lib/pdfExporter.ts` or `pdfmake` from any always-loaded file.
 - The DOCX exporter (`lib/exporter.ts`) is lazy-loaded via dynamic import in `ResumeViewsEditor` (~352 kB chunk). Don't statically import it from any always-loaded file.
 - CVpartner project skills may have proficiency=0 across the board — don't assume non-zero.
 

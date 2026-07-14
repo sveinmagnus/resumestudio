@@ -125,11 +125,12 @@ function SortableSecRow({ id, off, children }: {
  * trigger so exporting — the frequent task — is always one click away without
  * scrolling to the bottom of the config. Closes on outside-click / Escape.
  */
-function ExportMenu({ onPdf, onDocx, onText, onMarkdown, docxBusy, lastExportedAt }: {
+function ExportMenu({ onPdf, onDocx, onText, onMarkdown, pdfBusy, docxBusy, lastExportedAt }: {
   onPdf: () => void
   onDocx: () => void
   onText: () => void
   onMarkdown: () => void
+  pdfBusy: boolean
   docxBusy: boolean
   lastExportedAt: string | null
 }) {
@@ -168,8 +169,8 @@ function ExportMenu({ onPdf, onDocx, onText, onMarkdown, docxBusy, lastExportedA
       </button>
       {open && (
         <div className="rv-export-pop" role="menu">
-          <button type="button" role="menuitem" className="rv-export-item" onClick={() => pick(onPdf)}>
-            <FileText size={15} /> Export PDF
+          <button type="button" role="menuitem" className="rv-export-item" onClick={() => pick(onPdf, true)} disabled={pdfBusy}>
+            <FileText size={15} /> {pdfBusy ? 'Building PDF…' : 'Export PDF'}
           </button>
           <button type="button" role="menuitem" className="rv-export-item" onClick={() => pick(onDocx, true)} disabled={docxBusy}>
             <FileDown size={15} /> {docxBusy ? 'Building DOCX…' : 'Export DOCX'}
@@ -362,6 +363,7 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
   }
 
   const [docxBusy, setDocxBusy] = useState(false)
+  const [pdfBusy, setPdfBusy] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   // The view name is display-only until the user opens it with the pencil.
   const [editingName, setEditingName] = useState(false)
@@ -375,22 +377,22 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
     return next
   })
 
+  // Vector PDF straight to a download (no print dialog). pdfmake is ~1.5 MB, so
+  // it's lazy-loaded only when the user actually exports — like the DOCX path.
   const handleExport = () => {
     setExportError(null)
-    const html = buildViewHtml(data, view, exportLocale)
-    const win = window.open('', '_blank')
-    if (!win) { setExportError('Please allow pop-ups to export the PDF.'); return }
-    win.document.write(html)
-    win.document.close()
-    // Print only once the self-hosted brand fonts have loaded, so the pages
-    // aren't measured with fallback-font metrics (wrong line breaks / page
-    // count). Cap the wait so a slow or blocked font load still prints.
-    let printed = false
-    const doPrint = () => { if (printed) return; printed = true; try { win.focus(); win.print() } catch { /* window closed */ } }
-    const fonts = (win.document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts
-    if (fonts?.ready) fonts.ready.then(doPrint, doPrint)
-    window.setTimeout(doPrint, 1500) // fallback ceiling
-    onUpdate({ last_exported_at: new Date().toISOString() })
+    setPdfBusy(true)
+    void (async () => {
+      try {
+        const { exportPdf } = await import('../../../lib/pdfExporter')
+        await exportPdf(data, view, exportLocale)
+        onUpdate({ last_exported_at: new Date().toISOString() })
+      } catch (e) {
+        setExportError(`Could not export PDF: ${(e as Error).message}`)
+      } finally {
+        setPdfBusy(false)
+      }
+    })()
   }
 
   // ATS-friendly exports (F6): pure string builders, downloaded as files.
@@ -466,6 +468,7 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
             onDocx={() => void handleExportDocx()}
             onText={() => handleExportTextual('txt')}
             onMarkdown={() => handleExportTextual('md')}
+            pdfBusy={pdfBusy}
             docxBusy={docxBusy}
             lastExportedAt={view.last_exported_at}
           />
