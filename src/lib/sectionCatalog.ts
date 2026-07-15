@@ -21,6 +21,7 @@ import type { LocalizedString } from '../types'
 import { publicationTypeLabel } from './publicationTypes'
 import { positionTypeLabel } from './positionTypes'
 import { resolve, fmtRange, fmtDate, presentLabel, type DateFormat } from './locales'
+import { cefrSummary, type CefrMap } from './cefr'
 
 export type AnyItem = Record<string, unknown>
 type YM = { year: number; month: number | null } | null
@@ -520,12 +521,19 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
 
   spoken_languages: {
     title: (it, locale) => ls(it, 'name', locale) || 'Untitled',
-    alwaysFull: true,
-    full: (it, ctx) => view({
-      layout: 'inline',
-      title: ls(it, 'name', ctx.locale),
-      meta: [ls(it, 'level', ctx.locale)].filter(Boolean),
+    // Summary = one compact line (name — level / CEFR). Full = a proper item
+    // with the Europass passport levels, matching the other sections.
+    summary: (it, ctx) => summaryOf({
+      title: ls(it, 'name', ctx.locale) || 'Language',
+      org: [ls(it, 'level', ctx.locale), cefrSummary((it as AnyItem).cefr as CefrMap | undefined)].filter(Boolean).join(' · '),
     }),
+    full(it, ctx) {
+      const cef = cefrSummary((it as AnyItem).cefr as CefrMap | undefined)
+      return view({
+        title: ls(it, 'name', ctx.locale) || 'Language',
+        meta: [ls(it, 'level', ctx.locale), cef].filter(Boolean),
+      })
+    },
   },
 
   // Skills Showcase — items are `ShowcaseGroup`s (lib/showcase.ts), a

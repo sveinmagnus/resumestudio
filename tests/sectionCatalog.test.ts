@@ -213,12 +213,17 @@ describe('references — include_in_exports gate', () => {
 })
 
 describe('layout kinds', () => {
-  it('spoken_languages renders inline and ignores summary mode', () => {
-    const l = makeSpokenLanguage({ name: { en: 'Norwegian' }, level: { en: 'Native' } }) as unknown as Record<string, unknown>
-    expect(SECTION_CATALOG.spoken_languages.alwaysFull).toBe(true)
+  it('spoken_languages: one-line summary + a full item with the CEFR passport', () => {
+    const l = makeSpokenLanguage({
+      name: { en: 'Norwegian' }, level: { en: 'Native' },
+      cefr: { listening: 'C2', reading: 'C2', writing: 'C1' },
+    }) as unknown as Record<string, unknown>
+    const s = SECTION_CATALOG.spoken_languages.summary!(l, html)!
+    expect(s.parts.find((p) => p.key === 'title')?.value).toBe('Norwegian')
     const v = SECTION_CATALOG.spoken_languages.full!(l, html)!
-    expect(v.layout).toBe('inline')
-    expect(v.meta).toEqual(['Native'])
+    expect(v.title).toBe('Norwegian')
+    // Level + deduped CEFR summary in the meta line.
+    expect(v.meta).toEqual(['Native', 'C1 (Writing) · C2 (Listening, Reading)'])
   })
 
   it('recommendations render as a quote with attribution', () => {

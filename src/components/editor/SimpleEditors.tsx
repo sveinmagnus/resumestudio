@@ -15,10 +15,11 @@ import { richToPlain } from '../../lib/richText'
 import { RELATIONSHIP_OPTIONS, matchRelationshipKey, relationshipLabels } from '../../lib/recommendationRelationships'
 import { PUBLICATION_TYPES } from '../../lib/publicationTypes'
 import { POSITION_TYPES, positionTypeLabel } from '../../lib/positionTypes'
+import { CEFR_CATEGORIES, CEFR_LEVELS, CEFR_LEVEL_DESC, cefrSummary } from '../../lib/cefr'
 import type {
   WorkExperience, Education, Course, Certification, Position,
   Presentation, HonorAward, Publication, SpokenLanguage, KeyQualification,
-  KeyCompetency, Recommendation, Role, LocalizedString,
+  KeyCompetency, Recommendation, Role, LocalizedString, CefrCategory, CefrLevel,
 } from '../../types'
 import { X } from 'lucide-react'
 
@@ -509,6 +510,44 @@ export function AwardsEditor() {
 
 // ── Spoken languages ─────────────────────────────────────────────────────────
 
+/** Europass CEFR self-assessment grid — one A1–C2 dropdown per skill category. */
+function LanguageCefrEditor({ lang }: { lang: SpokenLanguage }) {
+  const updateItem = useStore((s) => s.updateItem)
+  const setLevel = (cat: CefrCategory, level: string) => {
+    const next = { ...(lang.cefr ?? {}) }
+    if (level) next[cat] = level as CefrLevel
+    else delete next[cat]
+    updateItem('spoken_languages', lang.id, { cefr: Object.keys(next).length ? next : undefined })
+  }
+  return (
+    <div className="sub-block">
+      <div className="sub-head">Europass language passport <span className="sub-hint">CEFR self-assessment (A1–C2)</span></div>
+      <div className="cefr-grid">
+        {CEFR_CATEGORIES.map((c) => (
+          <label key={c.key} className="cefr-field">
+            <span className="cefr-cat">{c.label}</span>
+            <select className="cefr-select" value={lang.cefr?.[c.key] ?? ''} onChange={(e) => setLevel(c.key, e.target.value)} aria-label={`${c.label} CEFR level`}>
+              <option value="">—</option>
+              {CEFR_LEVELS.map((lv) => <option key={lv} value={lv} title={CEFR_LEVEL_DESC[lv]}>{lv}</option>)}
+            </select>
+          </label>
+        ))}
+      </div>
+      <ul className="cefr-legend">
+        {CEFR_LEVELS.map((lv) => <li key={lv}><strong>{lv}</strong> — {CEFR_LEVEL_DESC[lv]}</li>)}
+      </ul>
+      <style>{`
+        .cefr-grid { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 8px; }
+        .cefr-field { display: flex; flex-direction: column; gap: 3px; }
+        .cefr-cat { font-size: 11px; font-weight: 600; color: var(--ink-faint); }
+        .cefr-select { padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper); min-width: 74px; }
+        .cefr-legend { margin: 4px 0 0; padding-left: 16px; font-size: 11px; color: var(--ink-faint); line-height: 1.5; }
+        .cefr-legend strong { color: var(--ink-soft); }
+      `}</style>
+    </div>
+  )
+}
+
 export function SpokenLanguagesEditor() {
   const { data, primaryLocale, addItem, updateItem } = useStore()
   const items = useSortedItems('spoken_languages')
@@ -520,16 +559,19 @@ export function SpokenLanguagesEditor() {
     <div className="section-pane">
       <SectionIntro>
         Spoken languages and your proficiency in each — for example Native,
-        Fluent, or Working knowledge.
+        Fluent, or Working knowledge. Add Europass CEFR levels for a language
+        passport in exports.
       </SectionIntro>
       <SortBar section="spoken_languages" count={items.length} />
       <SortableList section="spoken_languages" ids={items.map((x) => x.id)} addLabel="Add language" onAdd={add}>
       {items.map((l) => (
         <EditorCard key={l.id} section="spoken_languages" id={l.id}
-          title={resolve(l.name, primaryLocale)} subtitle={resolve(l.level, primaryLocale)}
+          title={resolve(l.name, primaryLocale)}
+          subtitle={[resolve(l.level, primaryLocale), cefrSummary(l.cefr)].filter(Boolean).join(' · ')}
           disabled={l.disabled} canStar={false}>
           <DualField label="Language" value={l.name} onChange={(v) => updateItem('spoken_languages', l.id, { name: v })} />
           <DualField label="Proficiency level" value={l.level} onChange={(v) => updateItem('spoken_languages', l.id, { level: v })} />
+          <LanguageCefrEditor lang={l} />
         </EditorCard>
       ))}
       </SortableList>

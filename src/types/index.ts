@@ -388,11 +388,22 @@ export interface Certification {
   disabled: boolean
 }
 
+/** Europass / CEFR self-assessment level. */
+export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'
+/** Europass / CEFR self-assessment skill categories. */
+export type CefrCategory = 'listening' | 'reading' | 'spoken_interaction' | 'spoken_production' | 'writing'
+
 export interface SpokenLanguage {
   id: string
   resume_id: string
   name: LocalizedString
   level: LocalizedString
+  /**
+   * Europass CEFR self-assessment levels per skill category (Listening, Reading,
+   * Spoken interaction, Spoken production, Writing). Additive/optional — a
+   * partial map; unset categories are simply not shown.
+   */
+  cefr?: Partial<Record<CefrCategory, CefrLevel>>
   sort_order: number
   disabled: boolean
 }

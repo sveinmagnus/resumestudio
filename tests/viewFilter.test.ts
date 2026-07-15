@@ -662,6 +662,19 @@ describe('buildViewHtml()', () => {
     expect(html).toContain('#00AA0033')          // accent underline
   })
 
+  it('renders languages in full mode with the CEFR passport', () => {
+    const store = emptyStore()
+    store.resume = makeResume()
+    store.spoken_languages.push(makeSpokenLanguage({
+      name: { en: 'German' }, level: { en: 'Fluent' },
+      cefr: { listening: 'C1', reading: 'C1', writing: 'B2' },
+    }))
+    const view = makeView({ sections: [{ key: 'spoken_languages', detail: 'full' as const, sort_order: 0 }] })
+    const html = buildViewHtml(store, view, 'en')
+    expect(html).toContain('<h3>German</h3>')            // a proper item heading
+    expect(html).toContain('C1 (Listening, Reading)')     // deduped CEFR passport
+  })
+
   // ─── XSS — escape every interpolated user value ────────────────────────────
 
   describe('HTML escaping (XSS)', () => {

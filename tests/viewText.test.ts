@@ -84,12 +84,16 @@ describe('buildViewText', () => {
     expect(txt).not.toContain('AcmeCo')
   })
 
-  it('renders inline languages and quote recommendations', () => {
+  it('renders languages (summary line) and quote recommendations', () => {
     const store = sampleStore()
     store.recommendations.push(makeRecommendation({
       recommender_name: 'Jane Boss', text: { en: 'Excellent work' },
     }))
-    const txt = buildViewText(store, makeView({ sections: buildViewSections() }), 'en')
+    // Languages now render as a proper section; in SUMMARY mode each is one line.
+    const sections = buildViewSections().map((s) =>
+      s.key === 'spoken_languages' ? { ...s, detail: 'summary' as const } : s,
+    )
+    const txt = buildViewText(store, makeView({ sections }), 'en')
     expect(txt).toContain('Norwegian — Native')
     expect(txt).toContain('"Excellent work"')
     expect(txt).toContain('— Jane Boss')
