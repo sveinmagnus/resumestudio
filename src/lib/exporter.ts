@@ -36,7 +36,7 @@ import { showcaseGroups } from './showcase'
 import { parseRichBlocks, type RichRun } from './richText'
 import { deriveTokens, resolveSectionStyle, sectionHeadingText, kqVisibility, withDefaults, withResolvedFonts, resolveFontDocx, type ResolvedSectionStyle, type StyleTokens } from './viewStyle'
 import type { GlobalFonts } from './fonts'
-import { withHeaderDefaults, withFooterDefaults, buildHeaderLines, buildCopyrightLine } from './viewHeader'
+import { withHeaderDefaults, withFooterDefaults, buildHeaderLines, buildCopyrightLine, footerLines } from './viewHeader'
 import { imageInfoFromDataUrl, applyShapeMaskToDataUrl, type ImageInfo } from './image'
 import { exportFilename } from './exportFilename'
 
@@ -394,9 +394,8 @@ export async function exportDocx(store: ResumeStore, view: ResumeView, locale: s
 
   // ── Footer (closing visual) ─────────────────────────────────────────────
   if (r) {
-    const copyright = buildCopyrightLine(footer, r, new Date().getFullYear(), locale)
-    const footerNote = L(footer.note, locale)
-    const footerText = [copyright, footerNote].filter(Boolean).join('  ·  ')
+    const lines = footerLines(footer, buildCopyrightLine(footer, r, new Date().getFullYear(), locale), L(footer.note, locale))
+    const footerText = lines.length > 0
     if (footer.separator !== 'none') {
       children.push(new Paragraph({
         spacing: { before: 280, after: footerText ? 60 : 0 },
@@ -411,18 +410,19 @@ export async function exportDocx(store: ResumeStore, view: ResumeView, locale: s
         children: [],
       }))
     }
-    if (footerText) {
+    // One paragraph per line: 'above'/'below' put the note on its own line.
+    lines.forEach((line, i) => {
       children.push(new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: footer.separator === 'none' ? 280 : 0 },
+        spacing: { before: i === 0 && footer.separator === 'none' ? 280 : 0 },
         children: [new TextRun({
-          text: footerText,
+          text: line,
           size: baseTokens.metaFontSizePt * 2,
           color: FAINT_HEX,
           font: baseTokens.bodyFontDocx,
         })],
       }))
-    }
+    })
   }
 
   // ── Page setup — A4 with style-driven margins ───────────────────────────

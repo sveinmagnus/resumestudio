@@ -638,6 +638,16 @@ export interface SectionStyle {
   heading_text?: LocalizedString
   /** Hide dates on items in this section. */
   hide_dates?: boolean
+  /**
+   * Show only starred items in THIS section, overriding the view-wide
+   * `starred_only`. Lets one view list every course but only the featured
+   * projects. Undefined = inherit the view default.
+   *
+   * A content filter rather than styling, but it lives here because the
+   * per-section override surface is `SectionStyle` — the style panel's left
+   * column is where content choices go.
+   */
+  starred_only?: boolean
   /** Override the global tag chip / inline choice for projects + tech cats. */
   tag_style?: TagStyle
   /** Override whether a divider is drawn between items in this section. Undefined = inherit the view default. */
@@ -795,13 +805,25 @@ export type FooterSeparator = 'none' | 'line' | 'double' | 'dotted' | 'dashed' |
  */
 export type CopyrightHolder = 'none' | 'person' | 'company' | 'custom'
 
+/**
+ * Where the footer note sits relative to the copyright line.
+ *  - 'after'  — same line, after the copyright (the default; how it has always
+ *               rendered, so an older view without the field is unchanged)
+ *  - 'before' — same line, ahead of the copyright
+ *  - 'above'  — its own line, above the copyright
+ *  - 'below'  — its own line, below the copyright
+ */
+export type FooterNotePlacement = 'after' | 'before' | 'above' | 'below'
+
 export interface ViewFooterConfig {
   separator: FooterSeparator
   copyright: CopyrightHolder
   /** Per-view copyright holder text, used when copyright === 'custom'. Localized. */
   copyright_custom: LocalizedString
-  /** Optional localized note appended after the copyright line. */
+  /** Optional localized note shown with the copyright line. */
   note: LocalizedString
+  /** Where {@link note} sits relative to the copyright. Absent = 'after'. */
+  note_placement?: FooterNotePlacement
 }
 
 export interface ResumeView {

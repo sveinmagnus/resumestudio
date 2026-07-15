@@ -39,7 +39,7 @@ import {
   type ResolvedSectionStyle, type StyleTokens,
 } from './viewStyle'
 import type { GlobalFonts } from './fonts'
-import { withHeaderDefaults, withFooterDefaults, buildHeaderLines, buildCopyrightLine } from './viewHeader'
+import { withHeaderDefaults, withFooterDefaults, buildHeaderLines, buildCopyrightLine, footerLines } from './viewHeader'
 import { imageInfoFromDataUrl, applyShapeMaskToDataUrl, type ImageInfo } from './image'
 import { exportFilename } from './exportFilename'
 
@@ -412,9 +412,8 @@ export async function buildPdfDocDefinition(
 
   // ── Footer (closing visual at the end of the document) ──────────────────
   if (r) {
-    const copyright = buildCopyrightLine(footer, r, new Date().getFullYear(), locale)
-    const footerNote = L(footer.note, locale)
-    const footerText = [copyright, footerNote].filter(Boolean).join('  ·  ')
+    const lines = footerLines(footer, buildCopyrightLine(footer, r, new Date().getFullYear(), locale), L(footer.note, locale))
+    const footerText = lines.length > 0
     if (footer.separator !== 'none') {
       content.push({
         canvas: [{
@@ -425,12 +424,13 @@ export async function buildPdfDocDefinition(
         margin: [0, 16, 0, footerText ? 6 : 0] as Margin,
       })
     }
-    if (footerText) {
+    // One block per line: 'above'/'below' put the note on its own line.
+    lines.forEach((line, i) => {
       content.push({
-        text: footerText, alignment: 'center', color: FAINT, fontSize: baseTokens.metaFontSizePt,
-        margin: [0, footer.separator === 'none' ? 16 : 0, 0, 0] as Margin,
+        text: line, alignment: 'center', color: FAINT, fontSize: baseTokens.metaFontSizePt,
+        margin: [0, i === 0 && footer.separator === 'none' ? 16 : 0, 0, 0] as Margin,
       })
-    }
+    })
   }
 
   return {

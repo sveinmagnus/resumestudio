@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cefrSummary, cefrGrouped, hasCefr } from '../src/lib/cefr'
+import { cefrSummary, cefrGrouped, hasCefr, cefrLines } from '../src/lib/cefr'
 
 describe('cefrSummary()', () => {
   it('collapses to a single level when all five categories match', () => {
@@ -27,5 +27,43 @@ describe('cefrGrouped()', () => {
       { level: 'B2', categories: ['Listening', 'Reading'] },
       { level: 'C1', categories: ['Writing'] },
     ])
+  })
+})
+
+describe('cefrLines()', () => {
+  it('is a single unlabelled value when every category matches', () => {
+    expect(cefrLines({
+      listening: 'B2', reading: 'B2', spoken_interaction: 'B2', spoken_production: 'B2', writing: 'B2',
+    })).toEqual(['B2'])
+  })
+
+  it('splits into understanding / spoken / written lines when they differ', () => {
+    expect(cefrLines({
+      listening: 'B2', reading: 'B2',
+      spoken_interaction: 'B2', spoken_production: 'B2',
+      writing: 'C1',
+    })).toEqual(['Understanding: B2', 'Spoken: B2', 'Written: C1'])
+  })
+
+  it('spells out a group whose own categories disagree', () => {
+    expect(cefrLines({
+      listening: 'B1', reading: 'B2',
+      writing: 'C1',
+    })).toEqual(['Understanding: B1 (Listening) · B2 (Reading)', 'Written: C1'])
+  })
+
+  it('omits a group with nothing set rather than showing it blank', () => {
+    expect(cefrLines({ listening: 'B1', writing: 'C2' }))
+      .toEqual(['Understanding: B1', 'Written: C2'])
+  })
+
+  it('is empty when nothing is set', () => {
+    expect(cefrLines(undefined)).toEqual([])
+    expect(cefrLines({})).toEqual([])
+  })
+
+  it('collapses to one value even when only some categories are set', () => {
+    // Two categories, same level — still nothing to distinguish.
+    expect(cefrLines({ listening: 'A2', writing: 'A2' })).toEqual(['A2'])
   })
 })

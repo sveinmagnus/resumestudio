@@ -13,7 +13,7 @@ import type {
   ResumeStore, Resume, LocalizedString,
   ViewHeaderConfig, ViewFooterConfig, HeaderField, HeaderFieldKey,
   HeaderTextStyle, PhotoPlacement, ProfileImageShape, LogoPlacement,
-  FooterSeparator, CopyrightHolder,
+  FooterSeparator, CopyrightHolder, FooterNotePlacement,
 } from '../types'
 import { resolve } from './locales'
 
@@ -54,6 +54,12 @@ function safeFooterSeparator(v: unknown): FooterSeparator {
 }
 function safeCopyrightHolder(v: unknown): CopyrightHolder {
   return COPYRIGHT_HOLDERS.has(v as CopyrightHolder) ? (v as CopyrightHolder) : 'none'
+}
+const NOTE_PLACEMENTS = new Set<FooterNotePlacement>(['after', 'before', 'above', 'below'])
+/** Untrusted-import surface: anything unrecognised falls back to the original
+ *  behaviour (note after the copyright, same line). */
+function safeNotePlacement(v: unknown): FooterNotePlacement {
+  return NOTE_PLACEMENTS.has(v as FooterNotePlacement) ? (v as FooterNotePlacement) : 'after'
 }
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
@@ -114,6 +120,7 @@ export const DEFAULT_VIEW_FOOTER: ViewFooterConfig = {
   copyright: 'none',
   copyright_custom: {},
   note: {},
+  note_placement: 'after',
 }
 
 /**
@@ -144,6 +151,32 @@ export function withFooterDefaults(footer: Partial<ViewFooterConfig> | undefined
     copyright: safeCopyrightHolder(footer.copyright),
     copyright_custom: footer.copyright_custom ?? {},
     note: footer.note ?? {},
+    note_placement: safeNotePlacement(footer.note_placement),
+  }
+}
+
+/**
+ * The footer's text as ordered LINES, placing the note per
+ * `footer.note_placement`. Shared by every render path (HTML / DOCX / PDF) so
+ * a note can't sit above the copyright in one export and beside it in another.
+ *
+ *  - after / before → one line, the two joined with a middot
+ *  - above / below  → two lines, in that order
+ *
+ * Either part being empty collapses to just the other; both empty → `[]`.
+ */
+export function footerLines(
+  footer: ViewFooterConfig, copyright: string, note: string,
+): string[] {
+  const c = copyright.trim()
+  const n = note.trim()
+  if (!c) return n ? [n] : []
+  if (!n) return [c]
+  switch (safeNotePlacement(footer.note_placement)) {
+    case 'before': return [`${n}  ·  ${c}`]
+    case 'above':  return [n, c]
+    case 'below':  return [c, n]
+    default:       return [`${c}  ·  ${n}`]
   }
 }
 

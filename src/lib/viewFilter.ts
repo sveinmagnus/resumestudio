@@ -12,7 +12,7 @@ import { deriveTokens, resolveSectionStyle, sectionHeadingText, kqVisibility, wi
 import type { GlobalFonts } from './fonts'
 import { sortItems } from './sectionSort'
 import { SECTION_ICON_INNER } from '../generated/sectionIcons'
-import { withHeaderDefaults, withFooterDefaults, buildHeaderLines, buildCopyrightLine } from './viewHeader'
+import { withHeaderDefaults, withFooterDefaults, buildHeaderLines, buildCopyrightLine, footerLines } from './viewHeader'
 
 /**
  * Build a section's `<h2>` heading, optionally prefixed with the section's
@@ -147,6 +147,16 @@ function sectionDetail(view: ResumeView, key: string): SectionDetail {
   return view.sections.find((s) => s.key === key)?.detail ?? 'full'
 }
 
+/**
+ * Whether a section shows only starred items: its own override wins, else the
+ * view-wide `starred_only`. An explicit `false` on the section is a real
+ * choice ("every course, even in a starred-only view"), so it must beat the
+ * view default — hence `??` and not `||`.
+ */
+export function sectionStarredOnly(view: ResumeView, key: string): boolean {
+  return view.sections.find((s) => s.key === key)?.style?.starred_only ?? !!view.starred_only
+}
+
 // ─── View filter ──────────────────────────────────────────────────────────────
 
 /**
@@ -165,6 +175,7 @@ export function applyView(store: ResumeStore, view: ResumeView): ResumeStore {
     // section that shares their storeKey.
     if (sec.virtual) continue
     const detail = sectionDetail(view, sec.key)
+    const starredOnly = sectionStarredOnly(view, sec.key)
     const items = store[sec.storeKey] as Array<{ id: string; disabled?: boolean; starred?: boolean }>
 
     if (detail === 'off') {
@@ -173,7 +184,7 @@ export function applyView(store: ResumeStore, view: ResumeView): ResumeStore {
       ;(filtered as Record<string, unknown>)[sec.storeKey] = items.filter((item) => {
         if (item.disabled) return false
         if (excluded.has(item.id)) return false
-        if (view.starred_only && !item.starred) return false
+        if (starredOnly && !item.starred) return false
         return true
       })
     }
@@ -299,7 +310,10 @@ function renderSummaryInline(
     .filter((g) => g.text)
   const shortEsc = short.trim() ? escapeHtml(short.trim()) : ''
   if (!groups.length && !shortEsc) return ''
-  const titleFirst = slots[0] === 'title'
+  // Keyed off what actually RENDERED first, not the configured slot order: a
+  // section with no dates (Languages) still leads with its title under the
+  // date-first layout, and should read "Norwegian — Native", not "· Native".
+  const titleFirst = groups[0]?.slot === 'title'
   let html = groups
     .map((g, i) => {
       const inner = g.slot === 'title'
@@ -340,7 +354,7 @@ function summaryColumns(summaries: SummaryView[], layout: SummaryLayout): Summar
 function renderTabulatedSummary(sectionKey: string, items: unknown[], ctx: RenderCtx): string {
   const desc = SECTION_CATALOG[sectionKey]
   if (!desc?.summary) return ''
-  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.style.hide_dates, dateFormat: ctx.style.date_format, target: 'html', kq: kqVisibility(ctx.style) }
+  const cctx: CatalogCtx = { locale: ctx.locale, hideDates: !!ctx.style.hide_dates, dateFormat: ctx.style.date_format, target: 'html', detail: 'tabulated', kq: kqVisibility(ctx.style) }
   const summaries = items
     .map((it) => desc.summary!(it as AnyItem, cctx))
     .filter((s): s is SummaryView => !!s)
@@ -369,7 +383,10 @@ function renderTabulatedSummary(sectionKey: string, items: unknown[], ctx: Rende
             return `<span class="ve-tab-sep">${both ? '·' : ''}</span>`
           }
           const cls = c === 'title' ? 've-tab-title' : flexes(c) ? 've-tab-text' : 've-tab-date'
-          return `<span class="${cls}">${escapeHtml(map.get(c) ?? '')}</span>`
+          // A part may carry '\n' line breaks (Languages' Europass column).
+          // Escape each line, THEN join with our own <br> — never the reverse.
+          const cell = escapeHtml(map.get(c) ?? '').split('\n').join('<br>')
+          return `<span class="${cls}">${cell}</span>`
         })
         .join('')
       return `<div class="ve-tab-row">${cells}</div>`
@@ -401,7 +418,13 @@ function renderItem(sectionKey: string, item: unknown, ctx: RenderCtx): string {
   if (!v) return ''
 
   if (v.layout === 'inline') {
-    return `<div class="ve-item ve-inline"><strong>${escapeHtml(v.title)}</strong> — ${escapeHtml(v.meta.join(' · '))}</div>`
+    const metaTxt = v.meta.filter(Boolean).join(' · ')
+    // extraLines drop below the line (Languages' split Europass passport).
+    const extra = v.extraLines.filter(Boolean)
+      .map((l) => `<div class="ve-inline-extra">${escapeHtml(l)}</div>`).join('')
+    return `<div class="ve-item ve-inline"><div><strong>${escapeHtml(v.title)}</strong>${
+      metaTxt ? ` — ${escapeHtml(metaTxt)}` : ''
+    }</div>${extra}</div>`
   }
 
   if (v.layout === 'quote') {
@@ -640,12 +663,18 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
     : ''
 
   // ── Footer (closing visual) ───────────────────────────────────────────────
-  const copyright = escapeHtml(buildCopyrightLine(footer, r, new Date().getFullYear(), locale))
-  const footerNote = escapeHtml(lc(footer.note))
-  const footerText = [copyright, footerNote].filter(Boolean).join('  ·  ')
-  const showFooter = footer.separator !== 'none' || !!footerText
+  // Compose from the PLAIN values, then escape each finished line — the
+  // placement joins with our own separators, so escaping last would mangle
+  // them and escaping the parts first would double-escape.
+  const footLines = footerLines(
+    footer,
+    buildCopyrightLine(footer, r, new Date().getFullYear(), locale),
+    lc(footer.note),
+  )
+  const footerText = footLines.map((l) => `<div class="ve-copyright">${escapeHtml(l)}</div>`).join('')
+  const showFooter = footer.separator !== 'none' || !!footLines.length
   const footerHtml = showFooter
-    ? `<footer class="ve-footer ve-footer-${footer.separator}">${footerText ? `<div class="ve-copyright">${footerText}</div>` : ''}</footer>`
+    ? `<footer class="ve-footer ve-footer-${footer.separator}">${footerText}</footer>`
     : ''
 
   // Restrictive CSP: blocks any script execution inside the generated document
@@ -773,7 +802,15 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
     .ve-summary-short { color: #6B7280; }
     .ve-summary-short-below { margin-top: 1px; font-size: ${tokens.metaFontSizePt}pt; }
     .ve-meta-inline { color: #6B7280; }
-    .ve-inline { display: inline-block; margin-right: 20px; }
+    /* Languages' FULL mode: one line per language (its Europass passport may
+       drop onto lines below it, so these can't flow side by side). */
+    .ve-inline { display: block; }
+    .ve-inline-extra { font-size: ${tokens.metaFontSizePt}pt; color: #6B7280; margin-left: 12px; }
+    /* Languages' SUMMARY mode: the compact scan line — every language flows
+       side by side and wraps. Scoped to the section; every other section's
+       summary stays one item per line. */
+    .ve-sec-spoken_languages .ve-item-line { display: inline-block; margin-right: 20px; }
+    .ve-sec-spoken_languages .ve-item-line:last-child { margin-right: 0; }
     .ve-meta { font-size: ${tokens.metaFontSizePt}pt; color: #6B7280; margin: 2px 0 5px; }
     .ve-desc { font-size: ${tokens.smallFontSizePt}pt; color: #374151; margin-top: 5px; }
     .ve-desc p { margin: 0 0 4px; }

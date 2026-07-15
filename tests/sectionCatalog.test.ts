@@ -213,17 +213,57 @@ describe('references — include_in_exports gate', () => {
 })
 
 describe('layout kinds', () => {
-  it('spoken_languages: one-line summary + a full item with the CEFR passport', () => {
-    const l = makeSpokenLanguage({
-      name: { en: 'Norwegian' }, level: { en: 'Native' },
-      cefr: { listening: 'C2', reading: 'C2', writing: 'C1' },
+  // Languages is a deliberate special case — every mode is a line, and they
+  // differ only by how much Europass detail rides along. See the descriptor.
+  describe('spoken_languages', () => {
+    const norwegian = (cefr?: Record<string, string>) => makeSpokenLanguage({
+      name: { en: 'Norwegian' }, level: { en: 'Native' }, cefr,
     }) as unknown as Record<string, unknown>
-    const s = SECTION_CATALOG.spoken_languages.summary!(l, html)!
-    expect(s.parts.find((p) => p.key === 'title')?.value).toBe('Norwegian')
-    const v = SECTION_CATALOG.spoken_languages.full!(l, html)!
-    expect(v.title).toBe('Norwegian')
-    // Level + deduped CEFR summary in the meta line.
-    expect(v.meta).toEqual(['Native', 'C1 (Writing) · C2 (Listening, Reading)'])
+
+    it('summary is name + level only — no passport on the scan line', () => {
+      const s = SECTION_CATALOG.spoken_languages.summary!(
+        norwegian({ listening: 'C2', reading: 'C2', writing: 'C1' }), html,
+      )!
+      expect(s.parts.find((p) => p.key === 'title')?.value).toBe('Norwegian')
+      expect(s.parts.find((p) => p.key === 'role')?.value).toBe('Native')
+      expect(s.parts.find((p) => p.key === 'org')?.value).toBeFalsy()
+    })
+
+    it('summary gains a passport PART when the grid asks, for its own column', () => {
+      const s = SECTION_CATALOG.spoken_languages.summary!(
+        norwegian({ listening: 'C2', reading: 'C2', writing: 'C1' }),
+        { ...html, detail: 'tabulated' },
+      )!
+      // Level and passport are separate parts ⇒ separate columns.
+      expect(s.parts.find((p) => p.key === 'role')?.value).toBe('Native')
+      expect(s.parts.find((p) => p.key === 'org')?.value)
+        .toBe('Understanding: C2\nWritten: C1')
+    })
+
+    it('full keeps a single passport value on the line', () => {
+      const v = SECTION_CATALOG.spoken_languages.full!(
+        norwegian({ listening: 'B2', reading: 'B2', spoken_interaction: 'B2', spoken_production: 'B2', writing: 'B2' }),
+        html,
+      )!
+      expect(v.layout).toBe('inline')
+      expect(v.title).toBe('Norwegian')
+      expect(v.meta).toEqual(['Native', 'B2'])
+      expect(v.extraLines).toEqual([])
+    })
+
+    it('full drops a split passport onto its own lines', () => {
+      const v = SECTION_CATALOG.spoken_languages.full!(
+        norwegian({ listening: 'C2', reading: 'C2', writing: 'C1' }), html,
+      )!
+      expect(v.meta).toEqual(['Native'])
+      expect(v.extraLines).toEqual(['Understanding: C2', 'Written: C1'])
+    })
+
+    it('full with no passport is just name + level', () => {
+      const v = SECTION_CATALOG.spoken_languages.full!(norwegian(), html)!
+      expect(v.meta).toEqual(['Native'])
+      expect(v.extraLines).toEqual([])
+    })
   })
 
   it('recommendations render as a quote with attribution', () => {

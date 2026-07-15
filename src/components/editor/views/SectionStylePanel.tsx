@@ -136,6 +136,23 @@ export function SectionStylePanel({ sectionKey, detail, style, onChange, onReset
               ))}
             </select>
           </div>
+          {/* Tri-state: inherit the view-wide starred_only, or override it
+              either way for this section. An explicit "All items" is a real
+              choice inside a starred-only view, so it can't be a checkbox. */}
+          <div className="rv-sel">
+            <span>Show items</span>
+            <select
+              aria-label="Section item selection"
+              value={s.starred_only === undefined ? '' : s.starred_only ? 'starred' : 'all'}
+              onChange={(e) => onChange({
+                starred_only: e.target.value === '' ? undefined : e.target.value === 'starred',
+              })}
+            >
+              <option value="">— view default —</option>
+              <option value="starred">Starred only</option>
+              <option value="all">All items</option>
+            </select>
+          </div>
           <label className="rv-toggle">
             <input
               type="checkbox"

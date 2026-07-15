@@ -3,7 +3,7 @@ import {
   DEFAULT_VIEW_HEADER, DEFAULT_VIEW_FOOTER,
   withHeaderDefaults, withFooterDefaults, defaultHeaderFields,
   buildLanguageSummary, buildHeaderLines, resolveHeaderFieldValue,
-  buildCopyrightLine,
+  buildCopyrightLine, footerLines,
 } from '../src/lib/viewHeader'
 import { emptyStore, makeResume, makeSpokenLanguage } from './fixtures'
 import type { ViewHeaderConfig } from '../src/types'
@@ -285,5 +285,43 @@ describe('buildCopyrightLine()', () => {
   it('returns empty for custom when the custom text is blank', () => {
     const footer = withFooterDefaults({ copyright: 'custom', copyright_custom: {} })
     expect(buildCopyrightLine(footer, makeResume(), 2026, 'en')).toBe('')
+  })
+})
+
+// ─── Footer note placement ──────────────────────────────────────────────────
+
+describe('footerLines()', () => {
+  const f = (placement?: string) =>
+    withFooterDefaults({ copyright: 'person', note_placement: placement as never })
+
+  it("defaults to the note after the copyright on one line — how it always rendered", () => {
+    expect(footerLines(f(), '© 2026 Ada', 'Confidential')).toEqual(['© 2026 Ada  ·  Confidential'])
+    expect(withFooterDefaults({}).note_placement).toBe('after')
+  })
+
+  it('puts the note before the copyright on the same line', () => {
+    expect(footerLines(f('before'), '© 2026 Ada', 'Confidential')).toEqual(['Confidential  ·  © 2026 Ada'])
+  })
+
+  it('puts the note on its own line above or below', () => {
+    expect(footerLines(f('above'), '© 2026 Ada', 'Confidential')).toEqual(['Confidential', '© 2026 Ada'])
+    expect(footerLines(f('below'), '© 2026 Ada', 'Confidential')).toEqual(['© 2026 Ada', 'Confidential'])
+  })
+
+  it('collapses to whichever part exists — placement is then irrelevant', () => {
+    for (const p of ['after', 'before', 'above', 'below']) {
+      expect(footerLines(f(p), '© 2026 Ada', '')).toEqual(['© 2026 Ada'])
+      expect(footerLines(f(p), '', 'Confidential')).toEqual(['Confidential'])
+    }
+    expect(footerLines(f(), '', '')).toEqual([])
+  })
+
+  it('trims, so a whitespace-only note does not produce a blank line', () => {
+    expect(footerLines(f('below'), '© 2026 Ada', '   ')).toEqual(['© 2026 Ada'])
+  })
+
+  it('falls back to the original layout for a junk placement from an import', () => {
+    expect(footerLines(f('sideways'), '© 2026 Ada', 'Note')).toEqual(['© 2026 Ada  ·  Note'])
+    expect(withFooterDefaults({ note_placement: 'sideways' as never }).note_placement).toBe('after')
   })
 })

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   applyView, buildViewSections, reorderViewSections,
   getItemTitle, getItemSubtitle, buildViewHtml, isDataImage,
-  normalizeViewSections, defaultViewDetail, promotedProjectItems,
+  normalizeViewSections, defaultViewDetail, promotedProjectItems, sectionStarredOnly,
 } from '../src/lib/viewFilter'
 import { SECTIONS } from '../src/lib/sections'
 import { DEFAULT_VIEW_STYLE } from '../src/lib/viewStyle'
@@ -159,6 +159,52 @@ describe('applyView()', () => {
     })
     const filtered = applyView(store, view)
     expect(filtered.projects.map((p) => p.id)).toEqual(['p2'])
+  })
+
+  // Per-section starred override: lets one view show every course but only the
+  // featured projects.
+  describe('per-section starred_only override', () => {
+    const twoOfEach = () => {
+      const store = emptyStore()
+      store.projects.push(makeProject({ id: 'p1', starred: false }))
+      store.projects.push(makeProject({ id: 'p2', starred: true }))
+      store.courses.push(makeCourse({ id: 'c1', starred: false }))
+      store.courses.push(makeCourse({ id: 'c2', starred: true }))
+      return store
+    }
+    const sections = (projectStyle?: { starred_only?: boolean }) => [
+      { key: 'projects', detail: 'full' as const, sort_order: 0, ...(projectStyle ? { style: projectStyle } : {}) },
+      { key: 'courses', detail: 'full' as const, sort_order: 1 },
+    ]
+
+    it('starres one section while the rest of the view keeps everything', () => {
+      const filtered = applyView(twoOfEach(), makeView({ sections: sections({ starred_only: true }) }))
+      expect(filtered.projects.map((p) => p.id)).toEqual(['p2'])
+      expect(filtered.courses.map((c) => c.id)).toEqual(['c1', 'c2'])
+    })
+
+    it('lets a section opt OUT of a starred-only view', () => {
+      const filtered = applyView(twoOfEach(), makeView({
+        sections: sections({ starred_only: false }),
+        starred_only: true,
+      }))
+      // Explicit false beats the view default; courses still follow it.
+      expect(filtered.projects.map((p) => p.id)).toEqual(['p1', 'p2'])
+      expect(filtered.courses.map((c) => c.id)).toEqual(['c2'])
+    })
+
+    it('inherits the view default when the section says nothing', () => {
+      const filtered = applyView(twoOfEach(), makeView({ sections: sections(), starred_only: true }))
+      expect(filtered.projects.map((p) => p.id)).toEqual(['p2'])
+      expect(filtered.courses.map((c) => c.id)).toEqual(['c2'])
+    })
+
+    it('sectionStarredOnly resolves the same precedence', () => {
+      const v = makeView({ sections: sections({ starred_only: false }), starred_only: true })
+      expect(sectionStarredOnly(v, 'projects')).toBe(false)
+      expect(sectionStarredOnly(v, 'courses')).toBe(true)
+      expect(sectionStarredOnly(v, 'nonexistent')).toBe(true)
+    })
   })
 
   it('defaults to full when a view has no entry for a section', () => {
@@ -662,17 +708,69 @@ describe('buildViewHtml()', () => {
     expect(html).toContain('#00AA0033')          // accent underline
   })
 
-  it('renders languages in full mode with the CEFR passport', () => {
-    const store = emptyStore()
-    store.resume = makeResume()
-    store.spoken_languages.push(makeSpokenLanguage({
-      name: { en: 'German' }, level: { en: 'Fluent' },
-      cefr: { listening: 'C1', reading: 'C1', writing: 'B2' },
-    }))
-    const view = makeView({ sections: [{ key: 'spoken_languages', detail: 'full' as const, sort_order: 0 }] })
-    const html = buildViewHtml(store, view, 'en')
-    expect(html).toContain('<h3>German</h3>')            // a proper item heading
-    expect(html).toContain('C1 (Listening, Reading)')     // deduped CEFR passport
+  // Languages: every mode is a line — see the descriptor. These pin the three
+  // densities so the special case can't silently drift back to a prose block.
+  describe('languages (the one-line special case)', () => {
+    const langStore = (cefr?: Record<string, string>) => {
+      const store = emptyStore()
+      store.resume = makeResume()
+      store.spoken_languages.push(makeSpokenLanguage({
+        name: { en: 'German' }, level: { en: 'Fluent' }, cefr,
+      }) as never)
+      return store
+    }
+    const render = (detail: 'summary' | 'full', cefr?: Record<string, string>, tabulate = false) =>
+      buildViewHtml(langStore(cefr), makeView({
+        sections: [{ key: 'spoken_languages', detail, sort_order: 0, ...(tabulate ? { style: { tabulate: true } } : {}) }],
+      }), 'en')
+
+    it('summary is the compact flow — name + level, no passport', () => {
+      const html = render('summary', { listening: 'C1', reading: 'C1', writing: 'B2' })
+      expect(html).toContain('German')
+      expect(html).toContain('Fluent')
+      expect(html).not.toContain('Understanding')
+      expect(html).not.toContain('C1')
+      // Languages flow side by side rather than one block per language.
+      expect(html).toContain('.ve-sec-spoken_languages .ve-item-line { display: inline-block')
+    })
+
+    it('summary keeps the classic "Name — level" dash despite the date-first layout', () => {
+      // The default layout leads with the date slot, but Languages has no
+      // dates — so the title still renders first and must read as a title.
+      expect(render('summary')).toContain('<strong>German</strong> — ')
+    })
+
+    it('full puts a single passport value on the line', () => {
+      const html = render('full', {
+        listening: 'B2', reading: 'B2', spoken_interaction: 'B2', spoken_production: 'B2', writing: 'B2',
+      })
+      expect(html).toContain('<div class="ve-item ve-inline">')
+      expect(html).toContain('Fluent · B2')
+      // Match the ELEMENT: the class name itself always appears in the <style>.
+      expect(html).not.toContain('<div class="ve-inline-extra">')
+    })
+
+    it('full splits a differing passport onto understanding/spoken/written lines', () => {
+      const html = render('full', { listening: 'C1', reading: 'C1', writing: 'B2' })
+      expect(html).toContain('<div class="ve-inline-extra">Understanding: C1</div>')
+      expect(html).toContain('<div class="ve-inline-extra">Written: B2</div>')
+      expect(html).not.toContain('<h3>German</h3>')   // never a prose block
+    })
+
+    it('tabulated gives the passport its own column, line-broken in the cell', () => {
+      const html = render('summary', { listening: 'C1', reading: 'C1', writing: 'B2' }, true)
+      expect(html).toContain('ve-tab-grid')
+      // name | level | passport = three columns, the passport its own cell.
+      expect(html).toContain('<span class="ve-tab-text">Fluent</span>')
+      expect(html).toContain('<span class="ve-tab-text">Understanding: C1<br>Written: B2</span>')
+    })
+
+    it('escapes a line-broken cell rather than trusting the break marker', () => {
+      const html = render('summary', { listening: 'C1', writing: 'B2' }, true)
+      expect(html).not.toContain('<script')
+      // The only <br> in a cell is ours — the value itself is escaped.
+      expect(html).toContain('Understanding: C1<br>Written: B2')
+    })
   })
 
   // ─── XSS — escape every interpolated user value ────────────────────────────

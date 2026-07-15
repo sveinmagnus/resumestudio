@@ -156,6 +156,28 @@ prescriptive.
   existing registries; a deselected item's registry entries never land. The
   `SortBar` renders for bulk even with zero items — an empty section is when
   it's most useful.
+- **Languages is a deliberate one-line special case.** Every other section's
+  modes trade a summary line for a prose block; a language and its level is a
+  fact, so all three modes are densities of the same line: `summary` = the
+  compact scan flow (name — level, every language side by side, no passport),
+  `full` = one line per language with the Europass levels (appended when
+  they're a single value, dropped onto their own lines via `cefrLines` when
+  understanding / spoken / written disagree — a group whose own categories
+  disagree spells them out), `tabulated` = name | level | passport columns.
+  The descriptor emits the passport only when `CatalogCtx.detail ===
+  'tabulated'` so it earns a column without bloating the plain line; a `'\n'`
+  in a `SummaryPart` is the cell's line break (escaped per line, then joined
+  with our own `<br>`).
+- **Per-section `starred_only`** (`SectionStyle.starred_only`,
+  `sectionStarredOnly`) — one view can list every course but only the featured
+  projects. Tri-state: an explicit `false` beats a view-wide `starred_only`
+  (hence `??`, not `||`), so the style panel offers view-default / starred /
+  all rather than a checkbox.
+- **Footer note placement** (`ViewFooterConfig.note_placement`,
+  `viewHeader.footerLines`) — after / before the copyright on one line, or
+  above / below it on its own. Composed once in `footerLines` and consumed by
+  all three render paths, so a note can't sit beside the copyright in the PDF
+  and above it in the preview. Absent = 'after' (how it always rendered).
 - **AI summarize assist** (`server/summarize.ts`, `server/summarizeDocker.ts`,
   `lib/summarizeClient.ts`, `lib/summarizeBatch.ts`) — drafts a one-line short
   description from a long one, mirroring the translate architecture: a

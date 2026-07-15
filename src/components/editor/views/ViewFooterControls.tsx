@@ -1,5 +1,7 @@
 import { DualField } from '../../ui/DualField'
-import type { ViewFooterConfig, FooterSeparator, CopyrightHolder } from '../../../types'
+import type {
+  ViewFooterConfig, FooterSeparator, CopyrightHolder, FooterNotePlacement,
+} from '../../../types'
 import { Select } from './Select'
 
 // ─── View footer controls ────────────────────────────────────────────────────
@@ -63,6 +65,28 @@ export function ViewFooterControls({
           placeholder="e.g. Confidential — do not distribute"
         />
       </div>
+      {/* Only meaningful once there's a note AND a copyright to place it
+          against — with either missing it renders alone regardless. */}
+      {hasNote(footer) && footer.copyright !== 'none' && (
+        <div className="rv-vs-grid" style={{ marginTop: 12 }}>
+          <Select<FooterNotePlacement>
+            label="Note placement"
+            value={footer.note_placement ?? 'after'}
+            options={[
+              ['after', 'After copyright (same line)'],
+              ['before', 'Before copyright (same line)'],
+              ['above', 'Above copyright (own line)'],
+              ['below', 'Below copyright (own line)'],
+            ]}
+            onChange={(note_placement) => onChange({ note_placement })}
+          />
+        </div>
+      )}
     </>
   )
+}
+
+/** True when the note has text in any language. */
+function hasNote(footer: ViewFooterConfig): boolean {
+  return Object.values(footer.note ?? {}).some((v) => (v ?? '').trim())
 }

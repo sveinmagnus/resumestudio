@@ -75,3 +75,43 @@ describe('buildPdfDocDefinition', () => {
     expect(text).toContain('Jane Doe') // copyright resolves the person's name
   })
 })
+
+// ─── Footer note placement ──────────────────────────────────────────────────
+// The placement is computed once in viewHeader.footerLines and consumed by
+// every path; these pin that the PDF actually honours it, so it can't drift
+// from the HTML preview.
+
+describe('footer note placement', () => {
+  const build = async (placement: string) => {
+    const store = emptyStore()
+    store.resume = makeResume({ full_name: 'Ada Lovelace' })
+    const view = makeView({
+      sections: [],
+      footer: {
+        separator: 'line', copyright: 'person', copyright_custom: {},
+        note: { en: 'Confidential' }, note_placement: placement as never,
+      },
+    })
+    const dd = await buildPdfDocDefinition(store, view, 'en')
+    // Only the footer's own text blocks, in order.
+    return collectText(dd.content)
+      .filter((t) => t.includes('Confidential') || t.includes('Ada Lovelace'))
+  }
+  const year = new Date().getFullYear()
+
+  it('after: one line, note trailing the copyright', async () => {
+    expect((await build('after')).at(-1)).toBe(`© ${year} Ada Lovelace  ·  Confidential`)
+  })
+
+  it('before: one line, note leading', async () => {
+    expect((await build('before')).at(-1)).toBe(`Confidential  ·  © ${year} Ada Lovelace`)
+  })
+
+  it('above: two blocks, note first', async () => {
+    expect((await build('above')).slice(-2)).toEqual(['Confidential', `© ${year} Ada Lovelace`])
+  })
+
+  it('below: two blocks, copyright first', async () => {
+    expect((await build('below')).slice(-2)).toEqual([`© ${year} Ada Lovelace`, 'Confidential'])
+  })
+})

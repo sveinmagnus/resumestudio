@@ -21,7 +21,7 @@ import type { LocalizedString } from '../types'
 import { publicationTypeLabel } from './publicationTypes'
 import { positionTypeLabel } from './positionTypes'
 import { resolve, fmtRange, fmtDate, presentLabel, type DateFormat } from './locales'
-import { cefrSummary, type CefrMap } from './cefr'
+import { cefrLines, type CefrMap } from './cefr'
 
 export type AnyItem = Record<string, unknown>
 type YM = { year: number; month: number | null } | null
@@ -34,6 +34,16 @@ export interface CatalogCtx {
   dateFormat?: DateFormat
   /** Which render pipeline is asking. Keeps deliberate per-path differences explicit. */
   target: 'html' | 'docx'
+  /**
+   * Which detail mode is asking for this summary — 'plain' for a free-flowing
+   * line, 'tabulated' for the column grid. Almost every descriptor ignores it:
+   * the same parts serve both, and the renderer decides the arrangement.
+   *
+   * Languages is the exception. Its Europass levels belong in their own COLUMN
+   * when tabulated, but would bloat a plain summary line, so its descriptor
+   * emits them only when the grid asks. Absent → 'plain'.
+   */
+  detail?: 'plain' | 'tabulated'
   /** Professional-summary (key_qualifications) part visibility. Only the KQ
    *  descriptor reads this; absent → its documented defaults. */
   kq?: { label: boolean; tagline: boolean; short: boolean; long: boolean }
@@ -91,6 +101,12 @@ export interface ItemView {
  *  - date  — a single date (sections without a range)
  */
 export type SummaryPartKey = 'title' | 'role' | 'org' | 'date' | 'start' | 'end'
+/**
+ * `value` is PLAIN TEXT — never markup (adapters own escaping). A '\n' in it
+ * means a hard line break within that part: the tabulated grid renders one per
+ * line inside the cell (Languages' Europass column is the only user today).
+ * Plain summary lines flatten it back to a space.
+ */
 export interface SummaryPart { key: SummaryPartKey; value: string }
 /** `sep` only affects the HTML adapter ('—' vs ':'). */
 export interface SummaryView { parts: SummaryPart[]; sep: '—' | ':' }
@@ -519,19 +535,40 @@ export const SECTION_CATALOG: Record<string, SectionDescriptor> = {
     },
   },
 
+  // Languages is a deliberate special case: a language and its level is a
+  // fact, not a story, so no mode gives it a block of prose. The modes are
+  // three densities of the same line (see the .ve-sec-spoken_languages rules
+  // in viewFilter for the summary flow):
+  //
+  //   summary   — "Norwegian — Native", every language flowing side by side on
+  //               one wrapped line. The scan line; no passport detail.
+  //   full      — one line per language, WITH the Europass levels: appended to
+  //               the line when they're a single value, split onto their own
+  //               lines when understanding/spoken/written disagree (cefrLines).
+  //   tabulated — name | level | Europass, each its own column.
   spoken_languages: {
     title: (it, locale) => ls(it, 'name', locale) || 'Untitled',
-    // Summary = one compact line (name — level / CEFR). Full = a proper item
-    // with the Europass passport levels, matching the other sections.
     summary: (it, ctx) => summaryOf({
       title: ls(it, 'name', ctx.locale) || 'Language',
-      org: [ls(it, 'level', ctx.locale), cefrSummary((it as AnyItem).cefr as CefrMap | undefined)].filter(Boolean).join(' · '),
+      // `role`, not `org`: it keeps the level in its own tabulate column and
+      // its own summary-layout slot, instead of glued onto the CEFR text.
+      role: ls(it, 'level', ctx.locale),
+      // Only the grid gets the passport, and it owns a column of its own.
+      // '\n' marks a line break inside the cell — see SummaryPart.
+      org: ctx.detail === 'tabulated'
+        ? cefrLines((it as AnyItem).cefr as CefrMap | undefined).join('\n')
+        : '',
     }),
     full(it, ctx) {
-      const cef = cefrSummary((it as AnyItem).cefr as CefrMap | undefined)
+      const lines = cefrLines((it as AnyItem).cefr as CefrMap | undefined)
+      const level = ls(it, 'level', ctx.locale)
+      // One value stays on the line; a split passport drops below it.
+      const inlineCefr = lines.length === 1 ? lines[0] : ''
       return view({
+        layout: 'inline',
         title: ls(it, 'name', ctx.locale) || 'Language',
-        meta: [ls(it, 'level', ctx.locale), cef].filter(Boolean),
+        meta: [level, inlineCefr].filter(Boolean),
+        extraLines: lines.length > 1 ? lines : [],
       })
     },
   },
