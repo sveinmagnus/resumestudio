@@ -73,11 +73,26 @@ export function isSummarizeConfigured(config?: SummarizeConfig): boolean {
   return !!ep && ep.model.length > 0
 }
 
-// App locale code → the language name we ask the model to write in.
+/**
+ * App locale code → the English language name we put in the prompt. One entry
+ * per offered locale (LOCALE_LABELS in src/lib/locales.ts) — an unlisted code
+ * degrades to "the same language as the input", which is a sane fallback for
+ * summarising but would silently no-op a TRANSLATION, so this table must track
+ * the offered set. Named in English because that's what models resolve most
+ * reliably in an instruction.
+ */
 const LANG_NAMES: Record<string, string> = {
   en: 'English', no: 'Norwegian', se: 'Swedish', dk: 'Danish',
-  de: 'German', fr: 'French', es: 'Spanish',
+  de: 'German', fr: 'French', es: 'Spanish', it: 'Italian',
+  nl: 'Dutch', pt: 'Portuguese', pl: 'Polish', fi: 'Finnish',
+  is: 'Icelandic', ru: 'Russian', uk: 'Ukrainian',
 }
+
+/** The English name of a locale's language, or null when we don't know it. */
+export function languageNameOf(locale: string): string | null {
+  return LANG_NAMES[locale] ?? null
+}
+
 function languageName(locale: string): string {
   return LANG_NAMES[locale] ?? 'the same language as the input'
 }
@@ -118,6 +133,36 @@ const SYSTEM_PROMPT =
  * failure — callers map that to an HTTP response without leaking internals.
  */
 export async function summarize(text: string, locale: string, config?: SummarizeConfig): Promise<string> {
+  const content = await chatComplete(
+    [
+      { role: 'system', content: SYSTEM_PROMPT.replace('{LANGUAGE}', languageName(locale)) },
+      { role: 'user', content: text },
+    ],
+    { maxTokens: 80 },
+    config,
+  )
+  const line = tidyLine(content)
+  if (!line) throw new SummarizeError(502, 'The AI model returned no usable summary')
+  return line
+}
+
+export interface ChatMessage { role: 'system' | 'user'; content: string }
+
+/**
+ * One OpenAI-compatible chat round-trip against the configured LLM, returning
+ * the raw reply text. Extracted so the LLM TRANSLATION provider
+ * (server/translate.ts) can reuse the same endpoint resolution, auth, timeout
+ * and error mapping rather than duplicating them — "translate with the model I
+ * already configured for Summarize" is exactly one config, one code path.
+ *
+ * Throws SummarizeError; translate.ts maps that onto its own error type so
+ * callers still get a translate-shaped failure.
+ */
+export async function chatComplete(
+  messages: ChatMessage[],
+  opts: { maxTokens: number; temperature?: number } ,
+  config?: SummarizeConfig,
+): Promise<string> {
   const c = config ?? resolveConfig()
   const ep = endpointFor(c)
   if (!ep || !ep.model) throw new SummarizeError(503, 'Summarize is not configured on this server')
@@ -132,12 +177,9 @@ export async function summarize(text: string, locale: string, config?: Summarize
       },
       body: JSON.stringify({
         model: ep.model,
-        temperature: 0.3,
-        max_tokens: 80,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT.replace('{LANGUAGE}', languageName(locale)) },
-          { role: 'user', content: text },
-        ],
+        temperature: opts.temperature ?? 0.3,
+        max_tokens: opts.maxTokens,
+        messages,
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
@@ -153,7 +195,5 @@ export async function summarize(text: string, locale: string, config?: Summarize
   const json = await res.json().catch(() => null) as { choices?: { message?: { content?: string } }[] } | null
   const content = json?.choices?.[0]?.message?.content
   if (typeof content !== 'string' || !content.trim()) throw new SummarizeError(502, 'The AI model returned no text')
-  const line = tidyLine(content)
-  if (!line) throw new SummarizeError(502, 'The AI model returned no usable summary')
-  return line
+  return content
 }

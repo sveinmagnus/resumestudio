@@ -196,3 +196,88 @@ describe('translate() — Azure', () => {
     expect(headers['Ocp-Apim-Subscription-Region']).toBeUndefined()
   })
 })
+
+// ─── llm provider (reuses the Summarize model) ───────────────────────────────
+
+describe("translate() — 'llm' provider", () => {
+  /** Point the summarize side at a local model so 'llm' is configured. */
+  function configureLlm() {
+    vi.stubEnv('TRANSLATE_PROVIDER', 'llm')
+    vi.stubEnv('SUMMARIZE_PROVIDER', 'ollama')
+    vi.stubEnv('SUMMARIZE_OLLAMA_URL', 'http://localhost:11434')
+    vi.stubEnv('SUMMARIZE_MODEL', 'llama3.2:3b')
+  }
+  const chat = (content: string) => ({ ok: true, json: async () => ({ choices: [{ message: { content } }] }) })
+
+  it('is configured whenever the summarize side has a model', () => {
+    configureLlm()
+    expect(isTranslationConfigured()).toBe(true)
+  })
+
+  it('is NOT configured when no summarize model is set', () => {
+    vi.stubEnv('TRANSLATE_PROVIDER', 'llm')
+    vi.stubEnv('SUMMARIZE_PROVIDER', 'ollama')
+    vi.stubEnv('SUMMARIZE_MODEL', '')
+    expect(isTranslationConfigured()).toBe(false)
+  })
+
+  it('calls the summarize endpoint/model and returns the reply', async () => {
+    configureLlm()
+    const fn = mockFetch(chat('Hei verden'))
+    expect(await translate('Hello world', 'en', 'no')).toBe('Hei verden')
+
+    const [url, opts] = fn.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('http://localhost:11434/v1/chat/completions')
+    const body = JSON.parse(opts.body as string)
+    expect(body.model).toBe('llama3.2:3b')
+    // The prompt must name both languages in words, not codes.
+    expect(body.messages[0].content).toContain('English')
+    expect(body.messages[0].content).toContain('Norwegian')
+    expect(body.messages[1].content).toBe('Hello world')
+  })
+
+  it('names every offered locale rather than sending a bare code', async () => {
+    configureLlm()
+    mockFetch(chat('x'))
+    // Locales added in the 15-locale work — these must be nameable or the
+    // prompt would read "translate to undefined".
+    for (const [code, name] of [['fi', 'Finnish'], ['uk', 'Ukrainian'], ['is', 'Icelandic']] as const) {
+      const fn = mockFetch(chat('x'))
+      await translate('a', 'en', code)
+      const body = JSON.parse((fn.mock.calls[0][1] as RequestInit).body as string)
+      expect(body.messages[0].content, code).toContain(name)
+    }
+  })
+
+  it('rejects a locale it cannot name instead of guessing', async () => {
+    configureLlm()
+    const fn = mockFetch(chat('x'))
+    await expect(translate('a', 'en', 'zz')).rejects.toThrow(TranslateError)
+    // Fails before any upstream call — no wasted round-trip, no wrong language.
+    expect(fn).not.toHaveBeenCalled()
+  })
+
+  it('strips fences/wrapping quotes but keeps multi-line bodies intact', async () => {
+    configureLlm()
+    mockFetch(chat('```\nLinje én\nLinje to\n```'))
+    expect(await translate('a', 'en', 'no')).toBe('Linje én\nLinje to')
+  })
+
+  it('keeps inner quotes (only whole-text wrapping quotes are stripped)', async () => {
+    configureLlm()
+    mockFetch(chat('Han sa "hei" til meg'))
+    expect(await translate('a', 'en', 'no')).toBe('Han sa "hei" til meg')
+  })
+
+  it('maps an upstream failure onto a TranslateError', async () => {
+    configureLlm()
+    mockFetch({ ok: false, status: 404 })
+    await expect(translate('a', 'en', 'no')).rejects.toThrow(TranslateError)
+  })
+
+  it('errors when the model returns nothing usable', async () => {
+    configureLlm()
+    mockFetch(chat('   '))
+    await expect(translate('a', 'en', 'no')).rejects.toThrow(TranslateError)
+  })
+})

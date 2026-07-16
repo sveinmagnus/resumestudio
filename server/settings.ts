@@ -29,7 +29,7 @@ export const DOCKER_TRANSLATE_URL = 'http://localhost:5000'
 /** Fixed URL the app uses when it manages a local Docker Ollama. */
 export const DOCKER_OLLAMA_URL = DEFAULT_OLLAMA_URL
 
-const PROVIDERS: readonly TranslateProvider[] = ['off', 'libretranslate', 'deepl', 'google', 'azure']
+const PROVIDERS: readonly TranslateProvider[] = ['off', 'libretranslate', 'deepl', 'google', 'azure', 'llm']
 const SUMMARIZE_PROVIDERS: readonly SummarizeProvider[] = ['off', 'ollama', 'openai', 'compat']
 
 export interface AppSettings {

@@ -143,7 +143,8 @@ export interface RestoreSummary {
   deleted: number
 }
 
-export type TranslateProvider = 'off' | 'libretranslate' | 'deepl' | 'google' | 'azure'
+/** `llm` reuses the model configured for Summarize — see server/translate.ts. */
+export type TranslateProvider = 'off' | 'libretranslate' | 'deepl' | 'google' | 'azure' | 'llm'
 export type SummarizeProvider = 'off' | 'ollama' | 'openai' | 'compat'
 
 /** Editable settings as returned to the client (API keys masked to booleans). */

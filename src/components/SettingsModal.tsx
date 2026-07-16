@@ -17,7 +17,7 @@ import { downloadBackup } from '../lib/backup'
 
 /** UI-level provider choice. LibreTranslate splits into two entries (the
  *  underlying provider is the same; only translate_docker differs). */
-type UiProvider = 'off' | 'libre_docker' | 'libre_remote' | 'deepl' | 'google' | 'azure'
+type UiProvider = 'off' | 'libre_docker' | 'libre_remote' | 'deepl' | 'google' | 'azure' | 'llm'
 /** UI-level summarize choice. Ollama splits into local-Docker vs remote-URL. */
 type SummUiProvider = 'off' | 'ollama_docker' | 'ollama_remote' | 'openai' | 'compat'
 
@@ -149,7 +149,7 @@ export function SettingsModal({ onClose, onChanged, onUnauthorized }: SettingsMo
     const v = s.settings
     const ui: UiProvider =
       v.translate_provider === 'libretranslate' ? (v.translate_docker ? 'libre_docker' : 'libre_remote')
-      : v.translate_provider // 'off' | 'deepl' | 'google' | 'azure'
+      : v.translate_provider // 'off' | 'deepl' | 'google' | 'azure' | 'llm'
     setProvider(ui)
     setLibreUrl(v.libretranslate_url)
     setAzureRegion(v.azure_region)
@@ -211,6 +211,8 @@ export function SettingsModal({ onClose, onChanged, onUnauthorized }: SettingsMo
     const u: SettingsUpdate = { backup_dir: backupDir.trim() }
     switch (provider) {
       case 'off': u.translate_provider = 'off'; break
+      // Carries no config of its own — it borrows the summarize settings below.
+      case 'llm': u.translate_provider = 'llm'; break
       case 'libre_docker': u.translate_provider = 'libretranslate'; u.translate_docker = true; break
       case 'libre_remote':
         u.translate_provider = 'libretranslate'; u.translate_docker = false
@@ -358,12 +360,30 @@ export function SettingsModal({ onClose, onChanged, onUnauthorized }: SettingsMo
                 onChange={(e) => setProvider(e.target.value as UiProvider)} aria-label="Translation provider"
               >
                 <option value="off">Off — no machine translation</option>
+                <option value="llm">Use the AI model from Summarize (below)</option>
                 <option value="libre_docker">LibreTranslate — local (Docker-managed)</option>
                 <option value="libre_remote">LibreTranslate — remote URL</option>
                 <option value="deepl">DeepL</option>
                 <option value="google">Google Cloud Translation</option>
                 <option value="azure">Microsoft Azure Translator</option>
               </select>
+
+              {provider === 'llm' && (
+                <div className="sm-sub">
+                  <p className="sm-help">
+                    Translates with whatever model the <strong>AI assist</strong> section
+                    below is set to — no second engine to install or key to manage.
+                    {summProvider === 'off'
+                      ? ' Set a Summarize provider below first, or this stays off.'
+                      : ' Quality depends on the model: a small local one is rougher than DeepL, so review every draft.'}
+                  </p>
+                  {summProvider === 'off' && (
+                    <div className="sm-inline sm-warn">
+                      <AlertCircle size={13} /> No AI model configured — pick one under “AI assist”.
+                    </div>
+                  )}
+                </div>
+              )}
 
               {provider === 'libre_docker' && (
                 <div className="sm-sub">

@@ -21,9 +21,16 @@
  * and language pair.
  */
 
-export type TranslateProvider = 'off' | 'libretranslate' | 'deepl' | 'google' | 'azure'
+import { chatComplete, isSummarizeConfigured, languageNameOf, SummarizeError } from './summarize.js'
 
-const PROVIDERS: readonly TranslateProvider[] = ['off', 'libretranslate', 'deepl', 'google', 'azure']
+/**
+ * `llm` reuses whatever model the SUMMARIZE settings already configure (local
+ * Ollama, OpenAI, or an OpenAI-compatible endpoint) instead of standing up a
+ * second engine. It carries no config of its own — that's the point.
+ */
+export type TranslateProvider = 'off' | 'libretranslate' | 'deepl' | 'google' | 'azure' | 'llm'
+
+const PROVIDERS: readonly TranslateProvider[] = ['off', 'libretranslate', 'deepl', 'google', 'azure', 'llm']
 
 export interface TranslateConfig {
   provider: TranslateProvider
@@ -73,6 +80,9 @@ export function isTranslationConfigured(config?: TranslateConfig): boolean {
     case 'deepl':          return c.deepl.apiKey.length > 0
     case 'google':         return c.google.apiKey.length > 0
     case 'azure':          return c.azure.apiKey.length > 0
+    // Borrowed wholesale from the summarize side — if a model is configured
+    // there, translation is configured here.
+    case 'llm':            return isSummarizeConfigured()
     default:               return false
   }
 }
@@ -235,6 +245,68 @@ export async function translate(
     case 'deepl':          return translateDeepL(text, source, target, c)
     case 'google':         return translateGoogle(text, source, target, c)
     case 'azure':          return translateAzure(text, source, target, c)
+    case 'llm':            return translateLlm(text, source, target)
     default:               throw new TranslateError(503, 'Translation is not configured on this server')
+  }
+}
+
+const LLM_TRANSLATE_PROMPT =
+  'You are a translation engine for résumé/CV content. Translate the user message from {SOURCE} to {TARGET}. ' +
+  'Output ONLY the translation — no preamble, no explanation, no quotes, no markdown fences. ' +
+  'Preserve the original line breaks, capitalisation style and any HTML tags exactly. ' +
+  'Keep proper nouns, company names, product names and technology names untranslated. ' +
+  'If the text is already in {TARGET}, return it unchanged.'
+
+/**
+ * Strip the wrapper an LLM sometimes adds despite instructions. Unlike
+ * `tidyLine` (summarize), this must PRESERVE the body: a CV field can be
+ * several sentences or lines, so only fences and whole-text wrapping quotes go.
+ */
+export function tidyTranslation(raw: string): string {
+  let s = raw.trim()
+  s = s.replace(/^```[a-z]*\r?\n?/i, '').replace(/\r?\n?```$/i, '').trim()
+  // Wrapping quotes only when they enclose the WHOLE text (not an inner quote).
+  if (s.length > 1 && /^["“']/.test(s) && /["”']$/.test(s) && !/["”']/.test(s.slice(1, -1))) {
+    s = s.slice(1, -1).trim()
+  }
+  return s
+}
+
+/**
+ * Translate via the model configured for Summarize. Same endpoint, same key,
+ * same model — so "use my local LLM for translation too" is zero extra config.
+ *
+ * Both languages must be ones we can NAME: an unknown code would leave the
+ * prompt saying "translate to undefined", which a model happily answers with
+ * nonsense. Failing loudly is better than silently returning the wrong language.
+ * SummarizeError is remapped to TranslateError so the route's error contract
+ * (and its "never leak upstream detail" rule) is unchanged.
+ */
+async function translateLlm(text: string, source: string, target: string): Promise<string> {
+  const from = languageNameOf(source)
+  const to = languageNameOf(target)
+  if (!from || !to) {
+    throw new TranslateError(400, `The AI translator does not support ${!from ? source : target}`)
+  }
+  try {
+    const raw = await chatComplete(
+      [
+        {
+          role: 'system',
+          content: LLM_TRANSLATE_PROMPT.replace('{SOURCE}', from).replace(/\{TARGET\}/g, to),
+        },
+        { role: 'user', content: text },
+      ],
+      // Generous headroom: translations run longer than the source, and a hard
+      // cut mid-sentence would silently truncate a CV field.
+      { maxTokens: 1600, temperature: 0.1 },
+    )
+    const out = tidyTranslation(raw)
+    if (!out) throw new TranslateError(502, 'The AI model returned no translation')
+    return out
+  } catch (err) {
+    if (err instanceof TranslateError) throw err
+    if (err instanceof SummarizeError) throw new TranslateError(err.status, err.message)
+    throw new TranslateError(502, 'The AI model could not translate that text')
   }
 }
