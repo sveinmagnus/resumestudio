@@ -14,6 +14,8 @@ import { SkillTranslationPopover } from './RegistryEditors'
 import { TranslationPopover } from '../ui/TranslationPopover'
 import { effectiveSkillCategory, categoryNameIndex } from '../../lib/skillCategorize'
 import { AssistRun } from '../ui/AssistRun'
+import { KeyPointsPanel } from '../ui/KeyPointsPanel'
+import { toHighlights } from '../../lib/keyPoints'
 import { extractJson } from '../../lib/llmAssist'
 import {
   buildSkillExtractPrompt, validateSkillExtract, resolveSuggestions, registryVocabulary,
@@ -126,6 +128,18 @@ function HighlightsEditor({ project }: { project: Project }) {
         </div>
       ))}
       <button className="sub-add" onClick={add}><Plus size={13} /> Add highlight</button>
+      {/* Reshapes the project's own long description into bullets — drafts
+          land in the primary locale; the secondary column is the user's
+          existing Copy/Draft-translation job. */}
+      <KeyPointsPanel
+        source={project.long_description}
+        locale={primaryLocale}
+        style="highlights"
+        noun="highlights"
+        onApply={(points) => updateItem('projects', project.id, {
+          highlights: [...project.highlights, ...toHighlights(points, primaryLocale)],
+        })}
+      />
     </div>
   )
 }
