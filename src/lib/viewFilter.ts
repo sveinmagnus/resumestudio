@@ -38,7 +38,10 @@ function sectionHeadingHtml(resolved: ResolvedSectionStyle, key: string, iconNam
  *  - the reusable registries 'skills' / 'roles' — these are structural data
  *    referenced by other sections, never rendered as a section of their own.
  */
-const NON_EXPORT_KEYS = new Set(['views', 'skills', 'roles'])
+// Sections that are NOT resume content and must never appear inside a view's
+// section list: the registries (skills/roles) and the document-builder sections
+// (views, cover_letters) — a cover letter accompanies a CV, it isn't part of one.
+const NON_EXPORT_KEYS = new Set(['views', 'skills', 'roles', 'cover_letters'])
 
 export function isExportableSection(s: { key: string; storeKey?: unknown }): boolean {
   return !!s.storeKey && !NON_EXPORT_KEYS.has(s.key)

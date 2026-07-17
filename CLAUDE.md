@@ -145,6 +145,7 @@ src/
 │   │   viewFilter (applyView + buildViewHtml; escapeHtml; SECURITY-CRITICAL),
 │   │   exporter (LAZY-LOADED docx; SECURITY: TextRun escapes), viewText (ATS text/MD),
 │   │   exporterEuropass (SkillsPassport XML; DOM+XMLSerializer, NOT string XML; round-trips importerEuropass),
+│   │   coverLetter (letter prompt + resolveLetterParts + text export; PDF/DOCX letter builders ride the lazy exporter/pdfmake chunks),
 │   │   viewStyle + viewHeader (render-boundary sanitisers), richText (allowlist;
 │   │   SECURITY-CRITICAL), image (canvas downscale; rejects SVG), sectionSort,
 │   │   viewTemplates, viewTailor (BYO-LLM), skillMatrix, showcase (showcaseGroups)
@@ -168,7 +169,8 @@ src/
 │   │                  (ARIA combobox), SortableList, TranslationPopover (here to avoid a
 │   │                  circular import), useDialog (shared modal focus behaviour)
 │   └── editor/      ← Overview, HeaderEditor, ProfileCompetenciesEditor, ProjectsEditor,
-│                      SimpleEditors, RegistryEditors, RegistryCategoryView, ResumeViewsEditor
+│                      SimpleEditors, RegistryEditors, RegistryCategoryView, ResumeViewsEditor,
+│                      CoverLettersEditor (own entity referencing a view; letter exports)
 └── index.css        ← self-hosted @font-face + design tokens + global a11y rules + utilities
 
 server/              ← Express API + SQLite persistence
@@ -350,7 +352,7 @@ Navigation: `setActiveSection(key)` / `setExpandedItem(id)`. Undo/redo: `useUndo
   `stripSnapshotImages`; restore re-attaches current images). The History modal
   restores via **`replaceData`** so a restore is undoable + re-saved.
 - **Data-shape versioning** (`lib/migrate.ts`): `shape_version` (absent = 1;
-  `CURRENT_SHAPE_VERSION` = 9). `migrateStore()` is the single choke point for
+  `CURRENT_SHAPE_VERSION` = 10). `migrateStore()` is the single choke point for
   data entering from outside (`loadStore` + snapshot restore; `replaceData`
   never migrates). Migrations are **idempotent shape-sniffers**. Newer-build
   data loads best-effort (stamp never downgraded; `NewerDataNotice`). **Bump

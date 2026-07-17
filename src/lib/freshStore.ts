@@ -23,6 +23,7 @@ export function emptyStore(): ResumeStore {
     presentations: [], honor_awards: [], publications: [], references: [],
     views: [],
     skill_categories: [],
+    cover_letters: [],
   }
 }
 

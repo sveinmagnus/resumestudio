@@ -61,6 +61,7 @@ export const SECTIONS: SectionDef[] = [
   { key: 'industries', label: 'Industry Registry', storeKey: 'industries', icon: 'Building2', group: 'registry' },
 
   { key: 'views', label: 'Resume Views', storeKey: 'views', icon: 'LayoutList', group: 'export' },
+  { key: 'cover_letters', label: 'Cover Letters', storeKey: 'cover_letters', icon: 'Mail', group: 'export' },
 ]
 
 export const GROUP_LABELS: Record<string, string> = {

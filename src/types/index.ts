@@ -898,6 +898,48 @@ export interface ResumeView {
   updated_at: string
 }
 
+// ─── Cover letter ─────────────────────────────────────────────────────────────
+
+/**
+ * A cover letter that accompanies a specific Resume View when applying for a
+ * role (shape v10). It is its OWN entity, not part of a view, because a letter
+ * is per-APPLICATION while a view is per-AUDIENCE — you send several letters
+ * against one "Consultant CV" view. It references the view whose CV it
+ * accompanies (`view_id`), and its export reuses that view's letterhead
+ * (contact block + fonts) so letter and CV look like one submission.
+ *
+ * The substance is `body`; everything else is letter chrome. Every reader-
+ * facing text field is a `LocalizedString` (the master-CV multi-language
+ * invariant — a letter can ship NO and EN), edited through `DualField`. The
+ * signature is the resume's `full_name`; the dateline is generated at export
+ * unless `place_dated` overrides it.
+ */
+export interface CoverLetter {
+  id: string
+  /** Internal label for the list/picker — never printed. */
+  name: string
+  /** The view this letter accompanies (letterhead + fonts reused); null = standalone letterhead from the resume. */
+  view_id: string | null
+  /** The organisation applied to (drives the AI draft + the inside address). */
+  company: LocalizedString
+  /** Recipient / addressee block, e.g. "Hiring Manager". */
+  recipient: LocalizedString
+  /** The role applied for — used in the subject line and the AI prompt. */
+  role_applied: LocalizedString
+  /** Salutation, e.g. "Dear Hiring Manager,". */
+  greeting: LocalizedString
+  /** The letter body — the substance. Plain multiline prose (paragraphs split on blank lines); a letter needs no lists/markup, which keeps every export path simple. */
+  body: LocalizedString
+  /** Sign-off, e.g. "Yours sincerely,". */
+  closing: LocalizedString
+  /** Optional "Place, date" override for the dateline; null = generated at export from today. */
+  place_dated: string | null
+  /** The job posting the letter targets — kept for re-drafting; never exported. */
+  posting?: string
+  created_at: string
+  updated_at: string
+}
+
 // ─── Full resume store ────────────────────────────────────────────────────────
 
 export interface ResumeStore {
@@ -941,6 +983,13 @@ export interface ResumeStore {
    * structure was unified into this.
    */
   skill_categories?: SkillCategory[]
+  /**
+   * Cover letters (shape v10). Additive top-level array — older data omits it;
+   * `migrateStore` seeds `[]` and readers tolerate `?? []`. A CRUD section like
+   * `views` (both are "documents built from the CV", not CV content), so it's a
+   * `SectionKey` and uses the generic store actions.
+   */
+  cover_letters: CoverLetter[]
 }
 
 // ─── UI state ────────────────────────────────────────────────────────────────

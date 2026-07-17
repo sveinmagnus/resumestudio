@@ -136,7 +136,24 @@ prescriptive.
   the rendered view catches "Led the Acme migration"; pass 2 is an opt-in model
   residual for names never recorded); **project highlights** drafted from the
   description (reshaping, never invention); **page-limit fitting** (proposes whole
-  items to cut through `excluded_item_ids` — never rewrites prose to fit).
+  items to cut through `excluded_item_ids` — never rewrites prose to fit);
+  **cover-letter body** drafted from the posting + the linked view's filtered
+  evidence (see below).
+- **Cover letters** (shape v10, `lib/coverLetter.ts` + `CoverLettersEditor`) —
+  their OWN entity (`data.cover_letters[]`), a document-builder sibling of
+  Resume Views in the Export sidebar group. A letter is per-APPLICATION and
+  REFERENCES a view (`view_id`) — the CV it accompanies — so you write several
+  against one view. Reader-facing fields are `LocalizedString` (DualField;
+  multi-language like everything else); the body is plain multiline prose.
+  The AI draft returns the body verbatim (prose, not JSON — unlike tailoring),
+  grounded in the posting + the linked view's `applyView` catalog so the letter
+  pitches the same story the tailored CV tells (or the master CV when no view is
+  linked). Export to PDF / DOCX / text via `resolveLetterParts` (one shared
+  parts resolver, so the three paths agree): the letter reuses the linked view's
+  resolved fonts + accent so letter and CV read as one submission. NOT a resume
+  section — `cover_letters` is in `NON_EXPORT_KEYS`, so it never appears inside a
+  view. Backup round-trips it (`BackupV1.cover_letters?`, `validateBackup` gates
+  it as an id-array); `wipeLocale` clears its localized fields.
 - **Bulk item selection** in a section's expanded item list
   (`ItemSelectTools` over pure `lib/viewItemSelect.ts`): **All / None** for
   long sections, plus **tri-state type chips** for sections whose items carry a

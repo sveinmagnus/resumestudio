@@ -3,9 +3,9 @@ import {
   appendLocalized, buildRoleParagraph, foldRoleDescriptions,
   extractKeyPointsToCompetencies, migrateEmploymentShape, internProjectIndustries,
   internSkillCategories, unifyShowcaseCategories, localizeRecommenderTitles,
-  unpinLegacyHeadingFont, migrateStore, isNewerShape, CURRENT_SHAPE_VERSION,
+  unpinLegacyHeadingFont, ensureCoverLetters, migrateStore, isNewerShape, CURRENT_SHAPE_VERSION,
 } from '../src/lib/migrate'
-import { emptyStore, makeProject, makeWork, makeSkill, makeSkillCategory, makeView, makeRecommendation } from './fixtures'
+import { emptyStore, makeProject, makeWork, makeSkill, makeSkillCategory, makeView, makeCoverLetter, makeRecommendation } from './fixtures'
 import type { ProjectRole, KeyQualification, KeyPoint, WorkExperience, Project, LocalizedString, Skill, ResumeStore } from '../src/types'
 
 /** A project carrying the pre-v4 single `industry`/`industry_id` pair. */
@@ -609,5 +609,29 @@ describe('unpinLegacyHeadingFont() — shape v9', () => {
     const out = migrateStore(store)
     expect(out.shape_version).toBe(CURRENT_SHAPE_VERSION)
     expect(out.views[0].style?.heading_font).toBe('inherit')
+  })
+})
+
+describe('ensureCoverLetters() — shape v10', () => {
+  it('adds an empty cover_letters array when absent', () => {
+    const store = emptyStore()
+    delete (store as { cover_letters?: unknown }).cover_letters
+    const out = ensureCoverLetters(store)
+    expect(out.cover_letters).toEqual([])
+  })
+
+  it('leaves an existing array untouched (same reference — idempotent)', () => {
+    const store = emptyStore()
+    store.cover_letters = [makeCoverLetter({ name: 'Keep me' })]
+    expect(ensureCoverLetters(store)).toBe(store)
+  })
+
+  it('is reached by migrateStore for pre-v10 data', () => {
+    const store = emptyStore()
+    store.shape_version = 9
+    delete (store as { cover_letters?: unknown }).cover_letters
+    const out = migrateStore(store)
+    expect(out.shape_version).toBe(CURRENT_SHAPE_VERSION)
+    expect(out.cover_letters).toEqual([])
   })
 })

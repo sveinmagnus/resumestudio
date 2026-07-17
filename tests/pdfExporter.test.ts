@@ -8,8 +8,8 @@
  * count out of the footer callback and hand pdfmake an undisturbed document.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { buildPdfDocDefinition, __resetPdfMakeForTests } from '../src/lib/pdfExporter'
-import { emptyStore, makeResume, makeProject, makeView } from './fixtures'
+import { buildPdfDocDefinition, buildCoverLetterPdfDef, __resetPdfMakeForTests } from '../src/lib/pdfExporter'
+import { emptyStore, makeResume, makeProject, makeView, makeCoverLetter } from './fixtures'
 
 /** Recursively gather every `text` string in a pdfmake content tree. */
 function collectText(node: unknown, out: string[] = []): string[] {
@@ -82,6 +82,36 @@ describe('buildPdfDocDefinition', () => {
 // The placement is computed once in viewHeader.footerLines and consumed by
 // every path; these pin that the PDF actually honours it, so it can't drift
 // from the HTML preview.
+
+describe('buildCoverLetterPdfDef', () => {
+  it('lays out an A4 letter with letterhead, subject, body and signature', () => {
+    const store = { ...emptyStore(), resume: makeResume({ full_name: 'Ada Lovelace', email: 'ada@x.io' }) }
+    const letter = makeCoverLetter({
+      company: { en: 'Equinor' }, recipient: { en: 'Hiring Manager' },
+      role_applied: { en: 'Architect' }, greeting: { en: 'Dear Manager,' },
+      body: { en: 'First paragraph.\n\nSecond paragraph.' }, closing: { en: 'Sincerely,' },
+    })
+    const dd = buildCoverLetterPdfDef(store, letter, 'en')
+    expect(dd.pageSize).toBe('A4')
+
+    const text = collectText(dd.content).join(' | ')
+    expect(text).toContain('Ada Lovelace')                 // letterhead + signature
+    expect(text).toContain('ada@x.io')                     // contact
+    expect(text).toContain('Application for Architect')    // subject
+    expect(text).toContain('Dear Manager,')                // greeting
+    expect(text).toContain('First paragraph.')
+    expect(text).toContain('Second paragraph.')
+    expect(text).toContain('Sincerely,')
+  })
+
+  it('does not leak an empty subject/greeting as blank nodes', () => {
+    const store = { ...emptyStore(), resume: makeResume({ full_name: 'Ada' }) }
+    const dd = buildCoverLetterPdfDef(store, makeCoverLetter({ body: { en: 'Body only.' } }), 'en')
+    const text = collectText(dd.content).join(' | ')
+    expect(text).toContain('Body only.')
+    expect(text).not.toContain('Application for')
+  })
+})
 
 describe('footer note placement', () => {
   const build = async (placement: string) => {

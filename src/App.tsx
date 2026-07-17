@@ -17,6 +17,7 @@ import {
 } from './components/editor/SimpleEditors'
 import { SkillsEditor, RolesEditor, IndustriesEditor, ReferencesEditor } from './components/editor/RegistryEditors'
 import { ResumeViewsEditor } from './components/editor/ResumeViewsEditor'
+import { CoverLettersEditor } from './components/editor/CoverLettersEditor'
 import { ConflictModal } from './components/ConflictModal'
 import { NewerDataNotice } from './components/NewerDataNotice'
 import { useRoute, navigate, Link } from './lib/router'
@@ -247,6 +248,7 @@ function EditorRoute({ resumeId, routeSection, routeViewId, onUnauthorized }: {
             {activeSection === 'roles'                 && <RolesEditor />}
             {activeSection === 'industries'            && <IndustriesEditor />}
             {activeSection === 'views'                 && <ResumeViewsEditor />}
+            {activeSection === 'cover_letters'          && <CoverLettersEditor />}
           </ErrorBoundary>
         </div>
       </main>

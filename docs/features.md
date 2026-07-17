@@ -86,6 +86,8 @@ an API key.
 - **Drafted project highlights** from the project description.
 - **Anonymization check.** Scan an anonymized view for real client names
   that leaked through in prose.
+- **Cover-letter draft.** Turn a job posting plus the CV you're sending into a
+  drafted letter body — grounded in your real experience, never invented.
 - **Page-fit advice.** When a view runs over its page limit, get concrete
   suggestions for what to cut.
 - **AI import and bulk add** — see the Import section below.
@@ -130,6 +132,18 @@ an API key.
   client and Norwegian to another.
 - **Promoted Projects** and **Skill Matrix** as synthetic sections — surface
   starred projects or a skills table without restructuring the master.
+
+## Cover letters
+
+- **A letter per application, paired with a view.** A cover letter is its own
+  document that references the Resume View it accompanies — write several
+  against one CV, one per role you apply for.
+- **Drafted from the posting.** Paste the job posting and draft the letter body
+  with your configured model (or copy the prompt into any LLM), grounded in the
+  CV you're actually sending — it won't invent employers or numbers.
+- **Matching letterhead.** The letter borrows the linked view's fonts and your
+  contact details, so letter and CV read as one submission. Export to PDF,
+  DOCX, or plain text, in any of your languages.
 
 ## Export
 

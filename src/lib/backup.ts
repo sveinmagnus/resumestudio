@@ -16,6 +16,7 @@ import type {
   KeyQualification, KeyCompetency, Recommendation, Project, WorkExperience,
   Education, Course, Certification, SpokenLanguage,
   Position, Presentation, HonorAward, Publication, Reference, ResumeView,
+  CoverLetter,
 } from '../types'
 
 // ─── Backup format types ──────────────────────────────────────────────────────
@@ -77,6 +78,12 @@ export interface BackupV1 {
     references: Reference[]
   }
   views: ResumeView[]
+  /**
+   * Cover letters (shape v10). Additive/optional — backups written before the
+   * feature omit it; `importFromBackup` defaults to `[]`. No `format_version`
+   * bump needed (the envelope stays readable to older builds).
+   */
+  cover_letters?: CoverLetter[]
 }
 
 /**
@@ -231,6 +238,7 @@ export function validateBackup(json: unknown): AnyBackup {
   }
 
   checkIdArray(json['views'], 'views', issues)
+  checkIdArray(json['cover_letters'], 'cover_letters', issues)
 
   if (issues.length) throw new InvalidBackupError(issues)
   return json as unknown as AnyBackup
@@ -298,6 +306,7 @@ export function exportToBackup(store: ResumeStore): BackupV1 {
       references: store.references,
     },
     views: store.views,
+    cover_letters: store.cover_letters,
   }
 }
 
@@ -345,6 +354,8 @@ export function importFromBackup(backup: AnyBackup): ResumeStore {
     publications:            v1.sections.publications,
     references:              v1.sections.references,
     views:                   v1.views,
+    // Added with cover letters (shape v10) — older backups omit it.
+    cover_letters:           v1.cover_letters ?? [],
   }
   // A pre-v6 backup carries the legacy showcase structure instead of
   // `registries.skill_categories` — attach it (untyped; ResumeStore no longer

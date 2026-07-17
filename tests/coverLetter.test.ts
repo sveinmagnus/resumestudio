@@ -1,0 +1,110 @@
+import { describe, it, expect } from 'vitest'
+import {
+  bodyParagraphs, resolveLetterParts, buildCoverLetterText, buildCoverLetterPrompt,
+} from '../src/lib/coverLetter'
+import { emptyStore, makeResume, makeCoverLetter, makeView, makeProject } from './fixtures'
+import type { ResumeStore } from '../src/types'
+
+function storeWith(over: Partial<ResumeStore> = {}): ResumeStore {
+  return { ...emptyStore(), resume: makeResume({ full_name: 'Ada Lovelace', email: 'ada@x.io', phone: '+47 900' }), ...over }
+}
+
+describe('bodyParagraphs()', () => {
+  it('splits on blank lines and collapses inner newlines', () => {
+    expect(bodyParagraphs('One\nline.\n\nSecond para.')).toEqual(['One line.', 'Second para.'])
+  })
+  it('drops empty paragraphs', () => {
+    expect(bodyParagraphs('\n\nOnly one\n\n\n')).toEqual(['Only one'])
+  })
+})
+
+describe('resolveLetterParts()', () => {
+  it('pulls the letterhead from the resume and localizes the letter fields', () => {
+    const letter = makeCoverLetter({
+      company: { en: 'Equinor' }, recipient: { en: 'Hiring Manager' },
+      role_applied: { en: 'Architect' }, greeting: { en: 'Dear Manager,' },
+      body: { en: 'Para one.\n\nPara two.' }, closing: { en: 'Sincerely,' },
+      place_dated: 'Oslo, 1 Jan 2026',
+    })
+    const p = resolveLetterParts(storeWith(), letter, 'en')
+    expect(p.senderName).toBe('Ada Lovelace')
+    expect(p.senderContact).toEqual(['ada@x.io', '+47 900'])
+    expect(p.recipient).toEqual(['Hiring Manager', 'Equinor'])
+    expect(p.subject).toBe('Application for Architect')
+    expect(p.greeting).toBe('Dear Manager,')
+    expect(p.paragraphs).toEqual(['Para one.', 'Para two.'])
+    expect(p.dateline).toBe('Oslo, 1 Jan 2026')
+  })
+
+  it('generates a dateline when none is set', () => {
+    const p = resolveLetterParts(storeWith(), makeCoverLetter(), 'en', new Date('2026-07-17T00:00:00Z'))
+    expect(p.dateline).toMatch(/2026/)
+  })
+
+  it('resolves the linked view for font reuse; a dangling id is just null', () => {
+    const view = makeView({ id: 'v1', name: 'Consultant CV' })
+    const store = storeWith({ views: [view] })
+    expect(resolveLetterParts(store, makeCoverLetter({ view_id: 'v1' }), 'en').view?.id).toBe('v1')
+    expect(resolveLetterParts(store, makeCoverLetter({ view_id: 'gone' }), 'en').view).toBeNull()
+  })
+
+  it('localizes the subject prefix per language', () => {
+    const letter = makeCoverLetter({ role_applied: { en: 'Architect', no: 'Arkitekt' } })
+    expect(resolveLetterParts(storeWith(), letter, 'no').subject).toBe('Søknad på stillingen Arkitekt')
+  })
+})
+
+describe('buildCoverLetterText()', () => {
+  it('assembles a readable plain-text letter, signed with the sender name', () => {
+    const letter = makeCoverLetter({
+      company: { en: 'Equinor' }, recipient: { en: 'Hiring Manager' },
+      role_applied: { en: 'Architect' }, greeting: { en: 'Dear Manager,' },
+      body: { en: 'I would be a great fit.\n\nI have delivered platforms.' },
+      closing: { en: 'Sincerely,' }, place_dated: 'Oslo, 1 Jan 2026',
+    })
+    const txt = buildCoverLetterText(storeWith(), letter, 'en')
+    expect(txt).toContain('Ada Lovelace')
+    expect(txt).toContain('Application for Architect')
+    expect(txt).toContain('Dear Manager,')
+    expect(txt).toContain('I would be a great fit.')
+    // Signed off with closing + name.
+    expect(txt.trimEnd().endsWith('Sincerely,\nAda Lovelace')).toBe(true)
+  })
+
+  it('omits blocks that are empty rather than leaving gaps', () => {
+    const txt = buildCoverLetterText(storeWith(), makeCoverLetter({ body: { en: 'Just a body.' } }), 'en')
+    expect(txt).toContain('Just a body.')
+    expect(txt).not.toContain('Application for') // no role → no subject line
+  })
+})
+
+describe('buildCoverLetterPrompt()', () => {
+  it('grounds the prompt in the posting, company/role, and CV evidence', () => {
+    const store = storeWith({ projects: [makeProject({ customer: { en: 'NorBAN' } })] })
+    const letter = makeCoverLetter({
+      company: { en: 'Equinor' }, role_applied: { en: 'Lead Architect' },
+      posting: 'We need a lead architect with cloud experience.',
+    })
+    const prompt = buildCoverLetterPrompt(store, letter, 'en')
+    expect(prompt).toContain('Equinor')
+    expect(prompt).toContain('Lead Architect')
+    expect(prompt).toContain('cloud experience')
+    expect(prompt).toContain('Ada Lovelace')
+    // Instructs body-only prose in the target locale.
+    expect(prompt).toMatch(/ONLY the letter body/i)
+    expect(prompt).toContain('"en"')
+  })
+
+  it('narrows the evidence to the linked view when one is set', () => {
+    // A view that excludes the project should not surface it as evidence.
+    const project = makeProject({ id: 'p1', customer: { en: 'SecretClient' } })
+    const view = makeView({ id: 'v1', excluded_item_ids: ['p1'], sections: [] })
+    const store = storeWith({ projects: [project], views: [view] })
+    const letter = makeCoverLetter({ view_id: 'v1', posting: 'x' })
+    expect(buildCoverLetterPrompt(store, letter, 'en')).not.toContain('SecretClient')
+  })
+
+  it('tolerates a letter with no posting text', () => {
+    expect(() => buildCoverLetterPrompt(storeWith(), makeCoverLetter(), 'en')).not.toThrow()
+  })
+})

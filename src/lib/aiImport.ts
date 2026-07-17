@@ -683,7 +683,7 @@ export function importFromAIDraft(input: AIImportV1): ResumeStore {
     honor_awards: [],
     publications: [],
     references: [],
-    views: [],
+    views: [], cover_letters: [],
   }
 }
 

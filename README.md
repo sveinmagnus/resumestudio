@@ -95,6 +95,10 @@ The full feature tour lives on the
   with your configured model in one click, or run the generated prompt in any
   LLM you trust and paste the JSON back — get a proposed view with detail
   levels, exclusions, a drafted intro, and a gap list.
+- **Cover letters.** A letter per application, referencing the Resume View it
+  accompanies and borrowing its letterhead + fonts. Draft the body from the
+  job posting with your own model (grounded in your real CV, nothing invented),
+  then export to PDF, DOCX, or text.
 - **Anonymized submissions.** A per-view toggle renders every project with
   its anonymized customer alias and redacts reference names to initials —
   for agency/broker submissions where client names must not leak.

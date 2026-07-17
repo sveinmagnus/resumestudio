@@ -24,8 +24,9 @@ import {
 } from 'docx'
 import type {
   ResumeStore, ResumeView, Resume, LocalizedString, SectionDetail, SectionStyle,
-  ViewHeaderConfig, FooterSeparator,
+  ViewHeaderConfig, FooterSeparator, CoverLetter,
 } from '../types'
+import { resolveLetterParts } from './coverLetter'
 import { SECTIONS, localizedSectionHeading } from './sections'
 import { resolve, type DateFormat } from './locales'
 import { SECTION_CATALOG, summaryTitleMeta, type AnyItem as CatalogItem, type CatalogCtx, type ItemView } from './sectionCatalog'
@@ -452,6 +453,57 @@ export async function exportDocx(store: ResumeStore, view: ResumeView, locale: s
 
   const blob = await Packer.toBlob(doc)
   downloadBlob(blob, exportFilename(store.resume?.full_name, view.name, 'docx'))
+}
+
+// ─── Cover letter (DOCX) ──────────────────────────────────────────────────────
+
+/**
+ * A cover letter as a `.docx`. Reuses the referenced view's resolved fonts +
+ * accent (like the PDF letter path) so letter and CV match, but it's a plain
+ * letter layout that shares only `resolveLetterParts` and this module's docx
+ * plumbing — not the CV section renderer. `docx` XML-escapes every `TextRun`,
+ * so this is XSS-safe by construction (see the security skill).
+ */
+export async function exportCoverLetterDocx(
+  store: ResumeStore, letter: CoverLetter, locale: string, globalFonts?: GlobalFonts,
+): Promise<void> {
+  const parts = resolveLetterParts(store, letter, locale)
+  const style = withResolvedFonts(withDefaults(parts.view?.style ?? {} as ResumeView['style']), globalFonts)
+  const tokens = deriveTokens(style)
+  const font = tokens.bodyFontDocx
+  const sz = tokens.bodyFontSizePt * 2  // docx uses half-points
+  const accent = tokens.accentHex
+
+  const run = (text: string, o: { bold?: boolean; color?: string; size?: number } = {}) =>
+    new TextRun({ text, bold: o.bold, color: o.color, size: o.size ?? sz, font })
+  const line = (text: string, o: { bold?: boolean; color?: string; size?: number; after?: number; align?: (typeof AlignmentType)[keyof typeof AlignmentType] } = {}) =>
+    new Paragraph({ spacing: { after: o.after ?? 120 }, alignment: o.align, children: [run(text, o)] })
+
+  const children: Paragraph[] = []
+
+  if (parts.senderName) children.push(line(parts.senderName, { bold: true, color: accent, size: sz + 10, after: 40 }))
+  if (parts.senderContact.length) children.push(line(parts.senderContact.join('  ·  '), { color: '333333', size: sz - 2, after: 320 }))
+  if (parts.dateline) children.push(line(parts.dateline, { after: 320 }))
+  for (const rl of parts.recipient) children.push(line(rl, { after: 40 }))
+  if (parts.recipient.length) children[children.length - 1] = line(parts.recipient[parts.recipient.length - 1], { after: 320 })
+  if (parts.subject) children.push(line(parts.subject, { bold: true, after: 280 }))
+  if (parts.greeting) children.push(line(parts.greeting, { after: 200 }))
+  for (const p of parts.paragraphs) children.push(line(p, { after: 200, align: AlignmentType.JUSTIFIED }))
+  if (parts.closing) children.push(line(parts.closing, { after: 40 }))
+  if (parts.senderName) children.push(line(parts.senderName, { bold: true }))
+
+  const doc = new Document({
+    styles: { default: { document: { run: { font, size: sz } } } },
+    sections: [{
+      properties: { page: {
+        size: { orientation: PageOrientation.PORTRAIT, width: 11906, height: 16838 },
+        margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 }, // ~2 cm
+      } },
+      children,
+    }],
+  })
+  const blob = await Packer.toBlob(doc)
+  downloadBlob(blob, exportFilename(store.resume?.full_name, letter.name || 'cover-letter', 'docx'))
 }
 
 // ─── Section dispatcher ───────────────────────────────────────────────────────

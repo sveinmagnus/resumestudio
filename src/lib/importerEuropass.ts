@@ -30,7 +30,7 @@ function freshImportStore(resumeId: string, resume: Resume): ResumeStore {
     skills: [], roles: [], industries: [],
     key_qualifications: [], key_competencies: [], recommendations: [],
     projects: [], work_experiences: [], educations: [], courses: [],
-    certifications: [], spoken_languages: [], skill_categories: [],
+    certifications: [], spoken_languages: [], skill_categories: [], cover_letters: [],
     positions: [], presentations: [], honor_awards: [], publications: [],
     references: [], views: [],
   }

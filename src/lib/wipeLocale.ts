@@ -21,6 +21,7 @@ import type {
   Education, Course, Certification, SpokenLanguage,
   Position, Presentation, HonorAward, Publication, Reference, Skill, Role,
   Industry, SkillCategory, KeyPoint, ProjectRole, ProjectIndustry, ProjectSkill, ResumeView,
+  CoverLetter,
 } from '../types'
 
 export function wipeLocale(store: ResumeStore, locale: string): ResumeStore {
@@ -134,6 +135,15 @@ export function wipeLocale(store: ResumeStore, locale: string): ResumeStore {
     views: store.views.map((v): ResumeView => ({
       ...v,
       introduction: ls(v.introduction),
+    })),
+    cover_letters: (store.cover_letters ?? []).map((c): CoverLetter => ({
+      ...c,
+      company: ls(c.company),
+      recipient: ls(c.recipient),
+      role_applied: ls(c.role_applied),
+      greeting: ls(c.greeting),
+      body: ls(c.body),
+      closing: ls(c.closing),
     })),
   }
   return next

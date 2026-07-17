@@ -2,7 +2,7 @@ import type {
   ResumeStore, ResumeView, Project, WorkExperience, Education,
   Course, Certification, Skill, Role, Industry, KeyQualification, SpokenLanguage,
   SkillCategory, Position, Presentation, Publication, HonorAward,
-  Reference, Resume, KeyCompetency, Recommendation,
+  Reference, Resume, KeyCompetency, Recommendation, CoverLetter,
 } from '../src/types'
 import { DEFAULT_VIEW_STYLE } from '../src/lib/viewStyle'
 import { DEFAULT_VIEW_HEADER, DEFAULT_VIEW_FOOTER, defaultHeaderFields } from '../src/lib/viewHeader'
@@ -17,7 +17,7 @@ export function emptyStore(): ResumeStore {
     work_experiences: [], educations: [], courses: [], certifications: [],
     spoken_languages: [], positions: [],
     presentations: [], honor_awards: [], publications: [], references: [],
-    views: [], skill_categories: [],
+    views: [], skill_categories: [], cover_letters: [],
   }
 }
 
@@ -351,6 +351,20 @@ export function makeReference(over: Partial<Reference> = {}): Reference {
     work_experience_id: null,
     include_in_exports: false,
     internal_notes: null,
+    ...over,
+  }
+}
+
+export function makeCoverLetter(over: Partial<CoverLetter> = {}): CoverLetter {
+  return {
+    id: id(),
+    name: 'Default Letter',
+    view_id: null,
+    company: {}, recipient: {}, role_applied: {},
+    greeting: {}, body: {}, closing: {},
+    place_dated: null, posting: '',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
     ...over,
   }
 }

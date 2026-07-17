@@ -161,7 +161,7 @@ export function importFromLinkedIn(files: Record<string, string>): ResumeStore {
     projects: [], work_experiences: [], educations: [], courses: [],
     certifications: [], spoken_languages: [], skill_categories: [],
     positions: [], presentations: [], honor_awards: [], publications: [],
-    references: [], views: [],
+    references: [], views: [], cover_letters: [],
   }
   if (profile['Summary']) {
     store.key_qualifications.push({

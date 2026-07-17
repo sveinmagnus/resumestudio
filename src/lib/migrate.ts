@@ -60,6 +60,10 @@ import { v4 as uuidv4 } from 'uuid'
  *  - 9          — un-pin the heading font on views written before fonts became
  *                 configurable (`unpinLegacyHeadingFont`), so the app-wide
  *                 default in Settings actually reaches them.
+ *  - 10         — guarantee the new top-level `cover_letters[]` array exists
+ *                 (`ensureCoverLetters`). Nothing to backfill — the feature is
+ *                 new — but code iterates the array, so it must be present (the
+ *                 same reason `industries` bumped, per the note below).
  *
  * Bump this ONLY for structural changes that need a migration (moving or
  * reshaping data). Additive optional fields are handled by render-boundary
@@ -68,7 +72,7 @@ import { v4 as uuidv4 } from 'uuid'
  * (like `industries`) is NOT a tolerable "optional field" — it must be
  * guaranteed present, hence the bump + migration.
  */
-export const CURRENT_SHAPE_VERSION = 9
+export const CURRENT_SHAPE_VERSION = 10
 
 /**
  * True when `store` was written by a build with a NEWER shape than this one
@@ -96,13 +100,15 @@ export function isNewerShape(store: ResumeStore): boolean {
 export function migrateStore(store: ResumeStore): ResumeStore {
   const stored = store.shape_version ?? 1
   if (stored >= CURRENT_SHAPE_VERSION) return store
-  const migrated = unpinLegacyHeadingFont(
-    localizeRecommenderTitles(
-      unifyShowcaseCategories(
-        internSkillCategories(
-          internProjectIndustries(
-            migrateEmploymentShape(
-              extractKeyPointsToCompetencies(foldRoleDescriptions(store)),
+  const migrated = ensureCoverLetters(
+    unpinLegacyHeadingFont(
+      localizeRecommenderTitles(
+        unifyShowcaseCategories(
+          internSkillCategories(
+            internProjectIndustries(
+              migrateEmploymentShape(
+                extractKeyPointsToCompetencies(foldRoleDescriptions(store)),
+              ),
             ),
           ),
         ),
@@ -110,6 +116,16 @@ export function migrateStore(store: ResumeStore): ResumeStore {
     ),
   )
   return { ...migrated, shape_version: CURRENT_SHAPE_VERSION }
+}
+
+/**
+ * Shape v10: guarantee `cover_letters[]` exists. Idempotent shape-sniffer like
+ * the rest — a store that already has the array is returned untouched (same
+ * reference), so re-running the chain is a no-op.
+ */
+export function ensureCoverLetters(store: ResumeStore): ResumeStore {
+  if (Array.isArray(store.cover_letters)) return store
+  return { ...store, cover_letters: [] }
 }
 
 /**

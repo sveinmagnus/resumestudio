@@ -554,6 +554,6 @@ export function importFromCVPartner(raw: Record<string, unknown>): ResumeStore {
     honor_awards,
     publications: [],
     references: [],
-    views: [],
+    views: [], cover_letters: [],
   }
 }

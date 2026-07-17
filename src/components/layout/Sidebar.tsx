@@ -6,7 +6,7 @@ import {
   LayoutDashboard, User, FileText, Briefcase, Building2, Users,
   GraduationCap, BookOpen, Award, Layers, Languages, Presentation,
   Newspaper, Trophy, Contact, Tags, SquareUser, LayoutList, Circle,
-  ListChecks, Quote, X,
+  ListChecks, Quote, Mail, X,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -14,7 +14,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   LayoutDashboard, User, FileText, Briefcase, Building2, Users,
   GraduationCap, BookOpen, Award, Layers, Languages, Presentation,
   Newspaper, Trophy, Contact, Tags, SquareUser, LayoutList,
-  ListChecks, Quote,
+  ListChecks, Quote, Mail,
 }
 
 const YEAR = new Date().getFullYear()

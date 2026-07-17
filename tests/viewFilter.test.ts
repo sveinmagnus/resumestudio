@@ -24,7 +24,7 @@ describe('buildViewSections()', () => {
   it('produces one entry per exportable section (excludes views + registries)', () => {
     const sections = buildViewSections()
     const exportable = SECTIONS.filter(
-      (s) => s.storeKey && !['views', 'skills', 'roles'].includes(s.key)
+      (s) => s.storeKey && !['views', 'skills', 'roles', 'cover_letters'].includes(s.key)
     )
     expect(sections).toHaveLength(exportable.length)
     // Every content section defaults to 'full' except the synthetics

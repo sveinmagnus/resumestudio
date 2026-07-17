@@ -26,6 +26,14 @@ sections, excluded items, and — if set — non-starred items). Then:
 - **DOCX** → `exporter.ts → exportDocx()` builds a `docx` `Document`.
 - **Text / Markdown** → `viewText.ts → buildViewText()` / `buildViewMarkdown()`
   for ATS-safe plain formats.
+- **Cover letters** → `coverLetter.ts` builds a letter (its own entity, not a
+  view section): `resolveLetterParts` is the one shared resolver, feeding the
+  plain-text export in that file and the PDF/DOCX letter builders that live in
+  the already-lazy `pdfExporter.ts` (`buildCoverLetterPdfDef` /
+  `exportCoverLetterPdf`) and `exporter.ts` (`exportCoverLetterDocx`) so they
+  ride the pdfmake / docx chunks. It's a **letter layout**, not the CV
+  renderer — it reuses only the linked view's resolved fonts/accent, never the
+  section catalog. Grounded AI draft in `buildCoverLetterPrompt`.
 - **Europass XML** → `exporterEuropass.ts → exportEuropassXml()` emits a
   `SkillsPassport` document, the round-trip partner of `importerEuropass.ts`.
   It is a **targeted-format** path, NOT a general render path: Europass only

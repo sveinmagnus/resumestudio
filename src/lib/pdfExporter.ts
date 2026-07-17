@@ -23,8 +23,9 @@
 
 import type {
   ResumeStore, ResumeView, Resume, LocalizedString, SectionDetail, SectionStyle,
-  ViewHeaderConfig, FooterSeparator,
+  ViewHeaderConfig, FooterSeparator, CoverLetter,
 } from '../types'
+import { resolveLetterParts } from './coverLetter'
 import { SECTIONS, localizedSectionHeading } from './sections'
 import { resolve, type DateFormat } from './locales'
 import { xs, fmtYears } from './exportStrings'
@@ -545,4 +546,69 @@ export async function exportPdf(store: ResumeStore, view: ResumeView, locale: st
   const docDefinition = await buildPdfDocDefinition(store, view, locale, globalFonts)
   const pdfMake = await loadPdfMake()
   pdfMake.createPdf(docDefinition).download(exportFilename(store.resume?.full_name, view.name, 'pdf'))
+}
+
+// ─── Cover letter ─────────────────────────────────────────────────────────────
+
+/**
+ * A cover letter as a simple, on-brand A4 letter. It reuses the referenced
+ * view's resolved fonts + accent (falling back to the view/global defaults) so
+ * the letter and the CV it accompanies look like one submission — but it's a
+ * letter layout, not the CV renderer, so it shares only `resolveLetterParts`
+ * and this module's pdfmake plumbing (`loadPdfMake`).
+ */
+export function buildCoverLetterPdfDef(
+  store: ResumeStore, letter: CoverLetter, locale: string, globalFonts?: GlobalFonts,
+): Record<string, unknown> {
+  const parts = resolveLetterParts(store, letter, locale)
+  // Borrow the referenced view's fonts/accent; otherwise the app defaults.
+  const style = withResolvedFonts(withDefaults(parts.view?.style ?? {} as ResumeView['style']), globalFonts)
+  const tokens = deriveTokens(style)
+  const accent = `#${tokens.accentHex}`
+  const size = tokens.bodyFontSizePt
+
+  const content: PdfNode[] = []
+  const M = (t: number, b: number): Margin => [0, t, 0, b]
+
+  // Letterhead: sender name (accent, bold) + contact lines.
+  if (parts.senderName) {
+    content.push({ text: parts.senderName, bold: true, color: accent, font: tokens.headingPdfFont, fontSize: size + 5, margin: M(0, 2) })
+  }
+  if (parts.senderContact.length) {
+    content.push({ text: parts.senderContact.join('  ·  '), color: META, fontSize: size - 1, margin: M(0, 16) })
+  }
+  // Date, then recipient block.
+  if (parts.dateline) content.push({ text: parts.dateline, fontSize: size, margin: M(0, 16) })
+  if (parts.recipient.length) {
+    content.push({ text: parts.recipient.join('\n'), fontSize: size, margin: M(0, 16) })
+  }
+  // Subject line (bold).
+  if (parts.subject) content.push({ text: parts.subject, bold: true, fontSize: size, margin: M(0, 14) })
+  // Salutation.
+  if (parts.greeting) content.push({ text: parts.greeting, fontSize: size, margin: M(0, 10) })
+  // Body paragraphs.
+  for (const para of parts.paragraphs) {
+    content.push({ text: para, fontSize: size, alignment: 'justify', margin: M(0, 10) })
+  }
+  // Closing + signature.
+  if (parts.closing || parts.senderName) {
+    content.push({ text: parts.closing, fontSize: size, margin: M(6, 0) })
+    if (parts.senderName) content.push({ text: parts.senderName, fontSize: size, bold: true, margin: M(2, 0) })
+  }
+
+  return {
+    pageSize: 'A4',
+    pageMargins: [64, 64, 64, 64] as Margin,
+    defaultStyle: { font: tokens.bodyPdfFont, fontSize: size, lineHeight: tokens.lineHeight, color: INK },
+    content,
+  }
+}
+
+/** Render a cover letter straight to a downloadable .pdf (lazy pdfmake). */
+export async function exportCoverLetterPdf(
+  store: ResumeStore, letter: CoverLetter, locale: string, globalFonts?: GlobalFonts,
+): Promise<void> {
+  const def = buildCoverLetterPdfDef(store, letter, locale, globalFonts)
+  const pdfMake = await loadPdfMake()
+  pdfMake.createPdf(def).download(exportFilename(store.resume?.full_name, letter.name || 'cover-letter', 'pdf'))
 }
