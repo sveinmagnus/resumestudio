@@ -25,6 +25,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { execFileSync } from 'child_process'
+import { createHash } from 'crypto'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const release = path.join(root, 'release')
@@ -291,6 +292,18 @@ try {
   console.error(`[build-desktop] failed to create ${archiveName} (${err.message}). Is tar available?`)
   process.exit(1)
 }
+
+// ── 7c. Emit the checksum sidecar the updater verifies against ───────────────
+// `<archive>.sha256` in sha256sum(1) format ("<hex>  <name>"), so `sha256sum -c`
+// works by hand and server/desktop/updater.ts can parse it after downloading.
+// Emitted HERE rather than in CI so a local build:desktop and a release build
+// produce the same asset set, and the digest is computed by whoever made the
+// archive. The updater FAILS CLOSED when this file is absent — if you change the
+// name, change `checksumNameFor` in updater.ts with it.
+const checksumName = `${archiveName}.sha256`
+const digest = createHash('sha256').update(fs.readFileSync(archivePath)).digest('hex')
+fs.writeFileSync(path.join(distDir, checksumName), `${digest}  ${archiveName}\n`)
+log(`checksum → ${checksumName} (${digest.slice(0, 16)}…)`)
 
 // ── 8. Done ─────────────────────────────────────────────────────────────────
 const platName = isWin ? 'windows' : process.platform

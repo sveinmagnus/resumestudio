@@ -14,11 +14,28 @@
  * URL we touch is constrained to GitHub hosts (`isAllowedHost`) — both the
  * release API call and the asset download (including each redirect hop). The
  * release/asset URLs themselves originate from GitHub's own API response.
+ *
+ * Downloads are verified against a `<asset>.sha256` sidecar published in the
+ * same release, and staging FAILS CLOSED if it is missing or mismatched. Be
+ * precise about what that buys, so nobody mistakes it for code-signing:
+ *   ✓ corruption / truncation / a tampered CDN blob (the asset is served from
+ *     objects.githubusercontent.com; the digest comes from the release metadata
+ *     via api.github.com — different origins, so tampering with only the blob
+ *     is caught).
+ *   ✗ a compromised repo or release: an attacker who can replace the asset can
+ *     replace the sidecar too. The configured GitHub repo remains the trust
+ *     boundary (see the security-review skill). Closing that needs a signature
+ *     over the digest from a key GitHub doesn't hold — the natural next step,
+ *     and this verification path is where it would plug in.
+ * Fail-closed is safe despite older releases lacking sidecars: a build that
+ * verifies only ever updates to a release NEWER than itself, and every release
+ * from v0.9.0 on ships them.
  */
 
 import fs from 'fs'
 import path from 'path'
 import { spawn } from 'child_process'
+import { createHash } from 'crypto'
 
 /** owner/repo to check. Overridable for forks / testing. */
 export function updateRepo(): string {
@@ -68,6 +85,14 @@ export function assetNameFor(
   return `resume-studio-${os}-${arch}.tar.gz`
 }
 
+/**
+ * The checksum sidecar published alongside an asset, emitted by
+ * `scripts/build-desktop.mjs` (§7c). KEEP IN SYNC with that script.
+ */
+export function checksumNameFor(assetName: string): string {
+  return `${assetName}.sha256`
+}
+
 // ── Host allowlist (SSRF guard) ──────────────────────────────────────────────
 
 const ALLOWED_HOST_SUFFIXES = ['github.com', 'githubusercontent.com']
@@ -94,6 +119,8 @@ export interface UpdateInfo {
   /** Asset download URL for THIS platform, or null if the release lacks one. */
   assetUrl: string | null
   assetName: string
+  /** URL of the `<asset>.sha256` sidecar, or null if the release lacks one. */
+  checksumUrl: string | null
   /** Release notes (the GitHub release body), truncated for display. */
   notes: string
   /** The release page on github.com (for the "Release notes" link). */
@@ -101,6 +128,17 @@ export interface UpdateInfo {
 }
 
 type FetchLike = typeof fetch
+
+/**
+ * Why this release can't be auto-installed, or null when it can. One predicate
+ * so the tray, the status route and the install path agree on what's offerable
+ * — an update we'd refuse to stage must never render an Install button.
+ */
+export function installBlocker(info: UpdateInfo): string | null {
+  if (!info.assetUrl) return `there is no build for this platform (${info.assetName})`
+  if (!info.checksumUrl) return `${info.assetName} has no published checksum, so it cannot be verified`
+  return null
+}
 
 // ── Check GitHub for the latest release ──────────────────────────────────────
 
@@ -147,11 +185,15 @@ export async function checkForUpdate(
 
   const wantName = assetNameFor()
   const assets = Array.isArray(rel.assets) ? (rel.assets as GithubAsset[]) : []
-  const match = assets.find((a) => typeof a.name === 'string' && a.name === wantName)
-  const rawAssetUrl = match && typeof match.browser_download_url === 'string'
-    ? match.browser_download_url
-    : null
-  const assetUrl = rawAssetUrl && isAllowedHost(rawAssetUrl) ? rawAssetUrl : null
+  const urlOf = (name: string): string | null => {
+    const match = assets.find((a) => typeof a.name === 'string' && a.name === name)
+    const raw = match && typeof match.browser_download_url === 'string'
+      ? match.browser_download_url
+      : null
+    return raw && isAllowedHost(raw) ? raw : null
+  }
+  const assetUrl = urlOf(wantName)
+  const checksumUrl = urlOf(checksumNameFor(wantName))
 
   const notes = (typeof rel.body === 'string' ? rel.body : '').slice(0, 2000)
   const htmlUrl = typeof rel.html_url === 'string' && isAllowedHost(rel.html_url)
@@ -164,12 +206,106 @@ export async function checkForUpdate(
     updateAvailable: compareVersions(latestVersion, currentVersion) > 0,
     assetUrl,
     assetName: wantName,
+    checksumUrl,
     notes,
     htmlUrl,
   }
 }
 
+// ── Checksum verification ────────────────────────────────────────────────────
+
+/**
+ * Thrown when a download can't be verified against its published digest —
+ * either the sidecar is unusable or the bytes don't match. Distinct from a
+ * generic failure so the UI can say "rejected", not "download failed": one is a
+ * flaky network, the other is a file we refused to run.
+ */
+export class ChecksumError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ChecksumError'
+  }
+}
+
+/**
+ * Pull the digest for `assetName` out of a sha256sum(1)-format file
+ * ("<hex>  <name>", `*` binary marker and `#` comments tolerated). A file
+ * carrying a lone bare digest is accepted too — some tools emit that. Returns
+ * lowercase hex, or null when there's no entry for this asset.
+ */
+export function parseChecksum(text: string, assetName: string): string | null {
+  const want = path.basename(assetName.trim())
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) continue
+    const m = /^([a-fA-F0-9]{64})(?:[ \t]+\*?(.+))?$/.exec(line)
+    if (!m) continue
+    const name = m[2]?.trim()
+    if (!name || path.basename(name) === want) return m[1].toLowerCase()
+  }
+  return null
+}
+
+/** Stream a file through SHA-256, returning lowercase hex. */
+export function sha256File(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256')
+    const stream = fs.createReadStream(filePath)
+    stream.on('error', reject)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('end', () => resolve(hash.digest('hex')))
+  })
+}
+
 // ── Download (manual redirect following, host-checked each hop) ───────────────
+
+/**
+ * Fetch `url`, following redirects MANUALLY so the host allowlist is re-checked
+ * on every hop (the SSRF guard — `fetch`'s automatic redirect would hand us the
+ * final response with no say in where it went). Shared by the asset and
+ * checksum fetches; both start at a GitHub API URL and typically land on the
+ * githubusercontent CDN.
+ */
+async function fetchFollowing(
+  url: string,
+  accept: string,
+  fetchImpl: FetchLike,
+): Promise<Response> {
+  let current = url
+  for (let hop = 0; hop < 6; hop++) {
+    if (!isAllowedHost(current)) throw new Error('Download host not allowed')
+    const r = await fetchImpl(current, {
+      redirect: 'manual',
+      headers: { 'User-Agent': 'ResumeStudio', Accept: accept },
+    })
+    if (r.status >= 300 && r.status < 400) {
+      const loc = r.headers.get('location')
+      if (!loc) throw new Error('Redirect without a location')
+      current = new URL(loc, current).toString()
+      continue
+    }
+    return r
+  }
+  throw new Error('Too many redirects')
+}
+
+/**
+ * Download the checksum sidecar and return the expected digest for `assetName`.
+ * Throws when the file can't be fetched or carries no entry for the asset —
+ * callers treat that as "cannot verify", which is fatal (fail closed).
+ */
+export async function fetchChecksum(
+  url: string,
+  assetName: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<string> {
+  const res = await fetchFollowing(url, 'text/plain', fetchImpl)
+  if (!res.ok) throw new ChecksumError(`Checksum download failed (${res.status})`)
+  // Sidecars are ~100 bytes; cap the read so a wrong URL can't stream forever.
+  const digest = parseChecksum((await res.text()).slice(0, 64_000), assetName)
+  if (!digest) throw new ChecksumError(`Checksum file has no entry for ${assetName}`)
+  return digest
+}
 
 /**
  * Stream a release asset to `destPath`, validating the host on every redirect
@@ -182,24 +318,7 @@ export async function downloadAsset(
   onProgress?: (fraction: number) => void,
   fetchImpl: FetchLike = fetch,
 ): Promise<number> {
-  let current = url
-  let res: Response | null = null
-  for (let hop = 0; hop < 6; hop++) {
-    if (!isAllowedHost(current)) throw new Error('Download host not allowed')
-    const r = await fetchImpl(current, {
-      redirect: 'manual',
-      headers: { 'User-Agent': 'ResumeStudio', Accept: 'application/octet-stream' },
-    })
-    if (r.status >= 300 && r.status < 400) {
-      const loc = r.headers.get('location')
-      if (!loc) throw new Error('Redirect without a location')
-      current = new URL(loc, current).toString()
-      continue
-    }
-    res = r
-    break
-  }
-  if (!res) throw new Error('Too many redirects')
+  const res = await fetchFollowing(url, 'application/octet-stream', fetchImpl)
   if (!res.ok || !res.body) throw new Error(`Download failed (${res.status})`)
 
   const total = Number(res.headers.get('content-length')) || 0
@@ -277,23 +396,40 @@ export interface StagedUpdate {
 }
 
 /**
- * Download + extract + validate a release into `<stagingRoot>/<version>/`.
- * Cleans any prior staging for the same version first. Throws if the asset is
- * missing, the download is incomplete, or the extracted tree fails validation.
+ * Download + verify + extract + validate a release into
+ * `<stagingRoot>/<version>/`. Cleans any prior staging for the same version
+ * first. Throws if the asset is missing, the download is incomplete, the
+ * SHA-256 doesn't match its published sidecar, or the extracted tree fails
+ * validation — nothing is installed unless every check passes.
  */
 export async function stageUpdate(
   info: UpdateInfo,
   stagingRoot: string,
   onProgress?: (fraction: number) => void,
   platform: NodeJS.Platform = process.platform,
+  fetchImpl: FetchLike = fetch,
 ): Promise<StagedUpdate> {
   if (!info.assetUrl) throw new Error(`No download for this platform (${info.assetName}).`)
+  // Fail closed: an unverifiable download is not installed. See the header note
+  // on why no legitimate update reaches this branch.
+  if (!info.checksumUrl) {
+    throw new ChecksumError(`This release publishes no checksum for ${info.assetName}, so the download cannot be verified.`)
+  }
   const verDir = path.join(stagingRoot, info.latestVersion)
   fs.rmSync(verDir, { recursive: true, force: true })
   fs.mkdirSync(verDir, { recursive: true })
 
   const archive = path.join(verDir, info.assetName)
-  await downloadAsset(info.assetUrl, archive, onProgress)
+  await downloadAsset(info.assetUrl, archive, onProgress, fetchImpl)
+
+  // Verify BEFORE tar sees the bytes: extraction trusts the archive, so the
+  // digest check is what stands between a tampered blob and our filesystem.
+  const expected = await fetchChecksum(info.checksumUrl, info.assetName, fetchImpl)
+  const actual = await sha256File(archive)
+  if (actual !== expected) {
+    try { fs.rmSync(verDir, { recursive: true, force: true }) } catch { /* best-effort */ }
+    throw new ChecksumError('Downloaded update failed its checksum check and was discarded.')
+  }
 
   const extractDir = path.join(verDir, 'extracted')
   await extractArchive(archive, extractDir)

@@ -242,10 +242,12 @@ launch and then daily**, and you can check on demand. The tray menu shows the
   the picker footer always shows the installed version.
 
 **How it installs.** Click **Install** (the pop-up), or **Install update** (tray
-or banner). The app downloads the new build for your OS, then a small **updater
-window opens and shows a progress bar** while it swaps the files and restarts
-onto the new version. Your data is untouched — it lives in the per-user folder
-(§3), not inside the app folder that gets replaced.
+or banner). The app downloads the new build for your OS, **checks it against the
+SHA-256 published with the release** and refuses to install anything that
+doesn't match, then a small **updater window opens and shows a progress bar**
+while it swaps the files and restarts onto the new version. Your data is
+untouched — it lives in the per-user folder (§3), not inside the app folder that
+gets replaced.
 
 **Cross-platform, by design.** This works on Windows, macOS and Linux without
 Electron. Because a running program can't overwrite its own files (especially
@@ -261,7 +263,9 @@ icon as usual. The downloaded asset is a `.tar.gz` (extracted with the system
 > The desktop build is **not code-signed**. The updater swaps files inside the
 > app folder you already trust and relaunches directly, which avoids the
 > first-run Gatekeeper/SmartScreen prompts — but if your OS still warns, that's
-> why. Updates are a desktop-only feature: a server (VPS) deployment never
+> why. The checksum check catches a corrupted or tampered *download*; it is not
+> a signature, so the GitHub release itself remains what you're trusting.
+> Updates are a desktop-only feature: a server (VPS) deployment never
 > self-updates (it reports "not supported").
 
 **Turning it off.** Set `RESUME_NO_UPDATE=1` before launching to disable the
@@ -327,3 +331,12 @@ your local network.
   are in `resume-studio.log` (§3). If an anti-virus blocks the swap helper
   script, download the new release manually instead. Set `RESUME_NO_UPDATE=1` to
   turn the feature off.
+- **"Update rejected: the download did not match its published checksum."**
+  The downloaded file isn't byte-for-byte what the release says it should be —
+  usually a corrupted or truncated download (a proxy, a flaky connection). It
+  was discarded and nothing was installed; try again. If it keeps happening,
+  download the release manually from GitHub rather than forcing the update.
+- **The update says "download manually" instead of offering Install.** Either
+  there's no build for your platform in that release, or it publishes no
+  checksum for it (older releases predate the check) — so the app won't install
+  it unverified. Grab it from the release page.

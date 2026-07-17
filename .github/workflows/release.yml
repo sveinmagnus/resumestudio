@@ -2,13 +2,16 @@
 # version tag is pushed (e.g. `git tag v0.1.0 && git push origin v0.1.0`),
 # then attach the artifacts to the matching GitHub Release.
 #
-# Two asset families are uploaded per release:
+# Asset families uploaded per release:
 #   1. ResumeStudio-<os>.(zip|tar.gz)        — human download (docs/download.md
 #      links to these; filenames MUST stay stable or those URLs 404).
 #   2. resume-studio-<os>-<arch>.tar.gz      — the AUTO-UPDATER asset, emitted by
 #      `npm run build:desktop` into release-dist/. Names MUST match
 #      server/desktop/updater.ts `assetNameFor`, and the format MUST be .tar.gz
 #      (the in-app updater extracts with `tar -xzf`). Do not rename these.
+#   3. resume-studio-<os>-<arch>.tar.gz.sha256 — the checksum sidecar for (2),
+#      emitted by the same build script. The updater FAILS CLOSED without it:
+#      drop these and every desktop build in the field stops updating.
 
 name: Release
 
@@ -167,10 +170,12 @@ jobs:
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          # Both the human-download bundle and the auto-updater .tar.gz.
+          # The human-download bundle, plus the auto-updater .tar.gz and its
+          # .sha256 sidecar (build-desktop.mjs emits both into release-dist/).
           files: |
             ${{ matrix.asset }}
             release-dist/*.tar.gz
+            release-dist/*.tar.gz.sha256
           # The `create-release` job has already made the release for this tag,
           # so every matrix job appends to the SAME one. Do not remove that job
           # and rely on auto-create here: three jobs creating concurrently is

@@ -70,11 +70,17 @@ describe('/api/update when the updater IS wired (desktop build)', () => {
   })
 
   it('POST /check finds a newer release (mocked GitHub) without installing', async () => {
+    const url = `https://github.com/sveinmagnus/resumestudio/releases/download/v9.9.9/${asset}`
     vi.stubGlobal('fetch', (async () => new Response(JSON.stringify({
       tag_name: 'v9.9.9',
       body: 'notes',
       html_url: 'https://github.com/sveinmagnus/resumestudio/releases/tag/v9.9.9',
-      assets: [{ name: asset, browser_download_url: `https://github.com/sveinmagnus/resumestudio/releases/download/v9.9.9/${asset}` }],
+      assets: [
+        { name: asset, browser_download_url: url },
+        // A real release also ships the digest sidecar; without it the updater
+        // reports the release as not auto-installable (see updater.ts).
+        { name: `${asset}.sha256`, browser_download_url: `${url}.sha256` },
+      ],
     }), { status: 200 })) as unknown as typeof fetch)
 
     const res = await request(app).post('/api/update/check')

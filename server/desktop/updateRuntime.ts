@@ -22,7 +22,8 @@ import path from 'path'
 import { spawn } from 'child_process'
 import { resolvePaths } from '../config.js'
 import {
-  checkForUpdate, stageUpdate, nodeBinaryName, type UpdateInfo, type StagedUpdate,
+  checkForUpdate, stageUpdate, nodeBinaryName, installBlocker, ChecksumError,
+  type UpdateInfo, type StagedUpdate,
 } from './updater.js'
 import { APP_VERSION } from '../version.js'
 
@@ -139,11 +140,12 @@ export function trayView(): UpdateTrayView {
       break
     case 'available':
     case 'staged':
-      if (info?.assetUrl) {
+      if (info && !installBlocker(info)) {
         view.installTitle = `Install update (v${info.latestVersion})`
         view.installEnabled = true
       } else if (info) {
-        // Newer version exists but no installable asset for this platform.
+        // Newer version exists but we can't install it (no asset for this
+        // platform, or nothing to verify it against) — offer a manual download.
         view.installTitle = `Update v${info.latestVersion} (download manually)`
         view.installEnabled = false
       }
@@ -169,7 +171,9 @@ export function getUpdateStatus(): UpdateStatusView {
     currentVersion: cfg?.appVersion?.trim() || process.env.RESUME_APP_VERSION?.trim() || APP_VERSION,
     latestVersion: info?.latestVersion ?? null,
     updateAvailable: info?.updateAvailable ?? false,
-    downloadable: !!info?.assetUrl,
+    // "Can we install it for you?" — an asset we couldn't verify is not
+    // downloadable as far as the UI is concerned (runInstall would refuse it).
+    downloadable: !!info && !installBlocker(info),
     progress,
     lastCheckedAt,
     notes: info?.notes ?? '',
@@ -232,9 +236,11 @@ let autoOfferedVersion: string | null = null
  */
 async function offerInstall(manual: boolean): Promise<void> {
   if (!cfg || !info) return
-  if (!info.assetUrl) {
-    // Newer version exists but nothing to auto-install for this platform.
-    cfg.notify?.(POPUP_TITLE, `Version ${info.latestVersion} is available, but there is no automatic install for this platform. Download it from the release page.`)
+  const blocked = installBlocker(info)
+  if (blocked) {
+    // Newer version exists but we won't auto-install it — say why, and point at
+    // the release page rather than leaving a dead Install button.
+    cfg.notify?.(POPUP_TITLE, `Version ${info.latestVersion} is available, but ${blocked}. Download it from the release page.`)
     return
   }
   if (!manual) {
@@ -258,12 +264,13 @@ async function offerInstall(manual: boolean): Promise<void> {
 export async function runInstall(): Promise<void> {
   if (!cfg || !info || !info.updateAvailable) return
   if (BUSY.includes(state)) return
-  if (!info.assetUrl) {
-    // Newer version exists but no installable asset for this platform — surface
-    // it rather than no-op'ing silently (the UI offers the release page link).
-    errorMsg = 'No downloadable build for this platform. Open the release page to update manually.'
+  const blocked = installBlocker(info)
+  if (blocked) {
+    // Nothing installable/verifiable — surface it rather than no-op'ing
+    // silently (the UI offers the release page link).
+    errorMsg = `Cannot install automatically: ${blocked}. Open the release page to update manually.`
     setState('error')
-    cfg.log('  update     : no asset for this platform — manual download required')
+    cfg.log(`  update     : not installable — ${blocked}`)
     return
   }
   progress = 0
@@ -278,7 +285,11 @@ export async function runInstall(): Promise<void> {
     cfg.log(`  update     : staged v${staged.version} — applying & restarting`)
     applyStaged(staged)
   } catch (err) {
-    errorMsg = 'Update download failed.'
+    // A rejected download is not a flaky network — don't blur the two. Nothing
+    // was installed either way.
+    errorMsg = err instanceof ChecksumError
+      ? 'Update rejected: the download did not match its published checksum. Nothing was installed.'
+      : 'Update download failed.'
     setState('error')
     cfg.log(`  update     : install failed — ${(err as Error).message}`)
   }

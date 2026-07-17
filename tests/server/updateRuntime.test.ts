@@ -119,16 +119,29 @@ describe('runCheck → manual-check popup (announce)', () => {
 describe('runCheck → Install/Cancel offer when an update is found', () => {
   afterEach(() => { __resetUpdateRuntimeForTests(); vi.unstubAllGlobals() })
 
-  function wireUpdate(confirmInstall: (t: string, m: string) => Promise<boolean>) {
+  /**
+   * Wire a release the updater considers installable. `withChecksum: false`
+   * models a release that publishes no `.sha256` sidecar — the updater refuses
+   * to install those (fail-closed), so no Install offer should be made.
+   */
+  function wireUpdate(
+    confirmInstall: (t: string, m: string) => Promise<boolean>,
+    notify = vi.fn(),
+    withChecksum = true,
+  ) {
     initUpdateRuntime({
       installDir: '/tmp/rs', appVersion: '0.0.1', log: () => {},
-      requestShutdown: () => {}, notify: vi.fn(), confirmInstall,
+      requestShutdown: () => {}, notify, confirmInstall,
     })
     const asset = assetNameFor()
+    const url = `https://github.com/sveinmagnus/resumestudio/releases/download/v9.9.9/${asset}`
+    const assets = [{ name: asset, browser_download_url: url }]
+    if (withChecksum) assets.push({ name: `${asset}.sha256`, browser_download_url: `${url}.sha256` })
     vi.stubGlobal('fetch', (async () => new Response(JSON.stringify({
       tag_name: 'v9.9.9',
-      assets: [{ name: asset, browser_download_url: `https://github.com/sveinmagnus/resumestudio/releases/download/v9.9.9/${asset}` }],
+      assets,
     }), { status: 200 })) as unknown as typeof fetch)
+    return notify
   }
 
   it('prompts "New version X available" and does not install on Cancel', async () => {
@@ -147,6 +160,17 @@ describe('runCheck → Install/Cancel offer when an update is found', () => {
     expect(confirm).toHaveBeenCalledTimes(1)
     await runCheck(true)  // manual → always offers
     expect(confirm).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not offer to install a release that publishes no checksum', async () => {
+    // Fail-closed: an unverifiable release must never render an Install prompt
+    // (stageUpdate would refuse it anyway). The user is told to fetch it by hand.
+    const confirm = vi.fn(async () => true)
+    const notify = wireUpdate(confirm, vi.fn(), false)
+    await runCheck(true)
+    expect(confirm).not.toHaveBeenCalled()
+    expect(notify.mock.calls[0][1]).toMatch(/no published checksum/i)
+    expect(getUpdateStatus().downloadable).toBe(false)
   })
 })
 
