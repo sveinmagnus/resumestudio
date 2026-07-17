@@ -62,12 +62,13 @@ export function TailorViewModal({ onApply, onClose }: TailorViewModalProps) {
     }
     try {
       const validated = validateTailorResponse(json)
-      setResult(applyTailorResponse(data, validated, primaryLocale))
+      // Pass the posting so the new view's purpose note fills itself in.
+      setResult(applyTailorResponse(data, validated, primaryLocale, posting))
     } catch (e) {
       if (e instanceof InvalidTailorResponseError) setIssues(e.issues)
       else setParseError((e as Error).message)
     }
-  }, [data, primaryLocale])
+  }, [data, primaryLocale, posting])
 
   const sectionCounts = result
     ? {

@@ -244,10 +244,38 @@ export interface TailorResult {
 }
 
 /**
- * Build a new ResumeView from a validated tailor response. Total function —
- * unknown ids/sections are reported, never fatal.
+ * A short label for the posting a view was tailored from: its first non-empty
+ * line, which in practice is the job title. Capped so one pasted wall of text
+ * can't become the note. Editor chrome (English side of CLAUDE.md §12) — this
+ * never reaches an export.
  */
-export function applyTailorResponse(store: ResumeStore, input: TailorV1, locale: string): TailorResult {
+export function postingLabel(posting: string): string {
+  const first = String(posting).split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? ''
+  return first.length > 80 ? `${first.slice(0, 79)}…` : first
+}
+
+/**
+ * The auto-filled `ResumeView.purpose` for a tailored view — the one case where
+ * we know why the view exists, so the user shouldn't have to type it. ISO date
+ * (stable + unambiguous; this is a note to self, not localized chrome).
+ */
+export function tailorPurpose(posting: string, now: Date = new Date()): string {
+  const label = postingLabel(posting)
+  const date = now.toISOString().slice(0, 10)
+  return `Tailored from a job posting on ${date}${label ? ` — ${label}` : ''}`
+}
+
+/**
+ * Build a new ResumeView from a validated tailor response. Total function —
+ * unknown ids/sections are reported, never fatal. `posting` (the source text)
+ * is used only to auto-fill the view's purpose note.
+ */
+export function applyTailorResponse(
+  store: ResumeStore,
+  input: TailorV1,
+  locale: string,
+  posting = '',
+): TailorResult {
   const validKeys = new Set(tailorableSectionKeys())
   const unknownSections: string[] = []
   const detailFor = new Map<string, SectionDetail>()
@@ -283,6 +311,9 @@ export function applyTailorResponse(store: ResumeStore, input: TailorV1, locale:
   const view: ResumeView = {
     id: uuidv4(),
     name: (typeof input.view_name === 'string' && input.view_name.trim()) || 'Tailored view',
+    // A tailored view is the one case where the app knows why it exists — fill
+    // the note in rather than making the user retype the posting's title.
+    purpose: tailorPurpose(posting),
     introduction: introText ? { [locale]: introText } : {},
     sections,
     excluded_item_ids: excluded,

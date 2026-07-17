@@ -583,6 +583,21 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
         )}
       </div>
 
+      {/* ── Purpose — a note to self, never exported (see ResumeView.purpose) ── */}
+      <div className="rv-section-block">
+        <label className="rv-field-label" htmlFor="rv-purpose-input">
+          Purpose <span className="rv-label-note">— your note, never exported</span>
+        </label>
+        <textarea
+          id="rv-purpose-input"
+          className="rv-purpose-input"
+          value={view.purpose ?? ''}
+          onChange={(e) => onUpdate({ purpose: e.target.value })}
+          rows={2}
+          placeholder="Why this view exists — e.g. tailored for the Equinor lead-architect posting; keep to 2 pages"
+        />
+      </div>
+
       {/* ── Introduction text ── */}
       <div className="rv-section-block">
         <DualField

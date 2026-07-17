@@ -7,7 +7,8 @@ import userEvent from '@testing-library/user-event'
 import { ResumeViewsEditor } from '../../src/components/editor/ResumeViewsEditor'
 import { useStore } from '../../src/store/useStore'
 import { resetStore } from '../helpers/store-reset'
-import { emptyStore } from '../fixtures'
+import { emptyStore, makeView } from '../fixtures'
+import { buildViewHtml, buildViewSections } from '../../src/lib/viewFilter'
 
 function seed() {
   useStore.setState({
@@ -46,6 +47,34 @@ describe('<ResumeViewsEditor>', () => {
     await userEvent.clear(nameInput)
     await userEvent.type(nameInput, 'Board CV')
     expect(useStore.getState().data.views[0].name).toBe('Board CV')
+  })
+
+  it('records a purpose note on the view and shows it on the card', async () => {
+    seed()
+    render(<ResumeViewsEditor />)
+    await userEvent.click(screen.getByRole('button', { name: /new view/i }))
+
+    await userEvent.type(screen.getByLabelText(/purpose/i), 'For the Equinor architect role')
+    expect(useStore.getState().data.views[0].purpose).toBe('For the Equinor architect role')
+
+    // Back on the list, the note is what tells the views apart.
+    await userEvent.click(screen.getByRole('button', { name: /all views/i }))
+    expect(screen.getByText('For the Equinor architect role')).toBeInTheDocument()
+  })
+
+  it('keeps the purpose note out of the exported document', async () => {
+    // The note sits right above the exported Introduction field; it is a note
+    // to self and must never reach a render path.
+    seed()
+    useStore.setState({
+      data: {
+        ...emptyStore(),
+        views: [makeView({ purpose: 'SECRET-INTERNAL-NOTE', sections: buildViewSections() })],
+      },
+    })
+    const view = useStore.getState().data.views[0]
+    const html = buildViewHtml(useStore.getState().data, view, 'en')
+    expect(html).not.toContain('SECRET-INTERNAL-NOTE')
   })
 
   it('section rows are collapsed by default and expand to reveal style overrides + items', async () => {

@@ -852,6 +852,18 @@ export interface ViewFooterConfig {
 export interface ResumeView {
   id: string
   name: string
+  /**
+   * Why this view exists — "built for the Equinor lead-architect posting",
+   * "board-level, keep it to one page". A note to self that answers, months
+   * later, what a view was FOR and whether it can be reused or should be
+   * cloned.
+   *
+   * Deliberately NOT a LocalizedString and never exported: it is editor
+   * chrome, on the English side of the boundary in CLAUDE.md §12, so it takes
+   * a plain textarea rather than a DualField. Optional/additive — older views
+   * simply lack it; no shape bump (CLAUDE.md §8).
+   */
+  purpose?: string
   introduction: LocalizedString
   sections: ViewSection[]
   excluded_item_ids: string[]

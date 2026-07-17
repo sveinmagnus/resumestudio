@@ -41,6 +41,13 @@ export function Styles() {
       .rv-card-icon { color: var(--accent); flex-shrink: 0; }
       .rv-card-body { flex: 1; min-width: 0; }
       .rv-card-name { font-weight: 600; font-size: 15px; }
+      /* The purpose note: clamped to two lines so a long note can't stretch the
+         card, but readable enough to answer "what was this one for?". */
+      .rv-card-purpose {
+        font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; line-height: 1.45;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
       .rv-card-meta { font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
       .rv-card-actions { display: flex; align-items: center; gap: 8px; }
 
@@ -100,6 +107,25 @@ export function Styles() {
       }
       .rv-name-input:focus {
         outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash);
+      }
+      /* Purpose — a note to self, NOT document content. It sits two blocks
+         above the exported Introduction textarea, so it has to read as
+         different at a glance: sunken rather than raised, normal-weight italic
+         placeholder, and a label that says so outright. */
+      .rv-purpose-input {
+        width: 100%; padding: 8px 11px; background: var(--paper-sunken);
+        border: 1px dashed var(--line); border-radius: var(--r-sm);
+        font-family: var(--sans); font-size: 13px; color: var(--ink-soft);
+        resize: vertical; transition: border-color .15s, box-shadow .15s;
+      }
+      .rv-purpose-input:focus {
+        outline: none; border-color: var(--accent); border-style: solid;
+        box-shadow: 0 0 0 3px var(--accent-wash);
+      }
+      .rv-purpose-input::placeholder { font-style: italic; color: var(--ink-faint); }
+      .rv-label-note {
+        font-weight: 400; text-transform: none; letter-spacing: 0;
+        color: var(--ink-faint);
       }
       /* Collapsed (display) state — the name reads as a heading with an edit pencil. */
       .rv-name-display { display: flex; align-items: center; gap: 8px; }

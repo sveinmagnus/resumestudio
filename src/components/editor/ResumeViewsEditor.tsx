@@ -126,6 +126,9 @@ function ViewList({ views, onCreate, onTailor, onEdit, onDelete }: {
                 <div className="rv-card-icon"><LayoutList size={20} /></div>
                 <div className="rv-card-body">
                   <div className="rv-card-name">{v.name}</div>
+                  {/* The purpose note earns its keep HERE — this is where you
+                      ask "which of these do I reuse?". Only rendered when set. */}
+                  {v.purpose?.trim() && <div className="rv-card-purpose">{v.purpose}</div>}
                   <div className="rv-card-meta">
                     {full} full
                     {summary > 0 ? ` · ${summary} summary` : ''}

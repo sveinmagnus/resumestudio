@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   TAILOR_SCHEMA, buildTailorCatalog, buildTailorPrompt, isTailorFormat,
   validateTailorResponse, applyTailorResponse, InvalidTailorResponseError,
+  postingLabel, tailorPurpose,
 } from '../src/lib/viewTailor'
 import { emptyStore, makeProject, makeWork, makeSkill, makeView } from './fixtures'
 
@@ -93,6 +94,27 @@ describe('isTailorFormat / validateTailorResponse', () => {
   })
 })
 
+describe('postingLabel / tailorPurpose', () => {
+  it('takes the first non-empty line — in practice the job title', () => {
+    expect(postingLabel('\n\n  Senior Developer, Cartavio  \nWe are looking for…')).toBe('Senior Developer, Cartavio')
+  })
+
+  it('caps a long first line so a pasted wall of text cannot become the note', () => {
+    const label = postingLabel('x'.repeat(200))
+    expect(label).toHaveLength(80)
+    expect(label.endsWith('…')).toBe(true)
+  })
+
+  it('is empty for blank posting text', () => {
+    expect(postingLabel('   \n  ')).toBe('')
+  })
+
+  it('dates the purpose with a stable ISO date', () => {
+    expect(tailorPurpose('Architect', new Date('2026-07-17T10:00:00Z')))
+      .toBe('Tailored from a job posting on 2026-07-17 — Architect')
+  })
+})
+
 describe('applyTailorResponse', () => {
   const base = {
     $schema: TAILOR_SCHEMA,
@@ -124,6 +146,16 @@ describe('applyTailorResponse', () => {
   it('filters empty gaps and keeps the rest', () => {
     const res = applyTailorResponse(storeWithContent(), base, 'en')
     expect(res.gaps).toEqual(['Kubernetes'])
+  })
+
+  it('auto-fills the purpose note from the posting', () => {
+    const res = applyTailorResponse(storeWithContent(), base, 'en', 'Lead Architect — Equinor\nOslo, hybrid')
+    expect(res.view.purpose).toMatch(/^Tailored from a job posting on \d{4}-\d{2}-\d{2} — Lead Architect — Equinor$/)
+  })
+
+  it('still fills a dated purpose when no posting text is supplied', () => {
+    const res = applyTailorResponse(storeWithContent(), base, 'en')
+    expect(res.view.purpose).toMatch(/^Tailored from a job posting on \d{4}-\d{2}-\d{2}$/)
   })
 
   it('wraps the introduction in the requested locale', () => {
