@@ -30,7 +30,13 @@ import { chatComplete, isSummarizeConfigured, languageNameOf, SummarizeError } f
  */
 export type TranslateProvider = 'off' | 'libretranslate' | 'deepl' | 'google' | 'azure' | 'llm'
 
-const PROVIDERS: readonly TranslateProvider[] = ['off', 'libretranslate', 'deepl', 'google', 'azure', 'llm']
+/**
+ * The one canonical provider list. Exported so settings.ts and the settings
+ * route validate against THIS rather than their own copies — a drifted copy is
+ * exactly how the 'llm' provider shipped unsaveable (the route's inline list
+ * predated it and rejected the value the UI sent).
+ */
+export const TRANSLATE_PROVIDERS: readonly TranslateProvider[] = ['off', 'libretranslate', 'deepl', 'google', 'azure', 'llm']
 
 export interface TranslateConfig {
   provider: TranslateProvider
@@ -60,7 +66,7 @@ export function resolveConfig(env: NodeJS.ProcessEnv = process.env): TranslateCo
   const libreUrl = clean(env.LIBRETRANSLATE_URL).replace(/\/+$/, '') || null
   const explicit = clean(env.TRANSLATE_PROVIDER).toLowerCase()
   let provider: TranslateProvider
-  if ((PROVIDERS as string[]).includes(explicit)) provider = explicit as TranslateProvider
+  if ((TRANSLATE_PROVIDERS as string[]).includes(explicit)) provider = explicit as TranslateProvider
   else if (libreUrl) provider = 'libretranslate'
   else provider = 'off'
   return {
@@ -247,8 +253,11 @@ async function translateGoogle(text: string, source: string, target: string, c: 
 async function translateAzure(text: string, source: string, target: string, c: TranslateConfig): Promise<string> {
   const key = c.azure.apiKey
   if (!key) throw new TranslateError(503, 'Translation is not configured on this server')
-  const from = mapWith(AZURE_MAP, source)
-  const to = mapWith(AZURE_MAP, target)
+  // encodeURIComponent: locale codes are request input validated only for
+  // length, so encode at the boundary rather than trusting their charset
+  // (same rule as the Google key above).
+  const from = encodeURIComponent(mapWith(AZURE_MAP, source))
+  const to = encodeURIComponent(mapWith(AZURE_MAP, target))
   const res = await postJson(
     `https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=${from}&to=${to}`,
     {

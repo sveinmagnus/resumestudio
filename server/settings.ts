@@ -19,8 +19,8 @@
 import fs from 'fs'
 import path from 'path'
 import { resolvePaths } from './config.js'
-import { ltLoadOnly, type TranslateConfig, type TranslateProvider } from './translate.js'
-import { DEFAULT_OLLAMA_URL, type SummarizeConfig, type SummarizeProvider } from './summarize.js'
+import { ltLoadOnly, TRANSLATE_PROVIDERS, type TranslateConfig, type TranslateProvider } from './translate.js'
+import { DEFAULT_OLLAMA_URL, SUMMARIZE_PROVIDERS, type SummarizeConfig, type SummarizeProvider } from './summarize.js'
 
 export const SETTINGS_FILENAME = 'settings.json'
 
@@ -28,9 +28,6 @@ export const SETTINGS_FILENAME = 'settings.json'
 export const DOCKER_TRANSLATE_URL = 'http://localhost:5000'
 /** Fixed URL the app uses when it manages a local Docker Ollama. */
 export const DOCKER_OLLAMA_URL = DEFAULT_OLLAMA_URL
-
-const PROVIDERS: readonly TranslateProvider[] = ['off', 'libretranslate', 'deepl', 'google', 'azure', 'llm']
-const SUMMARIZE_PROVIDERS: readonly SummarizeProvider[] = ['off', 'ollama', 'openai', 'compat']
 
 export interface AppSettings {
   /** Which translation backend to use ('off' = no Draft button). */
@@ -132,7 +129,7 @@ function coerce(raw: unknown): AppSettings {
     )]
     return out.length ? out : [...DEFAULT_SETTINGS.translate_languages]
   }
-  const provider = (PROVIDERS as string[]).includes(String(o.translate_provider))
+  const provider = (TRANSLATE_PROVIDERS as string[]).includes(String(o.translate_provider))
     ? (o.translate_provider as TranslateProvider)
     : DEFAULT_SETTINGS.translate_provider
   const summarizeProvider = (SUMMARIZE_PROVIDERS as string[]).includes(String(o.summarize_provider))
@@ -246,20 +243,14 @@ function setOrClear(key: string, value: string): void {
 }
 
 /**
- * First-run seed: if settings.json doesn't exist, create it from the current
- * env (preserving any shim/system-provided values), then apply. Returns the
- * effective settings.
+ * A settings record synthesised from the current env — the first-run seed on
+ * the desktop build, and the read-only view on a server build. ONE builder for
+ * both so the two can't drift (they used to be near-identical copies).
  */
-export function loadOrInitSettings(): AppSettings {
-  const file = settingsFilePath()
-  if (fs.existsSync(file)) {
-    const s = loadSettings()
-    applyToEnv(s)
-    return s
-  }
-  const envProvider = process.env.TRANSLATE_PROVIDER?.trim()
-  const seeded = coerce({
-    translate_provider: envProvider || (process.env.LIBRETRANSLATE_URL?.trim() ? 'libretranslate' : 'off'),
+function settingsFromEnv(): AppSettings {
+  return coerce({
+    translate_provider: process.env.TRANSLATE_PROVIDER?.trim()
+      || (process.env.LIBRETRANSLATE_URL?.trim() ? 'libretranslate' : 'off'),
     libretranslate_url: process.env.LIBRETRANSLATE_URL ?? '',
     libretranslate_api_key: process.env.LIBRETRANSLATE_API_KEY ?? '',
     translate_docker: false,
@@ -271,6 +262,21 @@ export function loadOrInitSettings(): AppSettings {
     backup_interval_ms: Number(process.env.RESUME_BACKUP_INTERVAL_MS) || DEFAULT_SETTINGS.backup_interval_ms,
     ...summarizeFromEnv(),
   })
+}
+
+/**
+ * First-run seed: if settings.json doesn't exist, create it from the current
+ * env (preserving any shim/system-provided values), then apply. Returns the
+ * effective settings.
+ */
+export function loadOrInitSettings(): AppSettings {
+  const file = settingsFilePath()
+  if (fs.existsSync(file)) {
+    const s = loadSettings()
+    applyToEnv(s)
+    return s
+  }
+  const seeded = settingsFromEnv()
   writeSettings(seeded)
   applyToEnv(seeded)
   return seeded
@@ -291,21 +297,7 @@ export function saveSettings(patch: Partial<AppSettings>): AppSettings {
  * config too).
  */
 export function currentSettings(): AppSettings {
-  if (isDesktop()) return loadSettings()
-  return coerce({
-    translate_provider: process.env.TRANSLATE_PROVIDER?.trim()
-      || (process.env.LIBRETRANSLATE_URL?.trim() ? 'libretranslate' : 'off'),
-    libretranslate_url: process.env.LIBRETRANSLATE_URL ?? '',
-    libretranslate_api_key: process.env.LIBRETRANSLATE_API_KEY ?? '',
-    translate_docker: false,
-    deepl_api_key: process.env.DEEPL_API_KEY ?? '',
-    google_api_key: process.env.GOOGLE_TRANSLATE_API_KEY ?? '',
-    azure_api_key: process.env.AZURE_TRANSLATOR_KEY ?? '',
-    azure_region: process.env.AZURE_TRANSLATOR_REGION ?? '',
-    backup_dir: process.env.RESUME_BACKUP_DIR ?? '',
-    backup_interval_ms: Number(process.env.RESUME_BACKUP_INTERVAL_MS) || DEFAULT_SETTINGS.backup_interval_ms,
-    ...summarizeFromEnv(),
-  })
+  return isDesktop() ? loadSettings() : settingsFromEnv()
 }
 
 /** Summarize settings synthesised from env (VPS snapshot + first-run seed). */

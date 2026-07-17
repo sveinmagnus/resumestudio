@@ -75,6 +75,12 @@ describe('PUT /api/settings', () => {
     expect(res.status).toBe(400)
   })
 
+  it("saves the 'llm' translate provider (regression: the route's inline allowlist once rejected it)", async () => {
+    const put = await request(app).put('/api/settings').send({ translate_provider: 'llm' })
+    expect(put.status).toBe(200)
+    expect(put.body.settings.translate_provider).toBe('llm')
+  })
+
   it('docker mode reports translate configured (URL set under the hood)', async () => {
     const res = await request(app).put('/api/settings').send({ translate_provider: 'libretranslate', translate_docker: true })
     expect(res.status).toBe(200)

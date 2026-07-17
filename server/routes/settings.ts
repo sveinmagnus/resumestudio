@@ -14,9 +14,9 @@ import {
   isDesktop, saveSettings, toView, currentSettings, settingsToTranslateConfig,
   settingsToSummarizeConfig, DOCKER_OLLAMA_URL,
 } from '../settings.js'
-import { isTranslationConfigured, translate, TranslateError } from '../translate.js'
+import { isTranslationConfigured, translate, TranslateError, TRANSLATE_PROVIDERS } from '../translate.js'
 import { startTranslate, stopTranslate, translateReachable, dockerAvailable, DOCKER_TRANSLATE_URL } from '../translateDocker.js'
-import { isSummarizeConfigured, summarize, SummarizeError } from '../summarize.js'
+import { isSummarizeConfigured, summarize, SummarizeError, SUMMARIZE_PROVIDERS } from '../summarize.js'
 import { startSummarize, stopSummarize, ollamaReachable, dockerAvailable as ollamaDockerAvailable } from '../summarizeDocker.js'
 import { reconfigureBackup } from '../backupRuntime.js'
 
@@ -47,8 +47,10 @@ router.put('/', (req: Request, res: Response): void => {
 
   if ('translate_provider' in body) {
     const v = body.translate_provider
-    if (!['off', 'libretranslate', 'deepl', 'google', 'azure'].includes(String(v))) {
-      res.status(400).json({ error: 'translate_provider must be one of off/libretranslate/deepl/google/azure' })
+    // Validate against the canonical list — an inline copy here is how the
+    // 'llm' provider shipped rejectable (the UI offered it, this 400'd it).
+    if (!(TRANSLATE_PROVIDERS as string[]).includes(String(v))) {
+      res.status(400).json({ error: `translate_provider must be one of ${TRANSLATE_PROVIDERS.join('/')}` })
       return
     }
     patch.translate_provider = v as AppSettings['translate_provider']
@@ -104,8 +106,8 @@ router.put('/', (req: Request, res: Response): void => {
   }
   // ── Summarize ──
   if ('summarize_provider' in body) {
-    if (!['off', 'ollama', 'openai', 'compat'].includes(String(body.summarize_provider))) {
-      res.status(400).json({ error: 'summarize_provider must be one of off/ollama/openai/compat' })
+    if (!(SUMMARIZE_PROVIDERS as string[]).includes(String(body.summarize_provider))) {
+      res.status(400).json({ error: `summarize_provider must be one of ${SUMMARIZE_PROVIDERS.join('/')}` })
       return
     }
     patch.summarize_provider = body.summarize_provider as AppSettings['summarize_provider']

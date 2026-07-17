@@ -20,7 +20,9 @@
 
 export type SummarizeProvider = 'off' | 'ollama' | 'openai' | 'compat'
 
-const PROVIDERS: readonly SummarizeProvider[] = ['off', 'ollama', 'openai', 'compat']
+/** Canonical list — settings.ts and the settings route validate against this
+ *  (see TRANSLATE_PROVIDERS in translate.ts for why copies are banned). */
+export const SUMMARIZE_PROVIDERS: readonly SummarizeProvider[] = ['off', 'ollama', 'openai', 'compat']
 
 /** Default local Ollama base (no trailing /v1 — added when composing the URL). */
 export const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
@@ -46,7 +48,7 @@ function clean(v: string | undefined): string {
 
 export function resolveConfig(env: NodeJS.ProcessEnv = process.env): SummarizeConfig {
   const explicit = clean(env.SUMMARIZE_PROVIDER).toLowerCase()
-  const provider = (PROVIDERS as string[]).includes(explicit) ? (explicit as SummarizeProvider) : 'off'
+  const provider = (SUMMARIZE_PROVIDERS as string[]).includes(explicit) ? (explicit as SummarizeProvider) : 'off'
   return {
     provider,
     ollama: { url: clean(env.SUMMARIZE_OLLAMA_URL).replace(/\/+$/, '') || DEFAULT_OLLAMA_URL },
