@@ -63,18 +63,34 @@ describe('sizeHint()', () => {
 
 describe('providerBlurb()', () => {
   it('promises locality ONLY for a local endpoint', () => {
-    expect(providerBlurb(local('llama3.2:3b'))).toMatch(/does not leave/i)
+    expect(providerBlurb(local('llama3.2:3b'), true)).toMatch(/does not leave/i)
   })
 
   it('names the destination for a remote endpoint, and never claims locality', () => {
-    const b = providerBlurb(remote('gpt-4o-mini', 'openai'))
+    const b = providerBlurb(remote('gpt-4o-mini', 'openai'), true)
     expect(b).toMatch(/over the internet/i)
     expect(b).toContain('openai')
     expect(b).not.toMatch(/does not leave/i)
   })
 
-  it('points at the manual path when nothing is configured', () => {
-    expect(providerBlurb(off)).toMatch(/manual/i)
+  it('points at the manual path when nothing is configured and one exists', () => {
+    const b = providerBlurb(off, true)
+    expect(b).toMatch(/manual/i)
+    expect(b).toMatch(/Settings → AI assist/)
+  })
+
+  it('offers only Settings when the caller has no manual path', () => {
+    // The in-editor panels (key points, writing coach, skill suggest) render no
+    // copy-prompt steps — naming "the manual path" there points at nothing.
+    const b = providerBlurb(off, false)
+    expect(b).not.toMatch(/manual/i)
+    expect(b).toMatch(/Settings → AI assist/)
+  })
+
+  it('says a model is unconfigured either way', () => {
+    for (const hasManual of [true, false]) {
+      expect(providerBlurb(off, hasManual)).toMatch(/no ai model is configured/i)
+    }
   })
 })
 

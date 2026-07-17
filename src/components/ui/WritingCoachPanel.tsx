@@ -64,6 +64,7 @@ export function WritingCoachPanel({ source, locale, onApply, noun = 'description
         disabled={!hasSource}
         label={`Strengthen this ${noun}`}
         maxTokens={900}
+        hasManualPath={false}
       />
       {!hasSource && <p className="wc-hint">Write the {noun} first — there’s nothing to work on yet.</p>}
       {error && <p className="wc-hint wc-err" role="alert">{error}</p>}

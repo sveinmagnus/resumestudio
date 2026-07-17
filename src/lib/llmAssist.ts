@@ -81,10 +81,20 @@ export function sizeHint(chars: number, status: AssistStatus): string | null {
  * One sentence saying where the content goes. Rendered next to every Run
  * button; the wording is the user's only signal, so it names the destination
  * rather than saying something vague like "your configured provider".
+ *
+ * `hasManualPath` says whether the caller actually offers a copy-prompt /
+ * paste-result fallback (AssistRun's `children`). It only changes the
+ * unconfigured wording, and it is REQUIRED rather than defaulted on purpose:
+ * the modal flows have a manual path and the in-editor panels (key points,
+ * writing coach, skill suggest) do not, so pointing every unconfigured panel
+ * at "the manual path" sent half of them chasing something not on screen. A
+ * default would let the next caller re-introduce exactly that.
  */
-export function providerBlurb(status: AssistStatus): string {
+export function providerBlurb(status: AssistStatus, hasManualPath: boolean): string {
   if (!status.configured) {
-    return 'No AI model is configured — use the manual path, or set one up in Settings → AI assist.'
+    return hasManualPath
+      ? 'No AI model is configured — use the manual path, or set one up in Settings → AI assist.'
+      : 'No AI model is configured — set one up in Settings → AI assist.'
   }
   if (status.local) {
     return `Runs on ${status.model} on this computer — the content does not leave it.`
@@ -98,9 +108,10 @@ export function isRemote(status: AssistStatus): boolean {
 }
 
 /**
- * The manual (BYO) path is ALWAYS available — it's the only path with no model
+ * The manual (BYO) path, where a caller offers one: the only path with no model
  * configured, and a deliberate choice when the content is too big for a small
  * local one. Copy describes it honestly: the user is the one sending it.
+ * (The in-editor panels have no manual path — see `providerBlurb`.)
  */
 export const MANUAL_BLURB =
   'You copy the prompt and paste it into whatever AI you choose — nothing is sent from this app. ' +

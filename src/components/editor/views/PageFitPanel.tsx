@@ -67,6 +67,7 @@ export function PageFitPanel({ view, locale, pages, limit, onUpdate }: Props) {
         wholeCv
         label="Suggest what to cut"
         maxTokens={700}
+        hasManualPath={false}
       />
       <p className="pf-hint">
         Suggests whole items to leave out of <em>this view</em> — it never rewrites or

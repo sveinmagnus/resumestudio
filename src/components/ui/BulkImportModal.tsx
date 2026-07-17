@@ -260,6 +260,9 @@ export function BulkImportModal({ spec, onClose }: BulkImportModalProps) {
                 disabled={!source.trim()}
                 label={`Extract ${spec.label.toLowerCase()}`}
                 maxTokens={4096}
+                // This modal lays its own copy-instructions / paste-JSON steps
+                // out as numbered stages rather than passing them as children.
+                hasManualPath
               />
             </div>
 

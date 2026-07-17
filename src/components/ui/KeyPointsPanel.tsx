@@ -65,6 +65,7 @@ export function KeyPointsPanel({ source, locale, style, onApply, noun = 'points'
         disabled={!hasProse}
         label={`Suggest ${noun} from the description`}
         maxTokens={600}
+        hasManualPath={false}
       />
       {!hasProse && <p className="kp-hint">Write the description first — there’s nothing to reshape yet.</p>}
       {error && <p className="kp-hint kp-err" role="alert">{error}</p>}

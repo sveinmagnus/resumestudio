@@ -197,6 +197,9 @@ export function AIImportModal({ onImported, onClose }: AIImportModalProps) {
                 disabled={!source.trim() || !template}
                 label="Build the draft"
                 maxTokens={4096}
+                // The download-template / paste-JSON steps are this modal's own
+                // numbered stages, not AssistRun children.
+                hasManualPath
               />
               {!template && (
                 <p className="aim-step-note">Loading the template…</p>

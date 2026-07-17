@@ -21,13 +21,24 @@ function backend(status: typeof LOCAL | typeof OFF) {
   vi.spyOn(api, 'summarizeStatus').mockResolvedValue(status)
 }
 
+/** A caller WITH a manual path, rendering its steps as children (tailor modal). */
 function setup(over: Partial<Parameters<typeof AssistRun>[0]> = {}) {
   const onResult = vi.fn()
   render(
-    <AssistRun buildPrompt={() => 'PROMPT'} onResult={onResult} {...over}>
+    <AssistRun buildPrompt={() => 'PROMPT'} onResult={onResult} hasManualPath {...over}>
       <button>Copy prompt for your LLM</button>
     </AssistRun>,
   )
+  return { onResult }
+}
+
+/**
+ * A caller with NO manual path — the in-editor panels (key points, writing
+ * coach, skill suggest, anon check, page fit) offer no copy-prompt steps at all.
+ */
+function setupNoManual(over: Partial<Parameters<typeof AssistRun>[0]> = {}) {
+  const onResult = vi.fn()
+  render(<AssistRun buildPrompt={() => 'PROMPT'} onResult={onResult} hasManualPath={false} {...over} />)
   return { onResult }
 }
 
@@ -134,6 +145,44 @@ describe('<AssistRun>', () => {
     it('points at Settings rather than leaving a dead end', async () => {
       setup()
       expect(await screen.findByText(/no ai model is configured/i)).toBeInTheDocument()
+    })
+
+    it('offers the manual path in the copy when the caller has one', async () => {
+      setup()
+      expect(await screen.findByText(/use the manual path/i)).toBeInTheDocument()
+    })
+
+    it('does not name a manual path the caller never rendered', async () => {
+      // An in-editor panel has no copy-prompt steps, so "use the manual path"
+      // would send the user looking for something that is not on screen.
+      setupNoManual()
+      expect(await screen.findByText(/no ai model is configured/i)).toBeInTheDocument()
+      expect(screen.queryByText(/manual/i)).not.toBeInTheDocument()
+    })
+
+    it('still names the manual path when the caller renders its own steps', async () => {
+      // The AI-import and bulk-add modals lay their copy/paste steps out as
+      // numbered stages instead of passing them as children. Inferring "has a
+      // manual path" from `children` denied those two a path that was on
+      // screen — hence the explicit prop. Pin it.
+      const onResult = vi.fn()
+      render(
+        <>
+          <AssistRun buildPrompt={() => 'PROMPT'} onResult={onResult} hasManualPath />
+          <button>Copy instructions</button>
+        </>,
+      )
+      expect(await screen.findByText(/use the manual path/i)).toBeInTheDocument()
+    })
+  })
+
+  describe('with no manual path (in-editor panels)', () => {
+    it('still promises locality for a local model', async () => {
+      backend(LOCAL)
+      setupNoManual()
+      expect(await screen.findByText(/does not leave/i)).toBeInTheDocument()
+      // No children → no disclosure to reveal.
+      expect(screen.queryByRole('button', { name: /do it manually/i })).not.toBeInTheDocument()
     })
   })
 

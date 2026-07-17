@@ -49,13 +49,27 @@ interface Props {
   label?: string
   /** Max reply tokens, for tasks that return a lot (a full CV import). */
   maxTokens?: number
+  /**
+   * Does this screen offer a copy-prompt / paste-result path at all? It decides
+   * the wording when no model is configured — pointing at "the manual path"
+   * when there is none is a dead end.
+   *
+   * REQUIRED, and deliberately not inferred from `children`. `children` only
+   * says whether AssistRun renders the steps *itself*: the tailor modal passes
+   * them here, but the AI-import and bulk-add modals lay their own steps out as
+   * numbered stages beside this control. Inferring from `children` therefore
+   * told those two there was no manual path while one was on screen — the same
+   * bug as before, pointing the other way. So each caller states the truth and
+   * the compiler asks the question.
+   */
+  hasManualPath: boolean
   /** The caller's existing copy/paste steps, revealed by "do it manually". */
   children?: ReactNode
 }
 
 export function AssistRun({
   buildPrompt, onResult, wholeCv = false, disabled = false,
-  label = 'Run with my AI', maxTokens, children,
+  label = 'Run with my AI', maxTokens, hasManualPath, children,
 }: Props) {
   const [status, setStatus] = useState<AssistStatus>(ASSIST_OFF)
   const [loaded, setLoaded] = useState(false)
@@ -118,7 +132,7 @@ export function AssistRun({
 
           <p className={`ar-blurb ${remote ? 'ar-remote' : 'ar-local'}`}>
             {remote ? <AlertTriangle size={12} /> : <ShieldCheck size={12} />}
-            {providerBlurb(status)}
+            {providerBlurb(status, hasManualPath)}
           </p>
 
           {hint && <p className="ar-blurb ar-hint"><Info size={12} />{hint}</p>}
@@ -126,7 +140,7 @@ export function AssistRun({
         </>
       )}
 
-      {!configured && <p className="ar-blurb ar-hint"><Info size={12} />{providerBlurb(status)}</p>}
+      {!configured && <p className="ar-blurb ar-hint"><Info size={12} />{providerBlurb(status, hasManualPath)}</p>}
 
       {children && (
         <div className="ar-manual">

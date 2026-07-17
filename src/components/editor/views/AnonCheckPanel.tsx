@@ -73,6 +73,7 @@ export function AnonCheckPanel({ view, locale }: { view: ResumeView; locale: str
             wholeCv
             label="Also check for names I never recorded"
             maxTokens={500}
+            hasManualPath={false}
           />
           <p className="ac-help">
             The check above only knows the names in your CV’s fields. A model can also spot a

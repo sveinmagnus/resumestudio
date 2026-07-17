@@ -484,6 +484,7 @@ function SkillSuggestPanel({ project, onLink, onCreate }: {
         disabled={!hasProse}
         label="Suggest skills from the description"
         maxTokens={400}
+        hasManualPath={false}
       />
       {!hasProse && <p className="ss-hint">Add a description first — there's nothing to read yet.</p>}
       {error && <p className="ss-hint ss-err" role="alert">{error}</p>}

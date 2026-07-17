@@ -161,6 +161,7 @@ export function TailorViewModal({ onApply, onClose }: TailorViewModalProps) {
                 wholeCv
                 disabled={!posting.trim()}
                 label="Tailor this view"
+                hasManualPath
               >
                 <button className="tv-btn tv-btn-ghost" onClick={() => void copyPrompt()} disabled={!posting.trim()}>
                   {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy prompt for your LLM'}
