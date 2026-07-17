@@ -40,6 +40,10 @@ import {
   type ResolvedSectionStyle, type StyleTokens,
 } from './viewStyle'
 import type { GlobalFonts } from './fonts'
+// Type-only: erased at compile time, so this does NOT pull pdfmake into any
+// bundle that imports this module — the library stays behind the lazy imports
+// in loadPdfMake().
+import type { FooterFn, PdfMakeStatic } from 'pdfmake/build/pdfmake'
 import { withHeaderDefaults, withFooterDefaults, buildHeaderLines, buildCopyrightLine, footerLines } from './viewHeader'
 import { imageInfoFromDataUrl, applyShapeMaskToDataUrl, type ImageInfo } from './image'
 import { exportFilename } from './exportFilename'
@@ -460,29 +464,85 @@ export async function buildPdfDocDefinition(
 }
 
 /**
+ * Load + configure pdfmake. Cached: the library and its font vfs are ~2 MB, so
+ * a session pays for them once no matter how many times it exports or
+ * re-counts pages.
+ */
+let pdfMakePromise: Promise<PdfMakeStatic> | null = null
+function loadPdfMake(): Promise<PdfMakeStatic> {
+  pdfMakePromise ??= (async () => {
+    const [pdfMakeMod, fontsMod] = await Promise.all([
+      import('pdfmake/build/pdfmake'),
+      import('pdfmake/build/vfs_fonts'),
+    ])
+    const pdfMake = pdfMakeMod.default
+    // pdfmake 0.2.x ships the vfs as the module default; tolerate a namespace
+    // wrapper too so a bundler interop quirk doesn't break the export.
+    const fonts = fontsMod as unknown as { default?: Record<string, string> } & Record<string, string>
+    pdfMake.vfs = fonts.default ?? fonts
+    // Roboto is embedded (bundled vfs); Times / Helvetica / Courier are the PDF
+    // standard-14 base fonts — pdfkit renders them without any embedded file, so a
+    // font choice maps onto one of these (see lib/fonts.ts) and the PDF matches
+    // the family's look without shipping extra font binaries.
+    pdfMake.fonts = {
+      Roboto: { normal: 'Roboto-Regular.ttf', bold: 'Roboto-Medium.ttf', italics: 'Roboto-Italic.ttf', bolditalics: 'Roboto-MediumItalic.ttf' },
+      Times: { normal: 'Times-Roman', bold: 'Times-Bold', italics: 'Times-Italic', bolditalics: 'Times-BoldItalic' },
+      Helvetica: { normal: 'Helvetica', bold: 'Helvetica-Bold', italics: 'Helvetica-Oblique', bolditalics: 'Helvetica-BoldOblique' },
+      Courier: { normal: 'Courier', bold: 'Courier-Bold', italics: 'Courier-Oblique', bolditalics: 'Courier-BoldOblique' },
+    }
+    return pdfMake
+  })()
+  return pdfMakePromise
+}
+
+/** Test seam: drop the cached module so a suite can re-stub the import. */
+export function __resetPdfMakeForTests(): void { pdfMakePromise = null }
+
+/**
+ * The REAL number of pages this view renders to, from pdfmake's own pagination.
+ *
+ * Worth the round-trip because the alternative measures the wrong document.
+ * The old estimate divided the HTML preview's scroll height by an A4 page — but
+ * the preview and the PDF are different render engines with different fonts and
+ * metrics (brand webfonts at 96 dpi vs Roboto/standard-14 at 72 pt), so its
+ * height was never a proxy for PDF pagination. It is not off by a rounding
+ * error and it is not biased in a predictable direction: on a real 46-project
+ * CV it read 13 pages for a document pdfmake lays out in 10. That number drives
+ * the over-limit warning and the AI's what-to-cut advice, both of which are
+ * worthless — actively harmful, if it makes you cut content that already fit —
+ * unless it is true.
+ *
+ * The doc definition has no page `footer` of its own (its "footer" is trailing
+ * content in the flow), so we can attach one purely to read `pageCount` — the
+ * only public way pdfmake exposes it. Footers render in the page margin, not
+ * the content box, so an empty one cannot change the pagination it reports.
+ */
+export async function countPdfPages(
+  store: ResumeStore, view: ResumeView, locale: string, globalFonts?: GlobalFonts,
+): Promise<number> {
+  const docDefinition = await buildPdfDocDefinition(store, view, locale, globalFonts)
+  const pdfMake = await loadPdfMake()
+  return new Promise<number>((resolve, reject) => {
+    let pages = 1
+    const probe: FooterFn = (_current, pageCount) => { pages = pageCount; return '' }
+    try {
+      pdfMake
+        .createPdf({ ...docDefinition, footer: probe })
+        // getBlob forces a full layout; the blob itself is thrown away. This is
+        // the cost of an honest number (tens of ms for a CV), so callers debounce.
+        .getBlob(() => resolve(Math.max(1, pages)))
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)))
+    }
+  })
+}
+
+/**
  * Render a ResumeView straight to a downloadable .pdf. Lazy-loads pdfmake and
  * its font vfs, then hands the browser the file — no print dialog.
  */
 export async function exportPdf(store: ResumeStore, view: ResumeView, locale: string, globalFonts?: GlobalFonts): Promise<void> {
   const docDefinition = await buildPdfDocDefinition(store, view, locale, globalFonts)
-  const [pdfMakeMod, fontsMod] = await Promise.all([
-    import('pdfmake/build/pdfmake'),
-    import('pdfmake/build/vfs_fonts'),
-  ])
-  const pdfMake = pdfMakeMod.default
-  // pdfmake 0.2.x ships the vfs as the module default; tolerate a namespace
-  // wrapper too so a bundler interop quirk doesn't break the export.
-  const fonts = fontsMod as unknown as { default?: Record<string, string> } & Record<string, string>
-  pdfMake.vfs = fonts.default ?? fonts
-  // Roboto is embedded (bundled vfs); Times / Helvetica / Courier are the PDF
-  // standard-14 base fonts — pdfkit renders them without any embedded file, so a
-  // font choice maps onto one of these (see lib/fonts.ts) and the PDF matches
-  // the family's look without shipping extra font binaries.
-  pdfMake.fonts = {
-    Roboto: { normal: 'Roboto-Regular.ttf', bold: 'Roboto-Medium.ttf', italics: 'Roboto-Italic.ttf', bolditalics: 'Roboto-MediumItalic.ttf' },
-    Times: { normal: 'Times-Roman', bold: 'Times-Bold', italics: 'Times-Italic', bolditalics: 'Times-BoldItalic' },
-    Helvetica: { normal: 'Helvetica', bold: 'Helvetica-Bold', italics: 'Helvetica-Oblique', bolditalics: 'Helvetica-BoldOblique' },
-    Courier: { normal: 'Courier', bold: 'Courier-Bold', italics: 'Courier-Oblique', bolditalics: 'Courier-BoldOblique' },
-  }
+  const pdfMake = await loadPdfMake()
   pdfMake.createPdf(docDefinition).download(exportFilename(store.resume?.full_name, view.name, 'pdf'))
 }

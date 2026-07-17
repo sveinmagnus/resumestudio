@@ -38,6 +38,8 @@ export class InvalidPageFitError extends Error {
 /**
  * The prompt. `over` is how many pages too long the view currently is, so the
  * model can size its answer rather than cutting everything it dislikes.
+ * `pages` is a whole number — the caller gets it from pdfmake's real
+ * pagination (`countPdfPages`), so there is no fractional page to report.
  */
 export function buildPageFitPrompt(
   store: ResumeStore, view: ResumeView, locale: string, pages: number, limit: number,
@@ -46,7 +48,7 @@ export function buildPageFitPrompt(
   const over = Math.max(1, Math.round(pages - limit))
 
   return [
-    `This CV renders as ${pages.toFixed(1)} pages but must fit ${limit}. Suggest which ITEMS to leave out.`,
+    `This CV renders as ${pages} pages but must fit ${limit}. Suggest which ITEMS to leave out.`,
     'Rules:',
     `- Suggest roughly enough to save ${over} page${over === 1 ? '' : 's'} — not the whole CV.`,
     '- Prefer the oldest, least relevant and most repetitive items. Keep anything starred.',

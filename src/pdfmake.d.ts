@@ -10,6 +10,12 @@ declare module 'pdfmake/build/pdfmake' {
     open(): void
     getBlob(cb: (blob: Blob) => void): void
   }
+  /**
+   * A doc definition's `footer` callback. pdfmake hands it the total page count
+   * once layout is done — the only public way to learn the real pagination, and
+   * how `countPdfPages` in lib/pdfExporter.ts gets a truthful number.
+   */
+  type FooterFn = (currentPage: number, pageCount: number, pageSize: unknown) => unknown
   interface PdfMakeStatic {
     vfs: Record<string, string>
     fonts?: Record<string, unknown>
@@ -17,6 +23,7 @@ declare module 'pdfmake/build/pdfmake' {
   }
   const pdfMake: PdfMakeStatic
   export default pdfMake
+  export type { FooterFn, PdfMakeStatic }
 }
 
 declare module 'pdfmake/build/vfs_fonts' {

@@ -3,10 +3,12 @@
  *
  * Covers the pure doc-definition builder. The actual pdfmake render + download
  * (exportPdf) needs the browser + the ~1.5 MB font vfs, so it isn't unit-tested
- * here — we assert the structure pdfmake will consume instead.
+ * here — we assert the structure pdfmake will consume instead. countPdfPages is
+ * covered with pdfmake stubbed, since what matters there is that we read the
+ * count out of the footer callback and hand pdfmake an undisturbed document.
  */
-import { describe, it, expect } from 'vitest'
-import { buildPdfDocDefinition } from '../src/lib/pdfExporter'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { buildPdfDocDefinition, __resetPdfMakeForTests } from '../src/lib/pdfExporter'
 import { emptyStore, makeResume, makeProject, makeView } from './fixtures'
 
 /** Recursively gather every `text` string in a pdfmake content tree. */
@@ -113,5 +115,68 @@ describe('footer note placement', () => {
 
   it('below: two blocks, copyright first', async () => {
     expect((await build('below')).slice(-2)).toEqual([`© ${year} Ada Lovelace`, 'Confidential'])
+  })
+})
+
+// ─── True page count ─────────────────────────────────────────────────────────
+
+describe('countPdfPages', () => {
+  beforeEach(() => { vi.resetModules(); __resetPdfMakeForTests() })
+  afterEach(() => { vi.doUnmock('pdfmake/build/pdfmake'); vi.doUnmock('pdfmake/build/vfs_fonts') })
+
+  /**
+   * Stand in for pdfmake: run the doc's footer callback the way real pagination
+   * does (once per page, with the total), so we can assert we read the count
+   * out of it. Captures the doc definition it was handed.
+   */
+  function stubPdfMake(pages: number) {
+    const seen: { doc?: Record<string, unknown> } = {}
+    vi.doMock('pdfmake/build/vfs_fonts', () => ({ default: {} }))
+    vi.doMock('pdfmake/build/pdfmake', () => ({
+      default: {
+        vfs: {}, fonts: {},
+        createPdf(doc: Record<string, unknown>) {
+          seen.doc = doc
+          return {
+            getBlob(cb: (b: Blob) => void) {
+              const footer = doc.footer as ((c: number, t: number, s: unknown) => unknown) | undefined
+              for (let p = 1; p <= pages; p++) footer?.(p, pages, { width: 595, height: 842 })
+              cb(new Blob())
+            },
+            download() {}, open() {},
+          }
+        },
+      },
+    }))
+    return seen
+  }
+
+  const store = () => ({ ...emptyStore(), resume: makeResume({ full_name: 'Ada Lovelace' }) })
+
+  it('reports the page count pdfmake actually paginated to', async () => {
+    stubPdfMake(3)
+    const { countPdfPages } = await import('../src/lib/pdfExporter')
+    await expect(countPdfPages(store(), makeView(), 'en')).resolves.toBe(3)
+  })
+
+  it('attaches the probe footer without disturbing the document', async () => {
+    // The footer exists only to read pageCount; everything pdfmake lays out
+    // must be byte-identical to what the export produces.
+    const seen = stubPdfMake(2)
+    const { countPdfPages, buildPdfDocDefinition } = await import('../src/lib/pdfExporter')
+    await countPdfPages(store(), makeView(), 'en')
+    const real = await buildPdfDocDefinition(store(), makeView(), 'en')
+
+    expect(typeof seen.doc!.footer).toBe('function')
+    const { footer, ...rest } = seen.doc!
+    expect(rest).toEqual(real)
+    // The probe renders nothing, so it cannot push content onto another page.
+    expect((footer as (c: number, t: number, s: unknown) => unknown)(1, 2, {})).toBe('')
+  })
+
+  it('never reports less than one page', async () => {
+    stubPdfMake(0)
+    const { countPdfPages } = await import('../src/lib/pdfExporter')
+    await expect(countPdfPages(store(), makeView(), 'en')).resolves.toBe(1)
   })
 })

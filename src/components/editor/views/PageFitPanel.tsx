@@ -58,7 +58,7 @@ export function PageFitPanel({ view, locale, pages, limit, onUpdate }: Props) {
     <div className="pf-wrap">
       <div className="pf-head">
         <Scissors size={13} />
-        {pages.toFixed(1)} pages — {limit} allowed
+        {pages} page{pages !== 1 ? 's' : ''} — {limit} allowed
       </div>
 
       <AssistRun

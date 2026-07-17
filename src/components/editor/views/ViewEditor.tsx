@@ -238,7 +238,16 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
   const [previewHtml, setPreviewHtml] = useState(() =>
     buildViewHtml(data, view, exportLocale, globalFonts)
   )
-  const [pageCount, setPageCount] = useState<number | null>(null)
+  // Two page counts, deliberately:
+  //   estimate — the preview iframe's height / an A4 page. Instant and free,
+  //              but it measures the HTML render, not the PDF, so it is only a
+  //              ballpark (13 vs a true 10 on a real CV — see countPdfPages).
+  //   exact    — pdfmake's real pagination (lazy, debounced, ~2 MB the first
+  //              time). The truth, and what the limit + AI advice run on.
+  // The estimate paints immediately and is labelled "≈"; the exact count
+  // replaces it when it lands and drops the "≈".
+  const [pageEstimate, setPageEstimate] = useState<number | null>(null)
+  const [exactPages, setExactPages] = useState<number | null>(null)
   const [showPreview, setShowPreview] = useState(true)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const popoutRef = useRef<Window | null>(null)
@@ -284,7 +293,7 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
     const measure = () => {
       const body = iframe.contentDocument?.body
       if (!body) return
-      setPageCount(Math.max(1, Math.ceil(body.scrollHeight / A4_PX)))
+      setPageEstimate(Math.max(1, Math.ceil(body.scrollHeight / A4_PX)))
     }
     const restoreScroll = () => {
       const win = iframe.contentWindow
@@ -310,8 +319,34 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
     }
   }, [previewHtml])
 
+  // The real pagination, debounced well behind the preview: it lazy-loads
+  // pdfmake and lays the whole document out, so it must never run per keystroke.
+  // Stale replies are dropped — a fast edit after a slow layout would otherwise
+  // show the previous view's count.
+  useEffect(() => {
+    let alive = true
+    const t = window.setTimeout(() => {
+      // Dynamic import: pdfExporter pulls in pdfmake, which must never join the
+      // always-loaded bundle (CLAUDE.md §11). The chunk is fetched once and the
+      // module caches the configured library.
+      void import('../../../lib/pdfExporter')
+        .then(({ countPdfPages }) => countPdfPages(data, view, exportLocale, globalFonts))
+        .then((n) => { if (alive) setExactPages(n) })
+        // A failed count is not worth an error in the user's face — the
+        // estimate stays on screen and the export button is unaffected.
+        .catch(() => { if (alive) setExactPages(null) })
+    }, 700)
+    return () => { alive = false; window.clearTimeout(t) }
+  }, [data, view, exportLocale, globalFonts])
+
+  // Prefer the truth; fall back to the estimate until it arrives.
+  const pageCount = exactPages ?? pageEstimate
+  // But only the EXACT count may say you're over. The estimate is a different
+  // render engine's height and runs ~30% high on a real CV — driving the
+  // warning (and the AI's cut advice) off it would tell you to cut a document
+  // that already fits, then quietly retract. Better to say nothing for a second.
   const overLimit =
-    view.page_limit != null && pageCount != null && pageCount > view.page_limit
+    view.page_limit != null && exactPages != null && exactPages > view.page_limit
 
   // Normalized so sections added after this view was created (e.g. Key
   // Competencies, Recommendations, Promoted Projects) still appear and are
@@ -904,13 +939,14 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
             matters a lot, because the alias only covers structured fields. */}
         {view.force_anonymized && <AnonCheckPanel view={view} locale={primaryLocale} />}
 
-        {/* Hangs off the page-count the preview already measures — there's
-            nothing to fit until the view is actually over its limit. */}
-        {overLimit && pageCount != null && view.page_limit != null && (
+        {/* Nothing to fit until the view is genuinely over its limit. `overLimit`
+            is gated on the exact count, so this never asks the model to trim a
+            document that already fits. */}
+        {overLimit && exactPages != null && view.page_limit != null && (
           <PageFitPanel
             view={view}
             locale={primaryLocale}
-            pages={pageCount}
+            pages={exactPages}
             limit={view.page_limit}
             onUpdate={onUpdate}
           />
@@ -938,8 +974,15 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
           <div className="rv-preview-header">
             <span className="rv-preview-label">Preview</span>
             {pageCount != null && (
-              <span className={`rv-preview-pages${overLimit ? ' rv-preview-over' : ''}`}>
-                ≈ {pageCount} page{pageCount !== 1 ? 's' : ''}
+              <span
+                className={`rv-preview-pages${overLimit ? ' rv-preview-over' : ''}`}
+                // The "≈" is load-bearing: it disappears the moment the count
+                // comes from real pagination rather than a height estimate.
+                title={exactPages != null
+                  ? 'Exact page count, from the PDF layout'
+                  : 'Estimated from the preview height — the exact count is being worked out'}
+              >
+                {exactPages != null ? '' : '≈ '}{pageCount} page{pageCount !== 1 ? 's' : ''}
                 {view.page_limit != null ? ` / ${view.page_limit}` : ''}
               </span>
             )}
