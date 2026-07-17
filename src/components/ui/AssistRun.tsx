@@ -35,7 +35,10 @@ let remoteConsent = false
 export function resetAssistConsent(): void { remoteConsent = false }
 
 interface Props {
-  /** Built lazily — only when the user actually runs (or reveals the manual path). */
+  /**
+   * Called on every render while a model is configured (the size hint tracks
+   * the prompt live as the user types/pastes) — keep it cheap-ish and pure.
+   */
   buildPrompt: () => string
   /** The model's raw reply. The caller validates it exactly as it validates a paste. */
   onResult: (text: string) => void

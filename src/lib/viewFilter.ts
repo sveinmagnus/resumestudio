@@ -211,9 +211,10 @@ export function applyView(store: ResumeStore, view: ResumeView): ResumeStore {
  * Why: every value rendered by buildViewHtml below comes from imported CV
  * data or user input. Without escaping, a name, description, or introduction
  * containing `<script>` runs in the same-origin preview iframe / print popup
- * — which would let a malicious imported file exfiltrate the API token from
- * sessionStorage. The generated document also carries a restrictive CSP, but
- * escape-at-render is the primary defence.
+ * — which would let a malicious imported file drive the API as the user (the
+ * HttpOnly session cookie auto-authenticates same-origin requests) and read
+ * the resume caches in localStorage. The generated document also carries a
+ * restrictive CSP, but escape-at-render is the primary defence.
  */
 export function escapeHtml(s: string | null | undefined): string {
   if (!s) return ''

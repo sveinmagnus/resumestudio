@@ -341,7 +341,7 @@ export function Overview() {
         .ov-snoozed-restore:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
         .ov-attn-badge {
           display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
-          font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+          font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
           padding: 2px 8px; border-radius: 9px; min-width: 64px; justify-content: center;
         }
         .ov-attn-err   .ov-attn-badge { background: var(--err-wash, #fef2f2); color: var(--err-ink, #b91c1c); }

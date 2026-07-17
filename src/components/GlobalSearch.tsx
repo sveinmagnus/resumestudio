@@ -115,7 +115,7 @@ export function GlobalSearch({ onClose }: { onClose: () => void }) {
         .gs-hit-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
         .gs-hit-title { font-size: 13.5px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .gs-hit-section {
-          font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
+          font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
           color: var(--accent); background: var(--accent-wash); padding: 1px 7px; border-radius: 9px; flex-shrink: 0;
         }
         .gs-hit-snippet { font-size: 12px; color: var(--ink-soft); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

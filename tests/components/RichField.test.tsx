@@ -21,6 +21,17 @@ describe('<RichField>', () => {
   })
   afterEach(() => vi.restoreAllMocks())
 
+  it('sanitises a stored value before writing it into the live DOM (untrusted import)', () => {
+    // A backup/snapshot import can carry HTML that never went through this
+    // editor's commit path — the DOM write is a render boundary (XSS).
+    render(<RichField label="Description" value={{
+      en: '<p>ok</p><img src=x onerror="window.__pwned=1"><script>window.__pwned=1</script>',
+    }} onChange={vi.fn()} />)
+    const editor = screen.getByRole('textbox')
+    expect(editor.innerHTML).toBe('<p>ok</p>')
+    expect((window as unknown as Record<string, unknown>).__pwned).toBeUndefined()
+  })
+
   it('cleans pasted HTML down to the allowed tags', () => {
     const onChange = vi.fn()
     render(<RichField label="Description" value={{}} onChange={onChange} />)

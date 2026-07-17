@@ -115,7 +115,7 @@ export function PageFitPanel({ view, locale, pages, limit, onUpdate }: Props) {
         .pf-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; cursor: pointer; }
         .pf-row input { accent-color: var(--accent); width: 14px; height: 14px; margin-top: 3px; flex-shrink: 0; }
         .pf-text { display: flex; flex-direction: column; gap: 1px; }
-        .pf-sec { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
+        .pf-sec { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
         .pf-why { font-size: 11.5px; color: var(--ink-soft); font-style: italic; }
         .pf-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
         .pf-btn {

@@ -259,7 +259,7 @@ export function SnapshotHistory({ resumeId, onClose, onUnauthorized }: SnapshotH
         .sh-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
         .sh-when { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
         .sh-badge {
-          font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+          font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
           background: var(--accent-wash); color: var(--accent); padding: 1px 6px; border-radius: 8px;
         }
         .sh-by { font-size: 11px; color: var(--ink-faint); font-weight: 400; }
@@ -287,7 +287,7 @@ export function SnapshotHistory({ resumeId, onClose, onUnauthorized }: SnapshotH
         .sh-changes { list-style: none; display: flex; flex-direction: column; gap: 6px; }
         .sh-change { display: flex; gap: 8px; align-items: flex-start; }
         .sh-chg-tag {
-          flex-shrink: 0; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+          flex-shrink: 0; font-size: 11px; font-weight: 700; letter-spacing: .04em;
           text-transform: uppercase; padding: 2px 7px; border-radius: 9px;
           min-width: 58px; text-align: center; margin-top: 1px;
         }

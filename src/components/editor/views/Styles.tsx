@@ -181,14 +181,14 @@ export function Styles() {
         letter-spacing: .04em; text-transform: uppercase; user-select: none;
       }
       .rv-secstyle-header .rv-secstyle-badge {
-        font-size: 9px; padding: 1px 6px; border-radius: 9px;
+        font-size: 11px; padding: 1px 6px; border-radius: 9px;
         background: var(--accent-wash); color: var(--accent); font-weight: 700;
         letter-spacing: .04em;
       }
       .rv-secstyle-header .rv-secstyle-reset {
         margin-left: auto; padding: 2px 6px; border-radius: var(--r-sm);
         color: var(--ink-faint); display: inline-flex; align-items: center; gap: 3px;
-        font-size: 10px; font-weight: 600; cursor: pointer;
+        font-size: 11px; font-weight: 600; cursor: pointer;
       }
       .rv-secstyle-header .rv-secstyle-reset:hover { color: var(--accent); background: var(--paper); }
 
@@ -202,7 +202,7 @@ export function Styles() {
       .rv-sec-expand .rv-chev-open { transform: rotate(90deg); }
       .rv-sec-config { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
       .rv-sec-chip {
-        font-size: 10.5px; font-weight: 500; padding: 2px 8px; border-radius: 10px;
+        font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 10px;
         background: var(--accent-wash); color: var(--accent); white-space: nowrap;
       }
       .rv-sec-config-empty { font-size: 11px; color: var(--ink-faint); font-style: italic; }
@@ -239,7 +239,7 @@ export function Styles() {
         border-radius: var(--r-sm);
       }
       .rv-kq-parts-label {
-        font-size: 10px; font-weight: 700; letter-spacing: .07em;
+        font-size: 11px; font-weight: 700; letter-spacing: .07em;
         text-transform: uppercase; color: var(--accent);
       }
       .rv-kq-part { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft); cursor: pointer; }
@@ -252,7 +252,7 @@ export function Styles() {
       }
       .rv-vs-field { display: flex; flex-direction: column; gap: 5px; }
       .rv-vs-label {
-        font-size: 10px; font-weight: 700; letter-spacing: .08em;
+        font-size: 11px; font-weight: 700; letter-spacing: .08em;
         text-transform: uppercase; color: var(--ink-faint);
       }
       .rv-vs-select, .rv-vs-color {
@@ -360,7 +360,7 @@ export function Styles() {
         border-radius: var(--r-sm);
       }
       .rv-item-tools-label {
-        font-size: 10px; font-weight: 700; letter-spacing: .07em;
+        font-size: 11px; font-weight: 700; letter-spacing: .07em;
         text-transform: uppercase; color: var(--ink-faint);
       }
       .rv-item-tool-btn {
@@ -382,7 +382,7 @@ export function Styles() {
       .rv-item-facet-badge {
         display: inline-flex; align-items: center; justify-content: center;
         min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
-        background: var(--accent); color: #fff; font-size: 10px; font-weight: 700;
+        background: var(--accent); color: #fff; font-size: 11px; font-weight: 700;
         font-variant-numeric: tabular-nums;
       }
       .rv-item-facet-trigger .rv-chev-open { transform: rotate(180deg); }
@@ -395,7 +395,7 @@ export function Styles() {
       }
       .rv-item-facet-group { display: flex; flex-direction: column; gap: 3px; }
       .rv-item-facet-group-head {
-        font-size: 10px; font-weight: 700; letter-spacing: .07em;
+        font-size: 11px; font-weight: 700; letter-spacing: .07em;
         text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px;
       }
       .rv-item-facet {

@@ -99,7 +99,7 @@ export function CareerTimeline() {
         }
         .ct-grid-label {
           position: absolute; top: 2px; left: 3px;
-          font-size: 10px; color: var(--ink-faint); font-weight: 600;
+          font-size: 11px; color: var(--ink-faint); font-weight: 600;
         }
         .ct-chart-expanded .ct-grid-label { font-size: 12px; }
         .ct-gap {
@@ -120,7 +120,7 @@ export function CareerTimeline() {
         .ct-proj { background: var(--secondary-ink-text); color: #fff; }
         .ct-ongoing { border-right: 3px solid var(--gold); }
         .ct-bar-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
-        .ct-bar-label-sm { font-weight: 500; font-size: 10.5px; }
+        .ct-bar-label-sm { font-weight: 500; font-size: 11px; }
         .ct-chart-expanded .ct-bar { font-size: 13px; padding: 0 9px; }
         .ct-chart-expanded .ct-bar-label-sm { font-size: 12px; }
 

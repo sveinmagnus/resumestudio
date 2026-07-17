@@ -263,14 +263,21 @@ function RichColumn({ variant, locale, fieldLabel, html, onCommit, placeholder, 
    * when the store value diverges from the DOM (load, undo, copy-from-primary,
    * draft), and never re-set during the user's own typing — doing so would
    * collapse the caret to the start every keystroke.
+   *
+   * SECURITY: the stored value is sanitised on every write through this
+   * editor, but the store can also be filled by an untrusted backup/snapshot
+   * import — so this DOM write is a render boundary and must sanitise too
+   * (same rule as renderRichHtml on the export side). sanitizeRich is
+   * idempotent, so editor-written values pass through unchanged.
    */
   useLayoutEffect(() => {
     const el = editorRef.current
     if (!el) return
-    if (el.innerHTML === html) return
+    const clean = sanitizeRich(html)
+    if (el.innerHTML === clean) return
     // Only re-sync when not focused; while typing the user owns the buffer.
     if (document.activeElement === el) return
-    el.innerHTML = html
+    el.innerHTML = clean
   }, [html])
 
   // Commit on every input — sanitiser cleans whatever the browser produced.

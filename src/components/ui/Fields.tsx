@@ -89,19 +89,23 @@ export function DateField({ label, value, onChange, allowOngoing }: {
 export function TagField({ label, tags, onChange, suggestions = [] }: {
   label: string; tags: string[]; onChange: (t: string[]) => void; suggestions?: string[]
 }) {
+  // Render tolerance: data that entered from outside (an older resume, a raw
+  // API write) can miss an additive array field even though the type requires
+  // it — a missing list must render as empty, never crash the section.
+  const list = tags ?? []
   const add = (t: string) => {
     const v = t.trim().toLowerCase()
-    if (v && !tags.includes(v)) onChange([...tags, v])
+    if (v && !list.includes(v)) onChange([...list, v])
   }
   const inputId = useId()
   return (
     <div className="pf-wrap">
       <label className="pf-label" htmlFor={inputId}>{label}</label>
       <div className="tag-box">
-        {tags.map((t) => (
+        {list.map((t) => (
           <span key={t} className="tag-chip">
             {t}
-            <button aria-label={`Remove ${t}`} onClick={() => onChange(tags.filter((x) => x !== t))}>×</button>
+            <button aria-label={`Remove ${t}`} onClick={() => onChange(list.filter((x) => x !== t))}>×</button>
           </span>
         ))}
         <input id={inputId} className="tag-input" placeholder="add tag…"

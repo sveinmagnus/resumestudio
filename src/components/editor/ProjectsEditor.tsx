@@ -30,7 +30,7 @@ export function ProjectsEditor() {
   const { data, primaryLocale, addItem, updateItem } = useStore()
   const projects = useSortedItems('projects')
 
-  const allTags = [...new Set(data.projects.flatMap((p) => p.skill_tags))]
+  const allTags = [...new Set(data.projects.flatMap((p) => p.skill_tags ?? []))]
 
   const addProject = () => {
     const p: Project = {
@@ -511,7 +511,7 @@ function SkillSuggestPanel({ project, onLink, onCreate }: {
         .ss-row { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; padding: 2px 0; }
         .ss-row input { accent-color: var(--accent); width: 14px; height: 14px; }
         .ss-name { flex: 1; }
-        .ss-tag { font-size: 10.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; }
+        .ss-tag { font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .04em; }
         .ss-new { color: var(--warn-ink); }
         .ss-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
         .ss-btn {

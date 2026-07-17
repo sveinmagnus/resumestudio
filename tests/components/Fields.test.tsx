@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { useState } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -123,5 +123,15 @@ describe('<TagField>', () => {
     await userEvent.type(input, 'node{Enter}')
     await userEvent.type(input, 'node{Enter}')
     expect(screen.getAllByText('node')).toHaveLength(1)
+  })
+
+  it('tolerates an undefined tags array (regression: crashed the Projects section)', async () => {
+    // Data written outside the editor (older resume, raw API client) can miss
+    // an additive array field despite the type — render as empty, don't throw.
+    const onChange = vi.fn()
+    render(<TagField label="Tags" tags={undefined as unknown as string[]} onChange={onChange} />)
+    const input = screen.getByPlaceholderText('add tag…')
+    await userEvent.type(input, 'go{Enter}')
+    expect(onChange).toHaveBeenCalledWith(['go'])
   })
 })

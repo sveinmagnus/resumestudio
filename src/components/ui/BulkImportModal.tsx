@@ -455,7 +455,7 @@ export function BulkImportModal({ spec, onClose }: BulkImportModalProps) {
         }
         .bim-item-dup .bim-item-title { color: var(--ink-soft); }
         .bim-dup-tag {
-          font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+          font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
           padding: 1px 6px; border-radius: 999px;
           background: var(--warn-wash); color: var(--warn-ink);
         }

@@ -103,7 +103,7 @@ export function AnonCheckPanel({ view, locale }: { view: ResumeView; locale: str
           font-size: 12px; padding: 5px 7px; border-radius: var(--r-sm); background: var(--warn-wash);
         }
         .ac-name { font-weight: 600; color: var(--warn-ink); }
-        .ac-origin { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
+        .ac-origin { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); }
         .ac-ctx { grid-column: 1 / -1; color: var(--ink-soft); font-style: italic; }
         .ac-deep { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
       `}</style>
