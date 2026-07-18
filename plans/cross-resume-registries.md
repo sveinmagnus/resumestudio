@@ -198,10 +198,19 @@ non-breaking increments per §2/§3.0–3.2, never leaving `main` broken.
     per-person facts untouched; same-ref when nothing links) and `planPublish`
     (creates/links, same-key siblings coalesced). 28 tests. Nothing loads or
     overlays yet — non-breaking.
-  - ⬜ 2b — wire it in: `loadStore` fetches `/api/registry` + overlays;
-    a "Share across resumes" action runs `planPublish` + sets links; a canonical
-    rename (registry editor) PUTs the canonical entry so it propagates. This is
-    where behaviour changes — kept reversible (unlink = revert to per-resume).
+  - ✅ **2b — boot overlay wired, shipped.** The boot fetches `/api/registry`
+    alongside the resume (guarded — a registry failure never blocks the resume)
+    and calls the new `reconcileRegistry` store action, which overlays canonical
+    identity onto linked entries via a RAW set (no `mutationCount` bump, so it
+    never triggers auto-save) — a no-op same-ref when nothing links. Verified
+    in-app as a clean no-op with the empty registry (217 skills load,
+    `mutationCount` stays 0, no console errors). Non-breaking; the load path is
+    now live and proven inert, de-risking 2c.
+  - ⬜ 2c — value delivery (its own focused pass): a "Share across resumes"
+    publish action (`planPublish` → `api.create/link` → set `canonical_id`) and
+    canonical-rename propagation (registry editor PUTs the canonical entry). This
+    is where the cross-resume rename payoff becomes visible; kept reversible
+    (unlink = revert to per-resume).
 - ⬜ Increments 3–5 — backup portability, sync/conflict, desktop merge.
 
 Remaining order per §3.1–3.2. Each increment compiles, tests green, leaves

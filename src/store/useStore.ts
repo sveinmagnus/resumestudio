@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
-import type { ResumeStore, Resume, LocalizedString } from '../types'
+import type { ResumeStore, Resume, LocalizedString, RegistryEntry } from '../types'
 import { detectLocalesInData, sortLocales } from '../lib/locales'
 import { migrateStore, isNewerShape } from '../lib/migrate'
 import { emptyStore as makeEmpty, freshStore as makeFresh } from '../lib/freshStore'
 import { sortItems, type SortMode } from '../lib/sectionSort'
+import { overlayCanonicalNames } from '../lib/registrySync'
 
 interface AppState {
   data: ResumeStore
@@ -71,6 +72,15 @@ interface AppState {
    * `replaceData` is for in-app rewrites where we want continuity.
    */
   replaceData: (data: ResumeStore) => void
+
+  // ── Cross-resume registry (shared canonical layer) ─────────────────────────
+  /**
+   * Reconcile linked registry entries' identity FROM the instance registry
+   * (`overlayCanonicalNames`). Display-only — a raw set with NO mutationCount
+   * bump, so it never triggers auto-save; a no-op (same store ref) when nothing
+   * links. Called at boot after the resume loads.
+   */
+  reconcileRegistry: (entries: RegistryEntry[]) => void
 
   // ── UI state ──────────────────────────────────────────────────────────────
   setActiveSection: (s: string) => void
@@ -190,6 +200,17 @@ export const useStore = create<AppState>((set, get) => {
     // ── In-app wholesale data replacement ──────────────────────────────────
 
     replaceData: (data) => mutate(() => ({ data })),
+
+    // ── Cross-resume registry ────────────────────────────────────────────────
+
+    reconcileRegistry: (entries) => set((st) => {
+      // Raw set, no mutationCount bump: this reconciles DISPLAY names from the
+      // shared registry, not a user edit — it must not trigger auto-save.
+      // overlayCanonicalNames returns the same ref when nothing links, so an
+      // un-shared resume skips the set entirely.
+      const next = overlayCanonicalNames(st.data, entries)
+      return next === st.data ? {} : { data: next }
+    }),
 
     // ── UI ─────────────────────────────────────────────────────────────────
 

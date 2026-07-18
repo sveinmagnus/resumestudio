@@ -23,7 +23,7 @@ import {
   ServerError,
   isAbortError,
 } from '../lib/api'
-import type { ResumeStore } from '../types'
+import type { ResumeStore, RegistryEntry } from '../types'
 import { type SaveState } from '../components/layout/SaveStatus'
 import { loadPending, savePending, clearPending, listDirty, clearAllCaches } from '../lib/localCache'
 import { subscribeOnline, recheckConnectivity, isOnline, type Connectivity } from '../lib/connectivity'
@@ -97,6 +97,7 @@ export function useResumePersistence(resumeId: string): ResumePersistence {
   // them here doesn't subscribe this hook to re-renders.
   const loadStore = useStore((s) => s.loadStore)
   const unloadStore = useStore((s) => s.unloadStore)
+  const reconcileRegistry = useStore((s) => s.reconcileRegistry)
   const setCurrentResumeId = useStore((s) => s.setCurrentResumeId)
   const hasData = useStore((s) => s.hasData)
   const mutationCount = useStore((s) => s.mutationCount)
@@ -232,11 +233,19 @@ export function useResumePersistence(resumeId: string): ResumePersistence {
       }
     }
 
-    api.loadResume(resumeId)
-      .then((res) => {
+    // Fetch the instance registry alongside the resume so linked entries can be
+    // reconciled to their shared canonical identity right after load. Guarded so
+    // a registry failure never blocks the resume boot (falls back to stored
+    // names). No-op for un-shared resumes (nothing links).
+    Promise.all([
+      api.loadResume(resumeId),
+      api.listRegistry().catch(() => [] as RegistryEntry[]),
+    ])
+      .then(([res, registry]) => {
         const pending = res ? loadPending(resumeId) : null
         applyBoot(decideBoot({ server: res ? 'hit' : 'not-found', pending }), res, pending)
         if (res) {
+          reconcileRegistry(registry) // overlay canonical names (display-only)
           // Server reachable on boot — drain any OTHER resumes' queued edits
           // (e.g. left from a previous offline session). The active resume is
           // handled by applyBoot above.

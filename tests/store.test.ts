@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useStore, newId } from '../src/store/useStore'
 import { CURRENT_SHAPE_VERSION } from '../src/lib/migrate'
-import { emptyStore, makeProject, makeWork, makeRole } from './fixtures'
+import { emptyStore, makeProject, makeWork, makeRole, makeSkill } from './fixtures'
+import type { RegistryEntry } from '../src/types'
 
 // Convenience — the store is a real Zustand singleton; reset between tests.
 const reset = () => {
@@ -444,6 +445,28 @@ describe('replaceData()', () => {
     // replaceData bumps mutationCount (user-mutation semantics)
     useStore.getState().replaceData(someStore)
     expect(useStore.getState().mutationCount).toBe(1)
+  })
+})
+
+describe('reconcileRegistry()', () => {
+  const canon = (over: Partial<RegistryEntry> & Pick<RegistryEntry, 'id' | 'kind' | 'name' | 'key'>): RegistryEntry =>
+    ({ extra: {}, version: 1, updated_at: '2026-01-01T00:00:00Z', ...over })
+
+  it('overlays a linked skill name from the canonical registry WITHOUT bumping mutationCount', () => {
+    useStore.setState({ data: { ...emptyStore(), skills: [makeSkill({ id: 's1', name: { en: 'React.js' }, canonical_id: 'c1' })] } })
+    const before = useStore.getState().mutationCount
+    useStore.getState().reconcileRegistry([canon({ id: 'c1', kind: 'skill', name: { en: 'React' }, key: 'react' })])
+    // Name reconciled from canonical…
+    expect(useStore.getState().data.skills[0].name.en).toBe('React')
+    // …but it's a display reconciliation, not a user edit — no auto-save trigger.
+    expect(useStore.getState().mutationCount).toBe(before)
+  })
+
+  it('is a no-op when nothing links (empty registry or no canonical_id)', () => {
+    useStore.setState({ data: { ...emptyStore(), skills: [makeSkill({ id: 's1', name: { en: 'Go' } })] } })
+    const data = useStore.getState().data
+    useStore.getState().reconcileRegistry([])
+    expect(useStore.getState().data).toBe(data) // same reference, untouched
   })
 })
 
