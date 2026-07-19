@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import { Upload, FileJson, Sparkles, FilePlus, Wand2 } from 'lucide-react'
 import { isBackupFormat, importFromBackup, UnsupportedBackupVersionError, InvalidBackupError } from '../lib/backup'
+import { reinternBackupLinks } from '../lib/registryReintern'
+import { api } from '../lib/api'
 import { importFromCVPartner } from '../lib/importer'
 import {
   isAIImportFormat, validateAIImport, importFromAIDraft, InvalidAIImportError,
@@ -12,7 +14,7 @@ import {
 import { AIImportModal } from './AIImportModal'
 import { loadSkillTaxonomy, loadSkillClassifications } from '../lib/skillTaxonomy'
 import { normalizeImportedSkills } from '../lib/skillNormalize'
-import type { ResumeStore } from '../types'
+import type { ResumeStore, CanonicalSnapshot } from '../types'
 
 const YEAR = new Date().getFullYear()
 
@@ -99,7 +101,13 @@ export function ImportScreen({ compact = false, onStartFresh, onImported }: Impo
         // normalization. importFromBackup validates the structure and throws
         // InvalidBackupError (with a field path) on anything malformed.
         const store = importFromBackup(json)
-        await onImported(store, deriveName(store, 'Imported resume'))
+        // Re-intern shared-registry links against THIS instance's registry (a
+        // backup from another instance carries foreign canonical ids). Embedded
+        // snapshots match by key → reuse or create; missing ones are cleared.
+        // Best-effort: a registry failure leaves the store's links as-imported.
+        const embedded = (json as { canonical_registry?: CanonicalSnapshot[] }).canonical_registry
+        const reinterned = await reinternBackupLinks(store, embedded, api).catch(() => store)
+        await onImported(reinterned, deriveName(reinterned, 'Imported resume'))
       } else {
         // Everything unrecognised falls through to the CVpartner importer, which
         // maps a large, real-world-messy object. Guard the one thing its cast

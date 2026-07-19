@@ -30,7 +30,7 @@ export function SaveToFileSection() {
       <div className="sm-btn-row">
         <button
           className="sm-btn"
-          onClick={() => downloadBackup(useStore.getState().data)}
+          onClick={() => void downloadBackup(useStore.getState().data)}
           disabled={!resume}
         >
           <Download size={13} /> Save to file

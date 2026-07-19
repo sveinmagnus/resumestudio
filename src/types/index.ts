@@ -189,6 +189,19 @@ export interface RegistryEntry {
 }
 
 /**
+ * A portable snapshot of one canonical registry entry's IDENTITY (no version /
+ * updated_at). Embedded in a per-resume backup (`BackupV1.canonical_registry`)
+ * so a restore into a different instance can re-intern the resume's
+ * `canonical_id` links by `key` instead of leaving them dangling.
+ */
+export interface CanonicalSnapshot {
+  id: string
+  kind: RegistryKind
+  name: LocalizedString
+  key: string
+}
+
+/**
  * A shared Industry registry entry (A8.1). Like Role, it lives in a global
  * registry (`data.industries`) and is referenced by `Project.industries[]`
  * (shape v4; a single `industry_id` pre-v4), so "Finance" / "finance" /

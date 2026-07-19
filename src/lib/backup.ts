@@ -16,8 +16,10 @@ import type {
   KeyQualification, KeyCompetency, Recommendation, Project, WorkExperience,
   Education, Course, Certification, SpokenLanguage,
   Position, Presentation, HonorAward, Publication, Reference, ResumeView,
-  CoverLetter,
+  CoverLetter, RegistryEntry, CanonicalSnapshot,
 } from '../types'
+import { collectReferencedCanonical } from './registryReintern'
+import { api } from './api'
 
 // ─── Backup format types ──────────────────────────────────────────────────────
 
@@ -84,6 +86,18 @@ export interface BackupV1 {
    * bump needed (the envelope stays readable to older builds).
    */
   cover_letters?: CoverLetter[]
+  /**
+   * Snapshots of the instance-level canonical registry entries this backup's
+   * `canonical_id` links reference (cross-resume registries, Stage 3). A
+   * per-resume backup is portable ACROSS instances, so a bare `canonical_id`
+   * (an id in the SOURCE instance's registry) would dangle on restore into a
+   * DIFFERENT instance. Embedding {id, kind, name, key} lets the import
+   * re-intern by `key` against the target registry (reuse or create) and
+   * rewrite the links — see `lib/registryReintern.ts`. Additive/optional:
+   * absent (older backups, or a resume with no shared links) → nothing to
+   * re-intern, links stay as-is.
+   */
+  canonical_registry?: CanonicalSnapshot[]
 }
 
 /**
@@ -240,6 +254,14 @@ export function validateBackup(json: unknown): AnyBackup {
   checkIdArray(json['views'], 'views', issues)
   checkIdArray(json['cover_letters'], 'cover_letters', issues)
 
+  // Embedded canonical-registry snapshots (Stage 3): an array of id-bearing
+  // objects when present. reinternBackupLinks tolerates a malformed entry
+  // (unknown kind / missing key) at runtime, but a non-array is a shape error.
+  const cr = json['canonical_registry']
+  if (cr != null && !Array.isArray(cr)) {
+    issues.push({ path: 'canonical_registry', reason: 'expected an array' })
+  }
+
   if (issues.length) throw new InvalidBackupError(issues)
   return json as unknown as AnyBackup
 }
@@ -275,8 +297,18 @@ export function migrateBackup(raw: AnyBackup): BackupV1 {
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-/** Convert the internal store to the portable backup format. */
-export function exportToBackup(store: ResumeStore): BackupV1 {
+/**
+ * Convert the internal store to the portable backup format. Pass the instance
+ * `canonicalEntries` (from `api.listRegistry()`) so the backup embeds a snapshot
+ * of the shared-registry entries the resume's `canonical_id` links reference —
+ * that's what makes the links survive a restore into a DIFFERENT instance
+ * (§`canonical_registry`). Omit it for a legacy/offline export: the backup still
+ * works, but cross-instance links may dangle (same as before Stage 3).
+ */
+export function exportToBackup(store: ResumeStore, canonicalEntries?: RegistryEntry[]): BackupV1 {
+  const canonical_registry = canonicalEntries?.length
+    ? collectReferencedCanonical(store, canonicalEntries)
+    : undefined
   return {
     $schema: 'resumestudio/v1',
     format_version: 1,
@@ -307,6 +339,7 @@ export function exportToBackup(store: ResumeStore): BackupV1 {
     },
     views: store.views,
     cover_letters: store.cover_letters,
+    ...(canonical_registry ? { canonical_registry } : {}),
   }
 }
 
@@ -369,9 +402,15 @@ export function importFromBackup(backup: AnyBackup): ResumeStore {
 
 // ─── Download helper ──────────────────────────────────────────────────────────
 
-/** Trigger a browser download of the backup JSON. */
-export function downloadBackup(store: ResumeStore): void {
-  const backup = exportToBackup(store)
+/**
+ * Trigger a browser download of the backup JSON. Fetches the instance registry
+ * first so the backup embeds snapshots of the canonical entries this resume
+ * links to (portable cross-instance restore). Best-effort: a registry failure
+ * just omits the embedding — the backup still downloads.
+ */
+export async function downloadBackup(store: ResumeStore): Promise<void> {
+  const canonical = await api.listRegistry().catch(() => undefined)
+  const backup = exportToBackup(store, canonical)
   const json   = JSON.stringify(backup, null, 2)
   const blob   = new Blob([json], { type: 'application/json' })
   const url    = URL.createObjectURL(blob)

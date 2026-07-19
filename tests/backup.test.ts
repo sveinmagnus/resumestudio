@@ -203,6 +203,27 @@ describe('exportToBackup()', () => {
     expect(backup.registries.roles).toEqual(store.roles)
     expect(backup.sections.projects).toEqual(store.projects)
   })
+
+  it('omits canonical_registry when no registry is passed', () => {
+    const store = { ...emptyStore(), skills: [makeSkill({ canonical_id: 'c1' })] }
+    expect(exportToBackup(store).canonical_registry).toBeUndefined()
+  })
+
+  it('embeds snapshots of the canonical entries the store links to', () => {
+    const store = { ...emptyStore(), skills: [makeSkill({ id: 's1', canonical_id: 'c1' })] }
+    const canonical = [
+      { id: 'c1', kind: 'skill' as const, name: { en: 'React' }, key: 'react', extra: {}, version: 3, updated_at: 'x' },
+      { id: 'c2', kind: 'skill' as const, name: { en: 'Go' }, key: 'go', extra: {}, version: 1, updated_at: 'x' },
+    ]
+    const backup = exportToBackup(store, canonical)
+    // Only the referenced entry, identity-only (no version/extra).
+    expect(backup.canonical_registry).toEqual([{ id: 'c1', kind: 'skill', name: { en: 'React' }, key: 'react' }])
+  })
+
+  it('leaves canonical_registry off when the store has links but the registry is empty', () => {
+    const store = { ...emptyStore(), skills: [makeSkill({ canonical_id: 'c1' })] }
+    expect(exportToBackup(store, []).canonical_registry).toBeUndefined()
+  })
 })
 
 describe('round-trip (exportToBackup → importFromBackup)', () => {

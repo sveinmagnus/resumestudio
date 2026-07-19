@@ -224,12 +224,23 @@ non-breaking increments per §2/§3.0–3.2, never leaving `main` broken.
       pushed to the canonical (version bumped), an API canonical rename appeared
       on the linked resume after reload, and the self-heal confirmed.
 
-**Remaining (Increments 3–5): backup portability (embed + re-intern — §4), a
-registry-scoped conflict surface, and the desktop whole-store merge carrying the
-instance registry.** Until those land, a per-resume backup carries bare
-`canonical_id`s that only resolve on the SAME instance — fine today (single
-instance), the sharp edge for cross-instance backup restore.
-- ⬜ Increments 3–5 — backup portability, sync/conflict, desktop merge.
+- ✅ **Increment 3 — backup portability, shipped** (`lib/registryReintern.ts`).
+  A per-resume backup now embeds `canonical_registry` snapshots of the canonical
+  entries its `canonical_id` links reference (`exportToBackup(store, registry)` +
+  `collectReferencedCanonical`; `downloadBackup` fetches the registry). On
+  import, `reinternBackupLinks` re-maps them against THIS instance by key (reuse
+  a matching entry or create one) and **clears any link whose snapshot is
+  missing**, so a foreign/dangling id never survives — a backup restores
+  correctly into a DIFFERENT instance. Wired into `ImportScreen`; `validateBackup`
+  guards the new field. Pure `planReintern`/`remapCanonicalIds` + orchestrator,
+  19 tests.
+
+**Remaining (Increments 4–5): a registry-scoped conflict surface (the editor
+rename hook currently last-writer-wins via a force PUT — adequate for a small
+team, not yet a conflict UI), and the desktop whole-store merge carrying the
+instance registry.** Both are refinements; the shared-registry feature is
+functional and portable as of Increment 3.
+- ⬜ Increments 4–5 — sync/conflict surface, desktop whole-store merge.
 
 Remaining order per §3.1–3.2. Each increment compiles, tests green, leaves
 `main` shippable.
