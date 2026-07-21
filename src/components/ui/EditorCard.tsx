@@ -118,26 +118,32 @@ export function EditorCard({
         {meta && <div className="ec-meta">{meta}</div>}
         <div className="ec-actions" onClick={(e) => e.stopPropagation()}>
           {canStar && (
-            <button className={`ec-act ${starred ? 'on' : ''}`} title="Feature"
-              aria-label="Feature" aria-pressed={!!starred}
+            <button className={`ec-act ${starred ? 'on' : ''}`}
+              title={starred
+                ? 'Starred — click to unstar. A view set to “Starred items only” shows just the starred items.'
+                : 'Star this item — a view set to “Starred items only” shows just the starred items.'}
+              aria-label={starred ? 'Unstar this item' : 'Star this item'} aria-pressed={!!starred}
               onClick={() => updateItem(section, id, { starred: !starred } as never)}>
               <Star size={15} fill={starred ? 'currentColor' : 'none'} />
             </button>
           )}
           {canDisable && (
-            <button className={`ec-act ${disabled ? 'on-off' : ''}`} title={disabled ? 'Hidden from exports' : 'Visible'}
-              aria-label="Hide from exports" aria-pressed={!!disabled}
+            <button className={`ec-act ${disabled ? 'on-off' : ''}`}
+              title={disabled
+                ? 'Hidden from every view and export — click to show again'
+                : 'Shown in views — click to hide from every view and export'}
+              aria-label={disabled ? 'Show in all views' : 'Hide from all views'} aria-pressed={!!disabled}
               onClick={() => updateItem(section, id, { disabled: !disabled } as never)}>
               {disabled ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
           )}
           {sortable && (
             <>
-              <button className="ec-act" title="Move up" aria-label="Move up" onClick={() => guard(() => reorderItem(section, id, 'up'))}><ArrowUp size={15} /></button>
-              <button className="ec-act" title="Move down" aria-label="Move down" onClick={() => guard(() => reorderItem(section, id, 'down'))}><ArrowDown size={15} /></button>
+              <button className="ec-act" title="Move up in this section" aria-label="Move up in this section" onClick={() => guard(() => reorderItem(section, id, 'up'))}><ArrowUp size={15} /></button>
+              <button className="ec-act" title="Move down in this section" aria-label="Move down in this section" onClick={() => guard(() => reorderItem(section, id, 'down'))}><ArrowDown size={15} /></button>
             </>
           )}
-          <button className="ec-act ec-del" title="Delete" aria-label="Delete"
+          <button className="ec-act ec-del" title="Delete this item from the resume" aria-label="Delete this item"
             onClick={() => void confirmDialog({
               title: 'Delete item?',
               message: 'This removes it from the resume.',

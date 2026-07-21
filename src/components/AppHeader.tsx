@@ -148,7 +148,7 @@ export function AppHeader({
           className="ah-settings"
           onClick={() => setShowSearch(true)}
           title="Search resume content (Ctrl/Cmd+K)"
-          aria-label="Search"
+          aria-label="Search resume content"
         >
           <Search size={16} />
         </button>
@@ -157,7 +157,7 @@ export function AppHeader({
           className="ah-btn-secondary"
           onClick={() => setShowHistory(true)}
           title="Browse and restore earlier saved versions"
-          aria-label="History"
+          aria-label="Version history — browse and restore earlier saves"
         >
           <History size={15} /> <span className="ah-btn-text">History</span>
         </button>

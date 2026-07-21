@@ -49,24 +49,24 @@ describe('<EditorCard>', () => {
     expect(screen.getByRole('button', { name: 'X', expanded: true })).toBeInTheDocument()
   })
 
-  it('toggles starred via the Feature action', async () => {
+  it('toggles starred via the star action', async () => {
     seedWithCourse()
     render(card({ starred: false }))
-    await userEvent.click(screen.getByTitle('Feature'))
+    await userEvent.click(screen.getByLabelText('Star this item'))
     expect(useStore.getState().data.courses[0].starred).toBe(true)
   })
 
   it('toggles disabled via the visibility action', async () => {
     seedWithCourse()
     render(card({ disabled: false }))
-    await userEvent.click(screen.getByTitle('Visible'))
+    await userEvent.click(screen.getByLabelText('Hide from all views'))
     expect(useStore.getState().data.courses[0].disabled).toBe(true)
   })
 
   it('deletes after confirmation', async () => {
     seedWithCourse()
     render(card())
-    await userEvent.click(screen.getByTitle('Delete'))
+    await userEvent.click(screen.getByLabelText('Delete this item'))
     await resolveConfirm('confirm')
     expect(useStore.getState().data.courses).toHaveLength(0)
   })
@@ -74,7 +74,7 @@ describe('<EditorCard>', () => {
   it('does not delete when confirmation is declined', async () => {
     seedWithCourse()
     render(card())
-    await userEvent.click(screen.getByTitle('Delete'))
+    await userEvent.click(screen.getByLabelText('Delete this item'))
     await resolveConfirm('cancel')
     expect(useStore.getState().data.courses).toHaveLength(1)
   })
@@ -83,6 +83,6 @@ describe('<EditorCard>', () => {
     seedWithCourse()
     render(card({ sortable: false }))
     expect(screen.queryByLabelText('Drag handle')).not.toBeInTheDocument()
-    expect(screen.queryByTitle('Move up')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Move up in this section')).not.toBeInTheDocument()
   })
 })
