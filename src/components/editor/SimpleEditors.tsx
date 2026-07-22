@@ -23,7 +23,10 @@ import type {
   Presentation, HonorAward, Publication, SpokenLanguage, KeyQualification,
   KeyCompetency, Recommendation, Role, LocalizedString, CefrCategory, CefrLevel,
 } from '../../types'
-import { X, ChevronUp, ChevronDown, Plus } from 'lucide-react'
+import { X, ChevronUp, ChevronDown, Plus, GripVertical } from 'lucide-react'
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 /** Current year+month as a YearMonth — the default "To" date for a new course. */
 function thisMonth(): { year: number; month: number } {
@@ -767,11 +770,66 @@ function RelationshipField({ label, value, primaryLocale, onChange }: {
 // ── Profile / key qualifications ──────────────────────────────────────────────
 
 /**
+ * One draggable competency row inside a profile bundle. Mirrors the EditorCard
+ * grip pattern (useSortable) so the bundle can be reordered by drag; the up/down
+ * buttons stay as the accessible, non-pointer fallback.
+ */
+function SortableCompetencyRow({
+  competency: c, index, count, isOpen, primaryLocale, otherBundleLabels,
+  onToggle, onMove, onRemove,
+}: {
+  competency: KeyCompetency
+  index: number
+  count: number
+  isOpen: boolean
+  primaryLocale: string
+  otherBundleLabels: string[]
+  onToggle: () => void
+  onMove: (dir: -1 | 1) => void
+  onRemove: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: c.id })
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1,
+  }
+  return (
+    <li ref={setNodeRef} style={style} className={`pcb-item ${isDragging ? 'is-dragging' : ''}`}>
+      <div className="pcb-row">
+        <button type="button" className="pcb-grip" {...attributes} {...listeners}
+          title="Drag to reorder" aria-label="Drag competency to reorder">
+          <GripVertical size={14} />
+        </button>
+        <button type="button" className="pcb-title" aria-expanded={isOpen} onClick={onToggle}>
+          {isOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} style={{ transform: 'rotate(90deg)' }} />}
+          <span>{resolve(c.title, primaryLocale) || 'Untitled competency'}</span>
+        </button>
+        <div className="pcb-actions">
+          <button type="button" className="pcb-icon" aria-label="Move up" disabled={index === 0} onClick={() => onMove(-1)}><ChevronUp size={15} /></button>
+          <button type="button" className="pcb-icon" aria-label="Move down" disabled={index === count - 1} onClick={() => onMove(1)}><ChevronDown size={15} /></button>
+          <button type="button" className="pcb-icon pcb-remove" aria-label="Remove from profile" onClick={onRemove}><X size={15} /></button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="pcb-fields">
+          <CompetencyFields competency={c} />
+          {otherBundleLabels.length > 0 && (
+            <p className="pcb-shared" role="note">
+              Also used by: {otherBundleLabels.join(', ')}. Edits apply everywhere.
+            </p>
+          )}
+        </div>
+      )}
+    </li>
+  )
+}
+
+/**
  * The "bundle" editor inside a profile card: the ordered set of competencies
  * this profile presents. A view showing this profile shows exactly these, in
  * this order. Create new competencies, pull in existing ones (reuse across
- * profiles), reorder, or remove (removing only unlinks — the competency stays
- * in the library). Membership lives on the profile (`competency_ids`).
+ * profiles), reorder (drag handle OR up/down buttons), or remove (removing only
+ * unlinks — the competency stays in the library). Membership lives on the
+ * profile (`competency_ids`).
  */
 function ProfileBundleEditor({ kq }: { kq: KeyQualification }) {
   const { data, primaryLocale, addItem, updateItem } = useStore()
@@ -782,6 +840,14 @@ function ProfileBundleEditor({ kq }: { kq: KeyQualification }) {
   const byId = new Map(data.key_competencies.map((c) => [c.id, c]))
   const members = ids.map((id) => byId.get(id)).filter((c): c is KeyCompetency => !!c)
   const available = data.key_competencies.filter((c) => !c.disabled && !ids.includes(c.id))
+
+  // A dnd context local to this bundle — reorders `competency_ids`, independent
+  // of the outer Profiles SortableList (nested dnd-kit contexts are fine; each
+  // grip only activates its own). Same sensor config as SortableList.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   const setIds = (next: string[]) => updateItem('key_qualifications', kq.id, { competency_ids: next })
 
@@ -806,47 +872,46 @@ function ProfileBundleEditor({ kq }: { kq: KeyQualification }) {
     setIds(next)
   }
 
+  const onDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const from = ids.indexOf(String(active.id))
+    const to = ids.indexOf(String(over.id))
+    if (from === -1 || to === -1) return
+    setIds(arrayMove(ids, from, to))
+  }
+
   return (
     <div className="pcb">
       <div className="pcb-head">
         <span className="pf-label" style={{ margin: 0 }}>Competencies in this profile</span>
-        <span className="pcb-hint">Shown, in this order, by any view that presents this profile.</span>
+        <span className="pcb-hint">Shown, in this order, by any view that presents this profile. Drag to reorder.</span>
       </div>
 
       {members.length === 0 && <p className="pcb-empty">No competencies yet — add one below.</p>}
 
-      <ul className="pcb-list">
-        {members.map((c, i) => {
-          const isOpen = expanded === c.id
-          const otherBundles = bundlesContaining(data.key_qualifications, c.id).filter((q) => q.id !== kq.id)
-          return (
-            <li key={c.id} className="pcb-item">
-              <div className="pcb-row">
-                <button type="button" className="pcb-title" aria-expanded={isOpen}
-                  onClick={() => setExpanded(isOpen ? null : c.id)}>
-                  {isOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} style={{ transform: 'rotate(90deg)' }} />}
-                  <span>{resolve(c.title, primaryLocale) || 'Untitled competency'}</span>
-                </button>
-                <div className="pcb-actions">
-                  <button type="button" className="pcb-icon" aria-label="Move up" disabled={i === 0} onClick={() => move(c.id, -1)}><ChevronUp size={15} /></button>
-                  <button type="button" className="pcb-icon" aria-label="Move down" disabled={i === members.length - 1} onClick={() => move(c.id, 1)}><ChevronDown size={15} /></button>
-                  <button type="button" className="pcb-icon pcb-remove" aria-label="Remove from profile" onClick={() => setIds(ids.filter((x) => x !== c.id))}><X size={15} /></button>
-                </div>
-              </div>
-              {isOpen && (
-                <div className="pcb-fields">
-                  <CompetencyFields competency={c} />
-                  {otherBundles.length > 0 && (
-                    <p className="pcb-shared" role="note">
-                      Also used by: {otherBundles.map((q) => resolve(q.tag_line, primaryLocale) || '(unnamed profile)').join(', ')}. Edits apply everywhere.
-                    </p>
-                  )}
-                </div>
-              )}
-            </li>
-          )
-        })}
-      </ul>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+          <ul className="pcb-list">
+            {members.map((c, i) => (
+              <SortableCompetencyRow
+                key={c.id}
+                competency={c}
+                index={i}
+                count={members.length}
+                isOpen={expanded === c.id}
+                primaryLocale={primaryLocale}
+                otherBundleLabels={bundlesContaining(data.key_qualifications, c.id)
+                  .filter((q) => q.id !== kq.id)
+                  .map((q) => resolve(q.tag_line, primaryLocale) || '(unnamed profile)')}
+                onToggle={() => setExpanded(expanded === c.id ? null : c.id)}
+                onMove={(dir) => move(c.id, dir)}
+                onRemove={() => setIds(ids.filter((x) => x !== c.id))}
+              />
+            ))}
+          </ul>
+        </SortableContext>
+      </DndContext>
 
       <div className="pcb-add">
         <button type="button" className="pcb-addbtn" onClick={addNew}><Plus size={14} /> Add competency</button>
@@ -873,7 +938,11 @@ function ProfileBundleEditor({ kq }: { kq: KeyQualification }) {
         .pcb-empty { margin: 8px 2px; font-size: 13px; color: var(--ink-soft); }
         .pcb-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
         .pcb-item { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper-raised); }
-        .pcb-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; }
+        .pcb-item.is-dragging { box-shadow: var(--shadow-md); border-color: var(--secondary-line); }
+        .pcb-row { display: flex; align-items: center; gap: 6px; padding: 6px 8px; }
+        .pcb-grip { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 26px; border: none; background: none; color: var(--ink-faint); cursor: grab; touch-action: none; }
+        .pcb-grip:hover { color: var(--ink-soft); }
+        .pcb-grip:active { cursor: grabbing; }
         .pcb-title { flex: 1; display: flex; align-items: center; gap: 6px; background: none; border: none; padding: 2px; text-align: left; cursor: pointer; color: var(--ink); font: inherit; font-size: 13px; }
         .pcb-title:hover { color: var(--accent); }
         .pcb-actions { display: flex; gap: 2px; }

@@ -12,7 +12,7 @@ import {
 } from '../../src/components/editor/SimpleEditors'
 import { useStore } from '../../src/store/useStore'
 import { resetStore } from '../helpers/store-reset'
-import { emptyStore, makeWork, makePublication, makeRecommendation } from '../fixtures'
+import { emptyStore, makeWork, makePublication, makeRecommendation, makeKQ, makeKeyCompetency } from '../fixtures'
 import type { ResumeStore } from '../../src/types'
 
 function seed(data: ResumeStore = emptyStore()) {
@@ -111,6 +111,27 @@ describe('ProfileEditor', () => {
     expect(state.key_competencies).toHaveLength(1)
     // The new competency is linked into this profile's bundle, in order.
     expect(state.key_qualifications[0].competency_ids).toEqual([state.key_competencies[0].id])
+  })
+
+  it('reorders bundle competencies (up/down) and offers a drag handle per row', async () => {
+    const data = emptyStore()
+    data.key_competencies.push(
+      makeKeyCompetency({ id: 'c1', title: { en: 'Alpha' } }),
+      makeKeyCompetency({ id: 'c2', title: { en: 'Beta' } }),
+    )
+    data.key_qualifications.push(makeKQ({ id: 'p1', tag_line: { en: 'Architect' }, competency_ids: ['c1', 'c2'] }))
+    seed(data)
+    // Expand the profile card so its bundle editor renders.
+    useStore.setState({ expandedItemId: 'p1' })
+    render(<ProfileEditor />)
+
+    // A drag handle per bundle row (the DnD affordance) plus the up/down fallback.
+    expect(screen.getAllByRole('button', { name: /drag competency to reorder/i })).toHaveLength(2)
+
+    // Up/down reorders competency_ids (same mutation path drag commits). Exact
+    // name so it doesn't also match the profile card's "Move down in this section".
+    await userEvent.click(screen.getAllByRole('button', { name: 'Move down' })[0])
+    expect(useStore.getState().data.key_qualifications[0].competency_ids).toEqual(['c2', 'c1'])
   })
 })
 
