@@ -23,7 +23,7 @@ const RAW_COURSE_CATEGORIES: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'finance', label: 'Finance' },
   { value: 'management', label: 'Company and board management' },
   { value: 'project_management', label: 'Project management' },
-  { value: 'creativity_design', label: 'Creativity & Agile processes' },
+  { value: 'creativity_agile', label: 'Creativity & Agile processes' },
   { value: 'architecture_design', label: 'Architecture & Design' },
   { value: 'food_beverage', label: 'Food & Beverage' },
   { value: 'sales', label: 'Sales' },
