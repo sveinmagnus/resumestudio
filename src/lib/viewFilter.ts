@@ -631,7 +631,7 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
         const body = rows.map((row) =>
           `<tr><td>${escapeHtml(row.name)}</td>${showCategory ? `<td>${escapeHtml(row.category)}</td>` : ''}<td>${escapeHtml(fmtYears(row.years, locale))}</td><td>${escapeHtml(fmtProficiency(row.proficiency))}</td>${showDates ? `<td>${escapeHtml(fmtLastUsed(row, locale, resolved.date_format))}</td>` : ''}</tr>`,
         ).join('\n')
-        return `<section class="ve-section ve-sec-skill_matrix">
+        return `<section class="ve-section ve-sec-skill_matrix${heading ? '' : ' ve-section-noheading'}">
   ${heading}
   <table class="ve-matrix"><thead>${head}</thead><tbody>${body}</tbody></table>
 </section>`
@@ -674,7 +674,11 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
       // s.label is a hardcoded constant from SECTIONS; the custom heading is
       // untrusted view config. Both go through escapeHtml here.
       const heading = sectionHeadingHtml(resolved, s.key, s.icon, locale)
-      return `<section class="ve-section ve-sec-${s.key}">
+      // The section's top spacing normally rides on the <h2>'s margin-top. With
+      // the heading hidden there is no <h2>, so tag the section to carry that
+      // top margin itself — otherwise it butts up against the previous section.
+      const noHeading = heading ? '' : ' ve-section-noheading'
+      return `<section class="ve-section ve-sec-${s.key}${noHeading}">
   ${heading}
   ${itemsHtml}
 </section>`
@@ -851,6 +855,9 @@ export function buildViewHtml(store: ResumeStore, view: ResumeView, locale: stri
     .ve-intro { margin: 14px 0 18px; font-size: ${tokens.bodyFontSizePt}pt;
                 line-height: ${tokens.lineHeight}; color: #1f2937; white-space: pre-line; }
     .ve-section { margin-bottom: 8px; }
+    /* Heading hidden → the section carries the top margin the <h2> would have,
+       so it doesn't crowd the previous section (margin collapses like the h2). */
+    .ve-section-noheading { margin-top: ${tokens.itemGapPx * 2}px; }
     .ve-item { margin-bottom: ${tokens.itemGapPx}px; padding-bottom: ${tokens.itemGapPx}px; border-bottom: 1px solid ${tokens.accentCss}1A; }
     /* Item bullets (opt-in): the glyph sits in its own column and the content
        column carries everything else, so every wrapped line aligns under the

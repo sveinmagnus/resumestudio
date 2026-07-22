@@ -237,7 +237,21 @@ function renderSection(key: string, label: string, items: unknown[], ctx: Export
     if (v) body.push(...renderItemPdf(v, ctx.tokens, ctx.resolved.item_bullets ? bulletGlyph(ctx.resolved) : null))
   }
   if (!body.length) return []
-  return ctx.resolved.hide_heading ? body : [sectionHeading(label, ctx.tokens), ...body]
+  if (ctx.resolved.hide_heading) {
+    // No heading node to carry the section's top margin — put it on the first
+    // node so the section keeps a sensible gap from the previous one (mirrors
+    // the HTML `.ve-section-noheading` fix). Matches the heading's own top margin.
+    return [withTopMargin(body[0], twip(ctx.tokens.itemGapTwips)), ...body.slice(1)]
+  }
+  return [sectionHeading(label, ctx.tokens), ...body]
+}
+
+/** Return a copy of `node` with `topPt` added to its top margin. */
+function withTopMargin(node: PdfNode, topPt: number): PdfNode {
+  if (typeof node === 'string') return { text: node, margin: [0, topPt, 0, 0] as Margin }
+  const m = node.margin as Margin | undefined
+  const base: Margin = Array.isArray(m) ? [m[0], m[1], m[2], m[3]] : [0, 0, 0, 0]
+  return { ...node, margin: [base[0], base[1] + topPt, base[2], base[3]] as Margin }
 }
 
 // ─── Skill matrix table (mirrors skillMatrixTable) ──────────────────────────
@@ -415,7 +429,8 @@ export async function buildPdfDocDefinition(
       if (!rows.length) continue
       const tokens = deriveTokens(resolved)
       if (!resolved.hide_heading) content.push(sectionHeading(sectionHeadingText(resolved, localizedSectionHeading(def.key, locale), locale), tokens))
-      content.push(skillMatrixTable(rows, !resolved.hide_dates, tokens, locale, resolved.date_format))
+      const matrix = skillMatrixTable(rows, !resolved.hide_dates, tokens, locale, resolved.date_format)
+      content.push(resolved.hide_heading ? withTopMargin(matrix, twip(tokens.itemGapTwips)) : matrix)
       continue
     }
     const rawItems = def.key === 'promoted_projects'

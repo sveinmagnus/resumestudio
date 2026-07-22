@@ -1449,6 +1449,32 @@ describe('key_competencies & recommendations rendering', () => {
   })
 })
 
+describe('hidden section heading keeps a top margin', () => {
+  it('tags a heading-hidden section so it does not crowd the previous one', () => {
+    const store = emptyStore()
+    store.work_experiences.push(makeWork({ employer: { en: 'Acme' } }))
+    const view = makeView({
+      sections: [{ key: 'work_experiences', detail: 'full' as const, sort_order: 0, style: { hide_heading: true } }],
+    })
+    const html = buildViewHtml(store, view, 'en')
+    // The <section> carries the marker class (which owns the top margin)...
+    expect(html).toContain('ve-sec-work_experiences ve-section-noheading')
+    // ...and the stylesheet defines that margin.
+    expect(html).toContain('.ve-section-noheading { margin-top:')
+    // No heading element for the hidden section.
+    expect(html).not.toMatch(/<h2[^>]*>\s*Employment/)
+  })
+
+  it('leaves a section with a visible heading untagged', () => {
+    const store = emptyStore()
+    store.work_experiences.push(makeWork({ employer: { en: 'Acme' } }))
+    const view = makeView({ sections: [{ key: 'work_experiences', detail: 'full' as const, sort_order: 0 }] })
+    const html = buildViewHtml(store, view, 'en')
+    // Class list is exactly the two base classes — no noheading marker.
+    expect(html).toContain('<section class="ve-section ve-sec-work_experiences">')
+  })
+})
+
 describe('promoted projects', () => {
   it('omits the Promoted Projects section by default', () => {
     const store = emptyStore()

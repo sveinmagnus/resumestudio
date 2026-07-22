@@ -143,6 +143,19 @@ function sectionHeading(label: string, tokens: StyleTokens): Paragraph {
 }
 
 /**
+ * A near-invisible paragraph that only contributes `beforeTwips` of top space —
+ * used when a section's heading is hidden, so the section keeps the top margin
+ * the heading would have provided instead of crowding the previous one. The tiny
+ * empty run keeps the spacer's own line height negligible.
+ */
+function topSpacer(beforeTwips: number): Paragraph {
+  return new Paragraph({
+    spacing: { before: beforeTwips, after: 0 },
+    children: [new TextRun({ text: '', size: 2 })],
+  })
+}
+
+/**
  * Emit a single-line summary paragraph: bold title plus an inline meta tail.
  */
 function summaryLine(title: string, meta: string, ctx: ExportCtx): Paragraph {
@@ -373,6 +386,7 @@ export async function exportDocx(store: ResumeStore, view: ResumeView, locale: s
       if (!rows.length) continue
       const tokens = deriveTokens(resolved)
       if (!resolved.hide_heading) children.push(sectionHeading(sectionHeadingText(resolved, localizedSectionHeading(def.key, locale), locale), tokens))
+      else children.push(topSpacer(tokens.itemGapTwips * 2))
       children.push(skillMatrixTable(rows, !resolved.hide_dates, tokens, locale, resolved.date_format))
       continue
     }
@@ -630,7 +644,7 @@ function renderItemDocx(v: ItemView, ctx: ExportCtx, bullet: string | null = nul
 
 function wrap(label: string, body: Paragraph[], ctx: ExportCtx): Paragraph[] {
   if (!body.length) return []
-  if (ctx.resolved.hide_heading) return body
+  if (ctx.resolved.hide_heading) return [topSpacer(ctx.tokens.itemGapTwips * 2), ...body]
   return [sectionHeading(label, ctx.tokens), ...body]
 }
 
