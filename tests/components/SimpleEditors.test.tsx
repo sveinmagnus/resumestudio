@@ -133,6 +133,30 @@ describe('ProfileEditor', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Move down' })[0])
     expect(useStore.getState().data.key_qualifications[0].competency_ids).toEqual(['c2', 'c1'])
   })
+
+  it('adds several existing competencies to the bundle at once via checkboxes', async () => {
+    const data = emptyStore()
+    data.key_competencies.push(
+      makeKeyCompetency({ id: 'c1', title: { en: 'Alpha' } }),
+      makeKeyCompetency({ id: 'c2', title: { en: 'Beta' } }),
+      makeKeyCompetency({ id: 'c3', title: { en: 'Gamma' } }),
+    )
+    // The profile starts with just c1; c2 and c3 are the reusable library.
+    data.key_qualifications.push(makeKQ({ id: 'p1', tag_line: { en: 'Architect' }, competency_ids: ['c1'] }))
+    seed(data)
+    useStore.setState({ expandedItemId: 'p1' })
+    render(<ProfileEditor />)
+
+    await userEvent.click(screen.getByRole('button', { name: /add existing/i }))
+    // Tick Beta and Gamma, leave nothing else, add them in one action.
+    await userEvent.click(screen.getByRole('checkbox', { name: /Beta/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Gamma/ }))
+    await userEvent.click(screen.getByRole('button', { name: /add selected \(2\)/i }))
+
+    expect(useStore.getState().data.key_qualifications[0].competency_ids).toEqual(['c1', 'c2', 'c3'])
+    // Panel closes after adding.
+    expect(screen.queryByRole('button', { name: /add selected/i })).toBeNull()
+  })
 })
 
 describe('RecommendationsEditor', () => {

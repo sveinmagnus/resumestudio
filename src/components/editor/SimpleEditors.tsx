@@ -835,6 +835,8 @@ function ProfileBundleEditor({ kq }: { kq: KeyQualification }) {
   const { data, primaryLocale, addItem, updateItem } = useStore()
   const [expanded, setExpanded] = useState<string | null>(null)
   const [addingExisting, setAddingExisting] = useState(false)
+  // Ids ticked in the "Add existing" multi-select panel (batch add).
+  const [picked, setPicked] = useState<Set<string>>(new Set())
 
   const ids = kq.competency_ids ?? []
   const byId = new Map(data.key_competencies.map((c) => [c.id, c]))
@@ -915,21 +917,56 @@ function ProfileBundleEditor({ kq }: { kq: KeyQualification }) {
 
       <div className="pcb-add">
         <button type="button" className="pcb-addbtn" onClick={addNew}><Plus size={14} /> Add competency</button>
-        {available.length > 0 && (addingExisting ? (
-          <span className="pcb-pick">
-            <select className="pf-input pcb-select" defaultValue="" aria-label="Add an existing competency"
-              onChange={(e) => { if (e.target.value) { setIds([...ids, e.target.value]); setAddingExisting(false) } }}>
-              <option value="" disabled>Choose a competency…</option>
-              {available.map((c) => (
-                <option key={c.id} value={c.id}>{resolve(c.title, primaryLocale) || 'Untitled competency'}</option>
-              ))}
-            </select>
-            <button type="button" className="pcb-cancel" onClick={() => setAddingExisting(false)}>Cancel</button>
-          </span>
-        ) : (
-          <button type="button" className="pcb-addbtn pcb-addbtn-alt" onClick={() => setAddingExisting(true)}>Add existing…</button>
-        ))}
+        {available.length > 0 && !addingExisting && (
+          <button type="button" className="pcb-addbtn pcb-addbtn-alt"
+            onClick={() => { setPicked(new Set()); setAddingExisting(true) }}>Add existing…</button>
+        )}
       </div>
+
+      {addingExisting && (
+        <div className="pcb-existing" role="group" aria-label="Add existing competencies to this profile">
+          <div className="pcb-existing-head">
+            <span>Add existing competencies</span>
+            <span className="pcb-existing-tools">
+              <button type="button" onClick={() => setPicked(new Set(available.map((c) => c.id)))}>All</button>
+              <button type="button" onClick={() => setPicked(new Set())}>None</button>
+            </span>
+          </div>
+          <ul className="pcb-existing-list">
+            {available.map((c) => {
+              const inBundles = bundlesContaining(data.key_qualifications, c.id)
+                .map((q) => resolve(q.tag_line, primaryLocale) || '(unnamed profile)')
+              return (
+                <li key={c.id}>
+                  <label className="pcb-existing-row">
+                    <input type="checkbox" checked={picked.has(c.id)}
+                      onChange={() => setPicked((prev) => {
+                        const next = new Set(prev)
+                        next.has(c.id) ? next.delete(c.id) : next.add(c.id)
+                        return next
+                      })} />
+                    <span className="pcb-existing-title">{resolve(c.title, primaryLocale) || 'Untitled competency'}</span>
+                    {inBundles.length > 0 && <span className="pcb-existing-in">in {inBundles.join(', ')}</span>}
+                  </label>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="pcb-existing-actions">
+            <button type="button" className="pcb-addbtn" disabled={picked.size === 0}
+              onClick={() => {
+                // Preserve library order; append the ticked ones not already in the bundle.
+                const add = available.filter((c) => picked.has(c.id)).map((c) => c.id)
+                setIds([...ids, ...add])
+                setAddingExisting(false)
+                setPicked(new Set())
+              }}>
+              Add selected ({picked.size})
+            </button>
+            <button type="button" className="pcb-cancel" onClick={() => setAddingExisting(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .pcb { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -957,9 +994,20 @@ function ProfileBundleEditor({ kq }: { kq: KeyQualification }) {
         .pcb-addbtn:hover { background: var(--accent); color: #fff; }
         .pcb-addbtn-alt { border-color: var(--line-strong); background: none; color: var(--ink-soft); font-weight: 500; }
         .pcb-addbtn-alt:hover { background: var(--paper-sunken); color: var(--ink); }
-        .pcb-pick { display: inline-flex; align-items: center; gap: 6px; }
-        .pcb-select { max-width: 260px; }
         .pcb-cancel { background: none; border: none; color: var(--ink-soft); font-size: 12px; cursor: pointer; text-decoration: underline; }
+        .pcb-existing { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper); overflow: hidden; }
+        .pcb-existing-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; background: var(--paper-sunken); border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+        .pcb-existing-tools { display: inline-flex; gap: 4px; }
+        .pcb-existing-tools button { border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--paper); font-size: 11.5px; font-weight: 600; padding: 2px 8px; color: var(--ink-soft); cursor: pointer; }
+        .pcb-existing-tools button:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-wash); }
+        .pcb-existing-list { list-style: none; margin: 0; padding: 4px; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+        .pcb-existing-row { display: flex; align-items: center; gap: 8px; padding: 5px 7px; border-radius: var(--r-sm); cursor: pointer; font-size: 13px; }
+        .pcb-existing-row:hover { background: var(--paper-sunken); }
+        .pcb-existing-title { color: var(--ink); }
+        .pcb-existing-in { color: var(--ink-faint); font-size: 11.5px; }
+        .pcb-existing-actions { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-top: 1px solid var(--line); }
+        .pcb-addbtn:disabled { opacity: 0.5; cursor: default; }
+        .pcb-addbtn:disabled:hover { background: var(--accent-wash); color: var(--accent); }
       `}</style>
     </div>
   )
