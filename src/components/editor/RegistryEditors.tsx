@@ -989,7 +989,7 @@ export function RolesEditor() {
       ) : view === 'list' ? (
         <>
           <FilterBar filter={filter} onChange={setFilter} counts={counts} />
-          <SortBar section="roles" count={sortedItems.length} />
+          <SortBar section="roles" />
           {/* SortableList only wraps the rendered slice; reordering with a filter
               active still bakes into sort_order against the visible items, which
               is the intuitive behaviour. */}
@@ -1129,7 +1129,7 @@ export function IndustriesEditor() {
           }} />
       ) : (
       <>
-      <SortBar section="industries" count={sortedItems.length} />
+      <SortBar section="industries" />
       <SortableList section="industries" ids={displayItems.map((x) => x.id)} addLabel="Add industry" onAdd={add}>
       {displayItems.length === 0 && (
         <div className="registry-empty">
@@ -1392,7 +1392,7 @@ export function ReferencesEditor() {
   return (
     <div className="section-pane">
       <p className="registry-note">References are private by default and never appear in exports unless you opt in per reference.</p>
-      <SortBar section="references" count={items.length} />
+      <SortBar section="references" />
       <AddButtons label="Add reference" onClick={add} hasItems={items.length > 0}>
       {items.map((ref) => (
         <EditorCard key={ref.id} section="references" id={ref.id}

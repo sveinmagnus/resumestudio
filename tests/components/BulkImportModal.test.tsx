@@ -214,35 +214,43 @@ describe('BulkImportModal — preview and confirm', () => {
 })
 
 describe('SortBar — the bulk button', () => {
+  // SortBar self-sources item counts from the store (it no longer takes a
+  // `count` prop), so these seed the section's array to size it.
+  const seedCourses = (n: number) =>
+    seed({ data: { ...emptyStore(), resume: makeResume({ id: 'r1' }), courses: Array.from({ length: n }, () => makeCourse()) } })
+
   it('offers bulk add on an empty content section (where sort is hidden)', () => {
-    render(<SortBar section="courses" count={0} />)
+    seedCourses(0)
+    render(<SortBar section="courses" />)
     expect(screen.getByRole('button', { name: /Bulk add/ })).toBeInTheDocument()
     expect(screen.queryByLabelText('Sort')).not.toBeInTheDocument()
   })
 
   it('shows both halves once the section has items to sort', () => {
-    render(<SortBar section="courses" count={3} />)
+    seedCourses(3)
+    render(<SortBar section="courses" />)
     expect(screen.getByRole('button', { name: /Bulk add/ })).toBeInTheDocument()
     expect(screen.getByLabelText('Sort')).toBeInTheDocument()
   })
 
   it('opens the lightbox for the section it sits on', async () => {
-    render(<SortBar section="courses" count={0} />)
+    seedCourses(0)
+    render(<SortBar section="courses" />)
     await userEvent.click(screen.getByRole('button', { name: /Bulk add/ }))
     expect(screen.getByRole('dialog', { name: 'Bulk add to Courses' })).toBeInTheDocument()
   })
 
   it('has no bulk button on Languages or the registries', () => {
-    const { rerender } = render(<SortBar section="spoken_languages" count={3} />)
+    const { rerender } = render(<SortBar section="spoken_languages" />)
     expect(screen.queryByRole('button', { name: /Bulk add/ })).not.toBeInTheDocument()
-    rerender(<SortBar section="skills" count={3} />)
+    rerender(<SortBar section="skills" />)
     expect(screen.queryByRole('button', { name: /Bulk add/ })).not.toBeInTheDocument()
-    rerender(<SortBar section="roles" count={3} />)
+    rerender(<SortBar section="roles" />)
     expect(screen.queryByRole('button', { name: /Bulk add/ })).not.toBeInTheDocument()
   })
 
   it('renders nothing for a section with neither sort nor bulk', () => {
-    const { container } = render(<SortBar section="spoken_languages" count={1} />)
+    const { container } = render(<SortBar section="spoken_languages" />)
     expect(container).toBeEmptyDOMElement()
   })
 })

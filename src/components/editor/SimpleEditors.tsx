@@ -71,7 +71,7 @@ export function WorkEditor() {
         Your permanent, contract, and freelance positions. Individual client
         engagements go under Projects; board and volunteer work under Other roles.
       </SectionIntro>
-      <SortBar section="work_experiences" count={items.length} />
+      <SortBar section="work_experiences" />
       <SortableList section="work_experiences" ids={items.map((x) => x.id)} addLabel="Add employment" onAdd={add}>
       {items.map((w) => (
         <EditorCard key={w.id} section="work_experiences" id={w.id}
@@ -233,7 +233,7 @@ export function EducationEditor() {
         universities, colleges and the like. Shorter technology or methodology
         training belongs under Courses.
       </SectionIntro>
-      <SortBar section="educations" count={items.length} />
+      <SortBar section="educations" />
       <SortableList section="educations" ids={items.map((x) => x.id)} addLabel="Add education" onAdd={add}>
       {items.map((e) => (
         <EditorCard key={e.id} section="educations" id={e.id}
@@ -282,7 +282,7 @@ export function CoursesEditor() {
         methodologies. Degree-bearing study belongs under Education; formal
         accreditations under Certifications.
       </SectionIntro>
-      <SortBar section="courses" count={items.length} />
+      <SortBar section="courses" />
       <SortableList section="courses" ids={items.map((x) => x.id)} addLabel="Add course" onAdd={add}>
       {items.map((c) => (
         <EditorCard key={c.id} section="courses" id={c.id}
@@ -325,7 +325,7 @@ export function CertificationsEditor() {
         Professional certifications and accreditations. Set an expiry date and
         the Overview flags them before they lapse.
       </SectionIntro>
-      <SortBar section="certifications" count={items.length} />
+      <SortBar section="certifications" />
       <SortableList section="certifications" ids={items.map((x) => x.id)} addLabel="Add certification" onAdd={add}>
       {items.map((c) => (
         <EditorCard key={c.id} section="certifications" id={c.id}
@@ -367,7 +367,7 @@ export function PositionsEditor() {
         Board memberships, advisory roles, volunteer work, and other
         engagements outside of paid employment.
       </SectionIntro>
-      <SortBar section="positions" count={items.length} />
+      <SortBar section="positions" />
       <SortableList section="positions" ids={items.map((x) => x.id)} addLabel="Add role" onAdd={add}>
       {items.map((p) => (
         <EditorCard key={p.id} section="positions" id={p.id}
@@ -420,7 +420,7 @@ export function PresentationsEditor() {
         Talks, conference sessions and workshops you have delivered — internal or
         public. Record the event, date and an optional abstract or link.
       </SectionIntro>
-      <SortBar section="presentations" count={items.length} />
+      <SortBar section="presentations" />
       <SortableList section="presentations" ids={items.map((x) => x.id)} addLabel="Add presentation" onAdd={add}>
       {items.map((p) => (
         <EditorCard key={p.id} section="presentations" id={p.id}
@@ -462,7 +462,7 @@ export function PublicationsEditor() {
         blog posts you have authored — with the publisher, co-authors, date and a
         link to the original.
       </SectionIntro>
-      <SortBar section="publications" count={items.length} />
+      <SortBar section="publications" />
       <SortableList section="publications" ids={items.map((x) => x.id)} addLabel="Add publication" onAdd={add}>
       {items.map((p) => (
         <EditorCard key={p.id} section="publications" id={p.id}
@@ -517,7 +517,7 @@ export function AwardsEditor() {
         Honours, prizes and recognition you have received, professional or
         academic — noting the issuer and what each was for.
       </SectionIntro>
-      <SortBar section="honor_awards" count={items.length} />
+      <SortBar section="honor_awards" />
       <SortableList section="honor_awards" ids={items.map((x) => x.id)} addLabel="Add award" onAdd={add}>
       {items.map((a) => (
         <EditorCard key={a.id} section="honor_awards" id={a.id}
@@ -591,7 +591,7 @@ export function SpokenLanguagesEditor() {
         Fluent, or Working knowledge. Add Europass CEFR levels for a language
         passport in exports.
       </SectionIntro>
-      <SortBar section="spoken_languages" count={items.length} />
+      <SortBar section="spoken_languages" />
       <SortableList section="spoken_languages" ids={items.map((x) => x.id)} addLabel="Add language" onAdd={add}>
       {items.map((l) => (
         <EditorCard key={l.id} section="spoken_languages" id={l.id}
@@ -649,7 +649,7 @@ export function KeyCompetenciesEditor() {
         shows exactly the competencies of the profile it presents. This page is
         the full library of every competency.
       </SectionIntro>
-      <SortBar section="key_competencies" count={items.length} />
+      <SortBar section="key_competencies" />
       <SortableList section="key_competencies" ids={items.map((x) => x.id)} addLabel="Add competency" onAdd={add}>
       {items.map((k) => {
         const bundles = bundlesContaining(data.key_qualifications, k.id)
@@ -700,7 +700,7 @@ export function RecommendationsEditor() {
         Testimonials you have received from colleagues and customers. Choose which
         ones appear in each Resume View from the view editor.
       </SectionIntro>
-      <SortBar section="recommendations" count={items.length} />
+      <SortBar section="recommendations" />
       <SortableList section="recommendations" ids={items.map((x) => x.id)} addLabel="Add recommendation" onAdd={add}>
       {items.map((r) => (
         <EditorCard key={r.id} section="recommendations" id={r.id}
@@ -1000,7 +1000,7 @@ export function ProfileEditor() {
         compact view can lead with the short summary and a detailed one with the
         long. Add several profiles and pick one per view.
       </SectionIntro>
-      <SortBar section="key_qualifications" count={items.length} />
+      <SortBar section="key_qualifications" />
       <SortableList section="key_qualifications" ids={items.map((x) => x.id)} addLabel="Add profile" onAdd={add}>
       {items.map((kq) => (
         <EditorCard key={kq.id} section="key_qualifications" id={kq.id}

@@ -4,11 +4,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { WorkEditor } from '../../src/components/editor/SimpleEditors'
+import { WorkEditor, CoursesEditor } from '../../src/components/editor/SimpleEditors'
 import { useStore } from '../../src/store/useStore'
 import { resetStore } from '../helpers/store-reset'
 import { resolveConfirm, confirmDialogVisible } from '../helpers/confirm'
-import { emptyStore, makeWork } from '../fixtures'
+import { emptyStore, makeWork, makeCourse } from '../fixtures'
+import { typeFilterKey } from '../../src/lib/viewItemSelect'
 
 function seedTwoWork() {
   useStore.setState({
@@ -90,5 +91,47 @@ describe('<SortBar> + reorder guard (via WorkEditor)', () => {
     expect(confirmDialogVisible()).toBe(false)
     const ordered = [...useStore.getState().data.work_experiences].sort((a, b) => a.sort_order - b.sort_order)
     expect(ordered.map((w) => w.id)).toEqual(['new', 'old'])
+  })
+})
+
+describe('<SortBar> type filter never traps the user (via CoursesEditor)', () => {
+  beforeEach(() => resetStore())
+
+  function seedTwoCourses() {
+    useStore.setState({
+      data: {
+        ...emptyStore(),
+        courses: [
+          makeCourse({ id: 'c1', name: { en: 'Kubernetes' }, category: 'technical_expertise' }),
+          makeCourse({ id: 'c2', name: { en: 'Leadership' }, category: 'management' }),
+        ],
+      },
+      hasData: true, primaryLocale: 'en', secondaryLocale: null,
+      activeSection: 'courses', expandedItemId: null,
+      sectionSort: {}, sectionTypeFilter: {}, mutationCount: 0,
+    })
+  }
+
+  it('keeps the Filter control after a filter narrows the list to one item, and can be cleared', async () => {
+    seedTwoCourses()
+    render(<CoursesEditor />)
+    expect(document.querySelectorAll('.ec-title').length).toBe(2)
+
+    // Filter to a category matching exactly one course.
+    await userEvent.selectOptions(
+      screen.getByLabelText('Filter'),
+      typeFilterKey('Category', 'technical_expertise'),
+    )
+    // The list is now a single item — the regression was the Filter control
+    // disappearing here (it keyed off the FILTERED count), stranding the user.
+    expect(document.querySelectorAll('.ec-title').length).toBe(1)
+    const filter = screen.getByLabelText('Filter') as HTMLSelectElement
+    expect(filter).toBeInTheDocument()
+    expect(filter.value).toBe(typeFilterKey('Category', 'technical_expertise'))
+
+    // Resetting to "All types" is always reachable and restores every item.
+    await userEvent.selectOptions(filter, '')
+    expect(useStore.getState().sectionTypeFilter.courses).toBe('')
+    expect(document.querySelectorAll('.ec-title').length).toBe(2)
   })
 })

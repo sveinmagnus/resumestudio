@@ -52,7 +52,7 @@ export function ProjectsEditor() {
         skills and industries; star the strongest to feature them as Promoted
         Projects in a view.
       </SectionIntro>
-      <SortBar section="projects" count={projects.length} />
+      <SortBar section="projects" />
       <SortableList section="projects" ids={projects.map((p) => p.id)} addLabel="Add project" onAdd={addProject}>
       {projects.map((p) => (
         <EditorCard key={p.id} section="projects" id={p.id}

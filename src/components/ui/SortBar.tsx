@@ -24,7 +24,7 @@ type ArraySection = SectionKey
  * renders whenever either half applies. Bulk is offered per `bulkImport`'s spec
  * table (content sections only — not Languages, not the registries).
  */
-export function SortBar({ section, count }: { section: ArraySection; count: number }) {
+export function SortBar({ section }: { section: ArraySection }) {
   const mode = useStore((s) => s.sectionSort[section] ?? 'custom')
   const setSectionSort = useStore((s) => s.setSectionSort)
   // Editor type filter (UI-only, never touches views/exports).
@@ -35,15 +35,23 @@ export function SortBar({ section, count }: { section: ArraySection; count: numb
   const setSectionTypeFilter = useStore((s) => s.setSectionTypeFilter)
   const [bulkOpen, setBulkOpen] = useState(false)
 
+  // Sort/Filter visibility keys off the count of ALL items in the section —
+  // NEVER the sorted/filtered view. Keying off the filtered count is the bug
+  // that lets a filter narrowing the list to one item hide the Filter control
+  // itself: the selection persists in the store (`sectionTypeFilter`) with no
+  // way to reach "All types" and clear it, so the user is stranded.
+  const total = items.length
   const modes = availableSortModes(section)
-  const showSort = count >= 2 && modes.length >= 2
+  const showSort = total >= 2 && modes.length >= 2
   const spec = bulkSpec(section)
 
-  // Facet groups for the type filter (only those with actual values). Built off
-  // the UNFILTERED items so options don't vanish once a filter is applied.
-  const facetSets = (count >= 2 ? typeGroups(section, items, locale, { roles }) : [])
+  // Facet groups for the type filter (only those with actual values), built off
+  // the UNFILTERED items so options don't vanish once a filter is applied. The
+  // control also stays visible whenever a filter is active (`|| !!filterKey`),
+  // so "All types" is always reachable — a filter can never trap the user.
+  const facetSets = (total >= 2 ? typeGroups(section, items, locale, { roles }) : [])
     .filter((s) => s.groups.length > 0)
-  const showFilter = facetSets.length > 0
+  const showFilter = facetSets.length > 0 || !!filterKey
 
   if (!showSort && !showFilter && !spec && !summaryFields(section)) return null
 
