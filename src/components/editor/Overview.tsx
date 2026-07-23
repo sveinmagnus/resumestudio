@@ -214,6 +214,7 @@ export function Overview() {
 
       <CareerTimeline />
 
+      <div className="ov-card">
       <h3 className="ov-section-title">Translation completeness</h3>
       <p className="ov-trans-hint">Click a row to see which fields are missing in that language.</p>
       <div className="ov-trans">
@@ -270,11 +271,12 @@ export function Overview() {
           )
         })}
       </div>
+      </div>
 
       {/* Cross-language drift — only with a second language selected. Compares
           the editing pair for fields whose two versions have diverged. */}
       {drift && drift.comparedFields > 0 && (
-        <>
+        <div className="ov-card">
           <h3 className="ov-section-title">
             Cross-language check
             <span className="ov-drift-pair">
@@ -317,7 +319,7 @@ export function Overview() {
               )}
             </>
           )}
-        </>
+        </div>
       )}
 
       {confirmWipe && (
@@ -448,6 +450,17 @@ export function Overview() {
           width: 1px; height: 14px; background: var(--line); transform: translateY(-50%);
         }
 
+        /* Boxed sections (Translation completeness, Cross-language check) — the
+           same blue-ish panel as the stat cards / Needs-attention box, so the
+           Overview reads as one system. The top margin also gives every section
+           heading (incl. the Career timeline above, at 28px) the SAME spacing —
+           previously these two headings sat flush against the element above. */
+        .ov-card {
+          margin-top: 28px; padding: 16px 18px;
+          background: var(--paper-raised); border: 1px solid var(--line);
+          border-radius: var(--r-md);
+        }
+        .ov-card > .ov-section-title:first-child { margin-top: 0; }
         .ov-section-title { font-size: 22px; margin-bottom: 6px; }
         .ov-trans-hint { font-size: 12px; color: var(--ink-faint); margin-bottom: 14px; }
         .ov-trans { display: flex; flex-direction: column; gap: 4px; max-width: 680px; }
