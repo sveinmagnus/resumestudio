@@ -3,8 +3,10 @@ import {
   isBackupFormat, exportToBackup, importFromBackup,
   migrateBackup, UnsupportedBackupVersionError, CURRENT_FORMAT_VERSION,
   validateBackup, InvalidBackupError,
+  isStoreBackupFormat, resumesFromStoreBackup, normalizeStoreShape,
   type AnyBackup,
 } from '../src/lib/backup'
+import { CURRENT_SHAPE_VERSION } from '../src/lib/migrate'
 import {
   emptyStore, makeProject, makeWork, makeEducation, makeKQ,
   makeReference, makeSpokenLanguage, makeSkill, makeRole, makeIndustry,
@@ -325,5 +327,107 @@ describe('migrateBackup() & UnsupportedBackupVersionError', () => {
       format_version: 7,
     } as unknown as AnyBackup
     expect(() => importFromBackup(fromTheFuture)).toThrow(UnsupportedBackupVersionError)
+  })
+})
+
+// ─── Whole-store (desktop-sync) backup ────────────────────────────────────────
+//
+// Regression: the `resumestudio-store/v1` file (every resume in one JSON, written
+// by the desktop build into a sync folder) used to slip past `isBackupFormat`
+// (which matches only "resumestudio/") and fall through to the CVpartner
+// importer, restoring an EMPTY resume. These pin the format's own reader.
+
+function storeBackup(resumes: unknown[], extra: Record<string, unknown> = {}) {
+  return {
+    $schema: 'resumestudio-store/v1',
+    format_version: 1,
+    exported_at: '2026-07-22T15:33:04.502Z',
+    generator: 'resume-studio',
+    resumes,
+    ...extra,
+  }
+}
+
+function storeEntry(data: unknown, name = 'Someone — CV') {
+  return {
+    id: 'entry-1', name, primary_locale: 'no', secondary_locale: 'en',
+    saved_at: '2026-07-22T15:32:37.594Z', created_at: '2026-06-05T17:59:49.311Z',
+    data,
+  }
+}
+
+describe('isStoreBackupFormat()', () => {
+  it('accepts a whole-store backup envelope', () => {
+    expect(isStoreBackupFormat(storeBackup([]))).toBe(true)
+  })
+
+  it('rejects a per-resume backup (resumestudio/ — not resumestudio-store/)', () => {
+    expect(isStoreBackupFormat(exportToBackup(emptyStore()))).toBe(false)
+  })
+
+  it('rejects null, non-objects, and a missing resumes array', () => {
+    expect(isStoreBackupFormat(null)).toBe(false)
+    expect(isStoreBackupFormat('x')).toBe(false)
+    expect(isStoreBackupFormat({ $schema: 'resumestudio-store/v1', format_version: 1 })).toBe(false)
+  })
+})
+
+describe('resumesFromStoreBackup()', () => {
+  it('restores each resume with its content INTACT (the empty-resume regression)', () => {
+    const store = { ...emptyStore(), projects: [makeProject('p1'), makeProject('p2')] }
+    const restored = resumesFromStoreBackup(storeBackup([storeEntry(store, 'Jane — CV')]))
+    expect(restored).toHaveLength(1)
+    expect(restored[0].name).toBe('Jane — CV')
+    expect(restored[0].store.projects).toHaveLength(2)
+  })
+
+  it('recovers as many resumes as possible, skipping a malformed entry', () => {
+    const good = storeEntry({ ...emptyStore(), work_experiences: [makeWork('w1')] })
+    const restored = resumesFromStoreBackup(storeBackup([good, { id: 'x' /* no data */ }, null]))
+    expect(restored).toHaveLength(1)
+    expect(restored[0].store.work_experiences).toHaveLength(1)
+  })
+
+  it('throws InvalidBackupError when nothing readable is inside', () => {
+    expect(() => resumesFromStoreBackup(storeBackup([{ id: 'x' }, null])))
+      .toThrow(InvalidBackupError)
+  })
+
+  it('throws InvalidBackupError for a non-store-backup', () => {
+    expect(() => resumesFromStoreBackup(exportToBackup(emptyStore())))
+      .toThrow(InvalidBackupError)
+  })
+
+  it('throws UnsupportedBackupVersionError for a newer envelope', () => {
+    expect(() => resumesFromStoreBackup(storeBackup([storeEntry(emptyStore())], { format_version: 2 })))
+      .toThrow(UnsupportedBackupVersionError)
+  })
+})
+
+describe('normalizeStoreShape()', () => {
+  it('fills every missing top-level collection so migrations never hit an absent array', () => {
+    const store = normalizeStoreShape({ resume: null, projects: [makeProject('p1')] })
+    // A field the raw data omitted entirely is present and empty.
+    expect(store.industries).toEqual([])
+    expect(store.cover_letters).toEqual([])
+    expect(store.skill_categories).toEqual([])
+    // Provided content survives.
+    expect(store.projects).toHaveLength(1)
+  })
+
+  it('coerces a wrong-typed collection to an empty array', () => {
+    const store = normalizeStoreShape({ projects: 'not-an-array' as unknown })
+    expect(store.projects).toEqual([])
+  })
+
+  it('preserves the backup OWN shape stamp — including undefined for pre-versioning data', () => {
+    expect(normalizeStoreShape({ shape_version: 5 }).shape_version).toBe(5)
+    // No stamp → undefined (NOT CURRENT), so migrateStore still runs on old data.
+    expect(normalizeStoreShape({}).shape_version).toBeUndefined()
+  })
+
+  it('keeps a current-version store at CURRENT (round-trips cleanly)', () => {
+    const store = normalizeStoreShape({ ...emptyStore() })
+    expect(store.shape_version).toBe(CURRENT_SHAPE_VERSION)
   })
 })

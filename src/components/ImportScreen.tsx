@@ -1,7 +1,10 @@
 import { useRef, useState } from 'react'
 import { Upload, FileJson, Sparkles, FilePlus, Wand2 } from 'lucide-react'
-import { isBackupFormat, importFromBackup, UnsupportedBackupVersionError, InvalidBackupError } from '../lib/backup'
-import { reinternBackupLinks } from '../lib/registryReintern'
+import {
+  isBackupFormat, importFromBackup, isStoreBackupFormat, resumesFromStoreBackup,
+  UnsupportedBackupVersionError, InvalidBackupError,
+} from '../lib/backup'
+import { reinternBackupLinks, collectReferencedCanonical } from '../lib/registryReintern'
 import { api } from '../lib/api'
 import { importFromCVPartner } from '../lib/importer'
 import {
@@ -14,7 +17,7 @@ import {
 import { AIImportModal } from './AIImportModal'
 import { loadSkillTaxonomy, loadSkillClassifications } from '../lib/skillTaxonomy'
 import { normalizeImportedSkills } from '../lib/skillNormalize'
-import type { ResumeStore, CanonicalSnapshot } from '../types'
+import type { ResumeStore, CanonicalSnapshot, RegistryEntry } from '../types'
 
 const YEAR = new Date().getFullYear()
 
@@ -108,6 +111,20 @@ export function ImportScreen({ compact = false, onStartFresh, onImported }: Impo
         const embedded = (json as { canonical_registry?: CanonicalSnapshot[] }).canonical_registry
         const reinterned = await reinternBackupLinks(store, embedded, api).catch(() => store)
         await onImported(reinterned, deriveName(reinterned, 'Imported resume'))
+      } else if (isStoreBackupFormat(json)) {
+        // Whole-store desktop-sync backup (resumestudio-store/v1): ONE file, EVERY
+        // resume. This is the file users grab from their cloud sync folder — read
+        // it here so it never falls through to the CVpartner importer and restores
+        // an empty resume (the bug this guards against). Restore each contained
+        // resume; re-intern its shared-registry links against this instance using
+        // the backup's own top-level registry snapshot.
+        const registry = (json as { registry?: RegistryEntry[] }).registry
+        const restored = resumesFromStoreBackup(json)
+        for (const { name, store } of restored) {
+          const embedded = registry?.length ? collectReferencedCanonical(store, registry) : undefined
+          const reinterned = await reinternBackupLinks(store, embedded, api).catch(() => store)
+          await onImported(reinterned, name || deriveName(reinterned, 'Imported resume'))
+        }
       } else {
         // Everything unrecognised falls through to the CVpartner importer, which
         // maps a large, real-world-messy object. Guard the one thing its cast

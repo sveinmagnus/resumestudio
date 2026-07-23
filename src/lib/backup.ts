@@ -19,6 +19,7 @@ import type {
   CoverLetter, RegistryEntry, CanonicalSnapshot,
 } from '../types'
 import { collectReferencedCanonical } from './registryReintern'
+import { emptyStore } from './freshStore'
 import { api } from './api'
 
 // ─── Backup format types ──────────────────────────────────────────────────────
@@ -398,6 +399,116 @@ export function importFromBackup(backup: AnyBackup): ResumeStore {
     (store as unknown as Record<string, unknown>).technology_categories = v1.sections.technology_categories
   }
   return store
+}
+
+// ─── Store-backup (whole-store desktop-sync file) ─────────────────────────────
+//
+// The DESKTOP build writes a WHOLE-STORE backup into a cloud-synced folder —
+// EVERY resume in one file (`server/backup.ts`, `resumestudio-store/v1`). This is
+// a DIFFERENT envelope from the per-resume `resumestudio/v1` above: its top level
+// is `resumes[]`, each entry `{ id, name, …, data: ResumeStore }` (the data is a
+// FLAT ResumeStore, not the profile/sections grouping).
+//
+// Users reach for this file to "restore a resume" just as readily as the
+// per-resume export — it's the biggest, most obvious backup in their sync folder.
+// If the import path doesn't recognise it, its `$schema` ("resumestudio-store/…")
+// slips past `isBackupFormat` (which matches only "resumestudio/…") and it falls
+// through to the CVpartner importer, which maps none of these fields and yields
+// an EMPTY resume. Reading it here is the fix.
+
+/** One resume entry inside a store backup (client-side mirror of the server shape). */
+interface StoreBackupEntry {
+  id?: unknown
+  name?: unknown
+  data?: unknown
+}
+
+/** The whole-store backup envelope, as far as the client needs to read it. */
+export interface StoreBackupFileV1 {
+  $schema: string
+  format_version: number
+  resumes: StoreBackupEntry[]
+  /** Instance-level canonical registry (cross-resume shared skills/roles). Optional. */
+  registry?: RegistryEntry[]
+}
+
+/**
+ * Lenient router (mirrors `isBackupFormat`): is this parsed JSON a whole-store
+ * backup? Keyed on the `resumestudio-store/` schema prefix + a `resumes` array,
+ * so it can't be confused with the per-resume `resumestudio/` backup.
+ */
+export function isStoreBackupFormat(json: unknown): json is StoreBackupFileV1 {
+  if (!json || typeof json !== 'object') return false
+  const obj = json as Record<string, unknown>
+  if (typeof obj['$schema'] !== 'string') return false
+  if (!String(obj['$schema']).startsWith('resumestudio-store/')) return false
+  if (typeof obj['format_version'] !== 'number') return false
+  return Array.isArray(obj['resumes'])
+}
+
+/** Top-level collections a ResumeStore must carry as arrays for the app to iterate them. */
+const STORE_ARRAY_KEYS = [
+  'skills', 'roles', 'industries', 'skill_categories',
+  'key_qualifications', 'key_competencies', 'recommendations', 'projects',
+  'work_experiences', 'educations', 'courses', 'certifications',
+  'spoken_languages', 'positions', 'presentations', 'honor_awards',
+  'publications', 'references', 'views', 'cover_letters',
+] as const
+
+/**
+ * Guarantee a raw/partial/older `ResumeStore` (as carried inside a store-backup
+ * entry) has every top-level collection present — WITHOUT touching its
+ * `shape_version` stamp, so `migrateStore` still dispatches correctly at load for
+ * an older or unstamped backup. This is the defensive fill (mirroring the `?? []`
+ * defaults in `importFromBackup`) that stops a previous-version backup from
+ * restoring empty or crashing a migration that iterates an absent array. A field
+ * present but of the wrong type is coerced to an empty array rather than trusted.
+ */
+export function normalizeStoreShape(data: Record<string, unknown>): ResumeStore {
+  const merged = { ...emptyStore(), ...data } as ResumeStore
+  const bag = merged as unknown as Record<string, unknown>
+  for (const key of STORE_ARRAY_KEYS) {
+    if (!Array.isArray(bag[key])) bag[key] = []
+  }
+  // Preserve the backup's OWN shape stamp — including `undefined` for a
+  // pre-versioning backup — so `migrateStore` runs on old data. `emptyStore()`
+  // stamps CURRENT, which would wrongly mark unstamped data as already current.
+  merged.shape_version = data['shape_version'] as number | undefined
+  return merged
+}
+
+/** One restored resume from a store backup: its saved name + a shape-normalized store. */
+export interface RestoredResume {
+  /** The resume's saved name, or '' if the backup entry had none (caller derives one). */
+  name: string
+  store: ResumeStore
+}
+
+/**
+ * Read every resume out of a whole-store backup. Throws
+ * `UnsupportedBackupVersionError` for a newer envelope and `InvalidBackupError`
+ * if it isn't a store backup or carries no usable resume entry. Each entry's flat
+ * `data` is normalized (`normalizeStoreShape`) so an older/partial backup still
+ * restores fully; `migrateStore` finishes the job at load. A single malformed
+ * entry is skipped, not fatal — as many resumes as possible are recovered.
+ */
+export function resumesFromStoreBackup(json: unknown): RestoredResume[] {
+  if (!isStoreBackupFormat(json)) {
+    throw new InvalidBackupError([{ path: '(root)', reason: 'not a Resume Studio store backup' }])
+  }
+  if (json.format_version !== 1) {
+    throw new UnsupportedBackupVersionError(json.format_version)
+  }
+  const out: RestoredResume[] = []
+  json.resumes.forEach((entry) => {
+    if (!isObj(entry) || !isObj(entry.data)) return // skip a malformed row, keep the rest
+    const name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : ''
+    out.push({ name, store: normalizeStoreShape(entry.data) })
+  })
+  if (!out.length) {
+    throw new InvalidBackupError([{ path: 'resumes', reason: 'contains no readable resume entries' }])
+  }
+  return out
 }
 
 // ─── Download helper ──────────────────────────────────────────────────────────

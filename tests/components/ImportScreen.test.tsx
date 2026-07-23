@@ -90,6 +90,41 @@ describe('<ImportScreen>', () => {
     expect(onImported).not.toHaveBeenCalled()
   })
 
+  it('restores a whole-store (resumestudio-store) backup with content intact, not an empty resume', async () => {
+    const onImported = vi.fn()
+    const { container } = render(<ImportScreen onStartFresh={() => {}} onImported={onImported} />)
+    // The desktop cloud-sync file: every resume in one envelope, each entry's
+    // `data` a FLAT ResumeStore. Regression — this used to fall through to the
+    // CVpartner importer and yield an empty resume.
+    const file = new File(
+      [JSON.stringify({
+        $schema: 'resumestudio-store/v1', format_version: 1,
+        exported_at: '2026-07-22T15:33:04.502Z', generator: 'resume-studio',
+        resumes: [{
+          id: 'r1', name: 'Ada — CV', saved_at: '2026-07-22T00:00:00Z',
+          data: {
+            shape_version: 13,
+            resume: { id: 'p1', full_name: 'Ada Lovelace' },
+            projects: [{ id: 'proj1', customer: { en: 'Acme' } }],
+            skills: [{ id: 's1', name: 'Analytical Engines' }],
+          },
+        }],
+      })],
+      'resume-studio-backup.json',
+      { type: 'application/json' },
+    )
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    await userEvent.upload(input, file)
+    await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1))
+    const [store, name] = onImported.mock.calls[0]
+    expect(name).toBe('Ada — CV')
+    expect(store.projects).toHaveLength(1)
+    expect(store.skills).toHaveLength(1)
+    // Missing collections were backfilled so nothing downstream iterates undefined.
+    expect(store.cover_letters).toEqual([])
+    expect(store.industries).toEqual([])
+  })
+
   it('rejects a non-object JSON file with a clear message', async () => {
     const onImported = vi.fn()
     const { container } = render(<ImportScreen onStartFresh={() => {}} onImported={onImported} />)
