@@ -5,7 +5,7 @@
  * DOMParser, which the default node env lacks.
  */
 import { describe, it, expect } from 'vitest'
-import { computeDrift, extractNumbers, wordCount, numberDiff } from '../src/lib/drift'
+import { computeDrift, extractNumbers, wordCount, numberDiff, driftDismissKey } from '../src/lib/drift'
 import { emptyStore, makeProject, makeResume, makeEducation } from './fixtures'
 import type { ResumeStore } from '../src/types'
 
@@ -215,5 +215,33 @@ describe('computeDrift()', () => {
     }
     const rep = computeDrift(data, 'en', 'no')
     expect(rep.findings.map((f) => f.severity)).toEqual(['high', 'low'])
+  })
+
+  it('carries a dismissKey keyed by field AND kind', () => {
+    const rep = computeDrift(storeWith('Led 5 people', 'Ledet 3'), 'en', 'no')
+    const f = rep.findings[0]
+    expect(f.dismissKey).toBe(driftDismissKey(f.meta, f.kind))
+    expect(f.dismissKey).toContain('numbers')
+  })
+
+  it('omits a finding the user has permanently ignored', () => {
+    const store = storeWith('Led 5 people', 'Ledet 3')
+    const key = computeDrift(store, 'en', 'no').findings[0].dismissKey
+    // With that key in the dismissed set, the finding is gone…
+    const after = computeDrift(store, 'en', 'no', [key])
+    expect(after.findings).toHaveLength(0)
+    // …but the field was still compared (the count reflects the pool, not the
+    // hidden finding).
+    expect(after.comparedFields).toBe(1)
+  })
+
+  it('only silences the ignored KIND, not another kind on the same field', () => {
+    // Ignore a hypothetical "length" key; the real "numbers" finding still shows.
+    const store = storeWith('Led 5 people', 'Ledet 3')
+    const numbersKey = computeDrift(store, 'en', 'no').findings[0].dismissKey
+    const lengthKey = numbersKey.replace(/:numbers$/, ':length')
+    const after = computeDrift(store, 'en', 'no', [lengthKey])
+    expect(after.findings).toHaveLength(1)
+    expect(after.findings[0].kind).toBe('numbers')
   })
 })

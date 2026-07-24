@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ChevronDown, ChevronRight, MoreHorizontal, Trash2, FileSearch, X, AlertTriangle, Clock, Check, RotateCcw } from 'lucide-react'
+import { ChevronDown, ChevronRight, MoreHorizontal, Trash2, FileSearch, X, AlertTriangle, Clock, Check, RotateCcw, EyeOff } from 'lucide-react'
 import { useStore } from '../../store/useStore'
 import { LOCALE_LABELS, resolve, fmtDate } from '../../lib/locales'
 import { computeCompleteness, computeSectionCoverage, type MissingField, type SectionCoverage } from '../../lib/completeness'
@@ -13,7 +13,7 @@ interface CoreStat { label: string; count: number; key: string }
 interface CompactStat { label: string; count: number; key: string }
 
 export function Overview() {
-  const { data, setActiveSection, setExpandedItem, replaceData, setPrimaryLocale, setSecondaryLocale, primaryLocale, secondaryLocale, dismissAttention, clearAttentionDismissal } = useStore()
+  const { data, setActiveSection, setExpandedItem, replaceData, setPrimaryLocale, setSecondaryLocale, primaryLocale, secondaryLocale, dismissAttention, clearAttentionDismissal, dismissDrift } = useStore()
   const locales = data.resume?.supported_locales || ['en']
 
   // Core experience: the substantive content sections — get prominent cards.
@@ -41,7 +41,9 @@ export function Overview() {
   const freshness = freshnessReport(data, new Date(), locales[0])
   // Drift is only meaningful with two languages in play — it compares the pair
   // the user is editing in. In single-column mode there's nothing to compare.
-  const drift = secondaryLocale ? computeDrift(data, primaryLocale, secondaryLocale) : null
+  const drift = secondaryLocale
+    ? computeDrift(data, primaryLocale, secondaryLocale, data.resume?.drift_dismissals ?? [])
+    : null
 
   const goToItem = (section: string, itemId: string) => {
     setActiveSection(section)
@@ -302,7 +304,7 @@ export function Overview() {
               <div className="ov-panel">
               <ul className="ov-drift-list">
                 {(driftOpen ? drift.findings : drift.findings.slice(0, 6)).map((f, i) => (
-                  <li key={`${f.meta.section}:${f.meta.itemId ?? 'root'}:${f.meta.fieldLabel}:${i}`}>
+                  <li key={`${f.meta.section}:${f.meta.itemId ?? 'root'}:${f.meta.fieldLabel}:${i}`} className="ov-drift-li">
                     <button className="ov-drift-row" onClick={() => goToField(f.meta)}>
                       <span className={`ov-drift-badge ov-drift-${f.severity}`}>
                         {f.severity === 'high' ? 'numbers' : 'length'}
@@ -313,6 +315,14 @@ export function Overview() {
                         <span className="ov-missing-field">{f.meta.fieldLabel}</span>
                       </span>
                       <span className="ov-drift-detail">{f.detail}</span>
+                    </button>
+                    <button
+                      className="ov-drift-ignore"
+                      onClick={() => dismissDrift(f.dismissKey)}
+                      title="Ignore — a false positive, don't flag this again"
+                      aria-label={`Ignore the ${f.kind} check for ${f.meta.itemLabel}, ${f.meta.fieldLabel}`}
+                    >
+                      <EyeOff size={14} />
                     </button>
                   </li>
                 ))}
@@ -513,13 +523,23 @@ export function Overview() {
         }
         .ov-drift-ok { display: flex; align-items: center; gap: 6px; color: var(--ok-ink); }
         .ov-drift-list { list-style: none; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 2px; }
+        .ov-drift-li { display: flex; align-items: center; gap: 2px; }
         .ov-drift-row {
-          display: flex; align-items: baseline; gap: 10px; width: 100%;
+          display: flex; align-items: baseline; gap: 10px; flex: 1; min-width: 0;
           padding: 6px 12px; border-radius: var(--r-sm); background: transparent;
           text-align: left; font-size: 13px; color: var(--ink-soft);
           transition: color .12s, background .12s;
         }
         .ov-drift-row:hover { background: var(--accent-wash); color: var(--accent); }
+        /* Permanently ignore a finding as a false positive (mirrors the
+           Needs-attention dismiss). Muted until hovered so it doesn't compete
+           with the row. */
+        .ov-drift-ignore {
+          flex-shrink: 0; width: 28px; height: 28px; display: grid; place-items: center;
+          border-radius: var(--r-sm); color: var(--ink-faint); background: transparent;
+          transition: color .12s, background .12s;
+        }
+        .ov-drift-ignore:hover { background: var(--paper-sunken); color: var(--ink); }
         .ov-drift-badge {
           flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase;
           letter-spacing: .06em; padding: 2px 7px; border-radius: 999px; line-height: 1.5;

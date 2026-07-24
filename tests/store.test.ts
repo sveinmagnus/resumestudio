@@ -696,3 +696,26 @@ describe('dismissAttention() / clearAttentionDismissal()', () => {
     expect(useStore.getState().mutationCount).toBe(before)
   })
 })
+
+describe('dismissDrift()', () => {
+  it('appends the key permanently and bumps mutationCount', () => {
+    const before = useStore.getState().mutationCount
+    useStore.getState().dismissDrift('educations:e1:Degree:length')
+    expect(useStore.getState().data.resume!.drift_dismissals).toEqual(['educations:e1:Degree:length'])
+    expect(useStore.getState().mutationCount).toBe(before + 1)
+  })
+
+  it('is a no-op when the key is already ignored (no duplicates)', () => {
+    useStore.getState().dismissDrift('educations:e1:Degree:length')
+    const before = useStore.getState().mutationCount
+    useStore.getState().dismissDrift('educations:e1:Degree:length')
+    expect(useStore.getState().data.resume!.drift_dismissals).toEqual(['educations:e1:Degree:length'])
+    expect(useStore.getState().mutationCount).toBe(before)
+  })
+
+  it('accumulates distinct keys', () => {
+    useStore.getState().dismissDrift('a:1:X:numbers')
+    useStore.getState().dismissDrift('b:2:Y:length')
+    expect(useStore.getState().data.resume!.drift_dismissals).toEqual(['a:1:X:numbers', 'b:2:Y:length'])
+  })
+})

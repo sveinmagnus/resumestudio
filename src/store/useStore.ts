@@ -121,6 +121,11 @@ interface AppState {
   dismissAttention: (key: string, until: string) => void
   /** Un-dismiss a previously snoozed warning so it can surface again. */
   clearAttentionDismissal: (key: string) => void
+  /**
+   * Permanently ignore a cross-language "check" finding judged a false positive
+   * (`DriftFinding.dismissKey`). Appends to `resume.drift_dismissals`; no expiry.
+   */
+  dismissDrift: (key: string) => void
   /** Rescan all data, merge any new locales into resume.supported_locales. */
   detectAndSetLocales: () => void
   /** Add a locale code to resume.supported_locales (no-op if already present). */
@@ -293,6 +298,18 @@ export const useStore = create<AppState>((set, get) => {
         data: {
           ...st.data,
           resume: { ...st.data.resume, attention_dismissals: next },
+        },
+      }
+    }),
+
+    dismissDrift: (key) => mutate((st) => {
+      if (!st.data.resume) return null
+      const current = st.data.resume.drift_dismissals ?? []
+      if (current.includes(key)) return null // no-op: already ignored
+      return {
+        data: {
+          ...st.data,
+          resume: { ...st.data.resume, drift_dismissals: [...current, key] },
         },
       }
     }),

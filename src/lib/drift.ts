@@ -40,6 +40,17 @@ export interface DriftFinding {
   severity: 'high' | 'low'
   /** One-line, human-readable explanation for the drill-down. */
   detail: string
+  /**
+   * Stable id for permanently ignoring this finding as a false positive (stored
+   * in `Resume.drift_dismissals`). Keyed by the field AND the kind, so ignoring
+   * a "length" hint on a field doesn't also silence a future "numbers" one there.
+   */
+  dismissKey: string
+}
+
+/** The permanent-ignore key for a drift finding — see DriftFinding.dismissKey. */
+export function driftDismissKey(meta: MissingField, kind: DriftKind): string {
+  return `${meta.section}:${meta.itemId ?? 'root'}:${meta.fieldLabel}:${kind}`
 }
 
 export interface DriftReport {
@@ -167,11 +178,21 @@ function lengthDrift(a: string, b: string): number | null {
  * the most actionable rows lead. A field can contribute at most one finding
  * (numbers takes precedence over length — the stronger signal wins).
  */
-export function computeDrift(data: ResumeStore, a: string, b: string): DriftReport {
+export function computeDrift(
+  data: ResumeStore, a: string, b: string, dismissed: Iterable<string> = [],
+): DriftReport {
   const findings: DriftFinding[] = []
   let comparedFields = 0
+  const ignored = dismissed instanceof Set ? dismissed : new Set(dismissed)
 
   if (a === b) return { a, b, comparedFields: 0, findings: [] }
+
+  // Push a finding unless the user has permanently ignored this field+kind.
+  const add = (meta: MissingField, kind: DriftKind, severity: 'high' | 'low', detail: string) => {
+    const dismissKey = driftDismissKey(meta, kind)
+    if (ignored.has(dismissKey)) return
+    findings.push({ meta, kind, severity, detail, dismissKey })
+  }
 
   for (const f of collectTrackedFields(data)) {
     const va = f.ls[a]
@@ -182,15 +203,10 @@ export function computeDrift(data: ResumeStore, a: string, b: string): DriftRepo
 
     const { onlyA, onlyB } = numberDiff(va, vb)
     if (onlyA.length || onlyB.length) {
-      findings.push({
-        meta: f.meta,
-        kind: 'numbers',
-        severity: 'high',
-        // Describe the DIFFERENCE, not both full lists — a timeline field with
-        // 20 years otherwise dumps an unreadable wall. "2027 in one, not the
-        // other" is what the user needs to act on.
-        detail: numberDetail(onlyA, onlyB, a, b),
-      })
+      // Describe the DIFFERENCE, not both full lists — a timeline field with 20
+      // years otherwise dumps an unreadable wall. "2027 in one, not the other"
+      // is what the user needs to act on.
+      add(f.meta, 'numbers', 'high', numberDetail(onlyA, onlyB, a, b))
       continue
     }
     // Length disparity only signals staleness in PROSE. On short structured
@@ -199,12 +215,7 @@ export function computeDrift(data: ResumeStore, a: string, b: string): DriftRepo
     // of Science in Engineering" (6) is a 6× ratio but not drift — so skip them.
     const ratio = f.prose ? lengthDrift(va, vb) : null
     if (ratio != null) {
-      findings.push({
-        meta: f.meta,
-        kind: 'length',
-        severity: 'low',
-        detail: `One language is ${ratio.toFixed(1)}× longer than the other — one side may be out of date.`,
-      })
+      add(f.meta, 'length', 'low', `One language is ${ratio.toFixed(1)}× longer than the other — one side may be out of date.`)
     }
   }
 

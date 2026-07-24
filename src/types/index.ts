@@ -76,6 +76,15 @@ export interface Resume {
    * `profile` and never widens the section-key unions.
    */
   attention_dismissals?: Record<string, string>
+  /**
+   * Cross-language "check" findings the consultant has judged false positives
+   * and PERMANENTLY ignored — a list of `DriftFinding.dismissKey`s (see
+   * `lib/drift.ts`). Unlike `attention_dismissals` this never expires: a drift
+   * false positive (a name that just reads differently across languages) stays
+   * a false positive. Additive + optional — absent on older data; consumers
+   * default to `[]`. Rides the backup `profile` like `attention_dismissals`.
+   */
+  drift_dismissals?: string[]
   created_at: string
   updated_at: string
 }
