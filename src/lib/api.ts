@@ -166,7 +166,8 @@ export interface AssistStatus {
 }
 
 export const ASSIST_OFF: AssistStatus = { configured: false, provider: '', model: '', local: false }
-export type SummarizeProvider = 'off' | 'ollama' | 'openai' | 'compat'
+export type SummarizeProvider =
+  | 'off' | 'ollama' | 'openai' | 'compat' | 'anthropic' | 'gemini' | 'mistral'
 
 /** Editable settings as returned to the client (API keys masked to booleans). */
 export interface SettingsView {
@@ -188,7 +189,22 @@ export interface SettingsView {
   summarize_openai_api_key_set: boolean
   summarize_compat_url: string
   summarize_compat_api_key_set: boolean
+  summarize_anthropic_api_key_set: boolean
+  summarize_gemini_api_key_set: boolean
+  summarize_mistral_api_key_set: boolean
   summarize_model: string
+}
+
+/** One subdirectory in the folder-picker listing. */
+export interface FolderEntry { name: string; path: string }
+
+/** POST /api/settings/folders response — a folder + its immediate subfolders. */
+export interface FolderListing {
+  path: string
+  parent: string | null
+  home: string
+  sep: string
+  entries: FolderEntry[]
 }
 
 /** GET /api/settings response. `managed` is false on env-driven (VPS) builds. */
@@ -218,6 +234,9 @@ export interface SettingsUpdate {
   summarize_openai_api_key?: string
   summarize_compat_url?: string
   summarize_compat_api_key?: string
+  summarize_anthropic_api_key?: string
+  summarize_gemini_api_key?: string
+  summarize_mistral_api_key?: string
   summarize_model?: string
 }
 
@@ -547,6 +566,25 @@ export const api = {
     const res = await request('GET', '/api/settings')
     if (!res.ok) throw new ServerError(res.status, `Could not load settings: ${res.statusText}`)
     return await res.json() as SettingsStatus
+  },
+
+  /**
+   * List a folder's subdirectories for the backup-folder picker (desktop only).
+   * Pass no path (or '') for the user's home directory. Throws on failure so the
+   * picker can show the reason (e.g. an unreadable folder).
+   */
+  async browseFolders(path?: string): Promise<FolderListing> {
+    const res = await request('POST', '/api/settings/folders', { path: path ?? '' })
+    if (!res.ok) {
+      if (res.status === 401) throw new UnauthorizedError()
+      let message = `Could not list that folder (${res.status})`
+      try {
+        const json = await res.json() as { error?: string }
+        if (json.error) message = json.error
+      } catch { /* keep default */ }
+      throw new ServerError(res.status, message)
+    }
+    return await res.json() as FolderListing
   },
 
   /** Persist a settings change; returns the refreshed status. */

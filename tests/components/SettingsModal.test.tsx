@@ -30,6 +30,9 @@ const managedStatus = (over: Partial<SettingsStatus['settings']> = {}): Settings
     summarize_openai_api_key_set: false,
     summarize_compat_url: '',
     summarize_compat_api_key_set: false,
+    summarize_anthropic_api_key_set: false,
+    summarize_gemini_api_key_set: false,
+    summarize_mistral_api_key_set: false,
     summarize_model: '',
     ...over,
   },
@@ -204,5 +207,41 @@ describe('<SettingsModal>', () => {
     expect(await screen.findByText(/Could not save: disk full/i)).toBeInTheDocument()
     // Never probed — a "Working" here would describe config that isn't stored.
     expect(testSpy).not.toHaveBeenCalled()
+  })
+
+  it('saves the Anthropic AI-assist provider with its key', async () => {
+    vi.spyOn(api, 'getSettings').mockResolvedValue(managedStatus())
+    const saveSpy = vi.spyOn(api, 'saveSettings').mockResolvedValue(
+      managedStatus({ summarize_provider: 'anthropic', summarize_anthropic_api_key_set: true }))
+    render(<SettingsModal onClose={() => {}} onChanged={() => {}} onUnauthorized={() => {}} />)
+
+    await openTab(/ai assist/i)
+    await userEvent.selectOptions(await screen.findByLabelText(/AI assist provider/i), 'anthropic')
+    await userEvent.type(screen.getByLabelText(/Anthropic API key/i), 'sk-ant-123')
+    await userEvent.type(screen.getByLabelText(/AI assist model/i), 'claude-haiku-4-5')
+    await userEvent.click(screen.getByRole('button', { name: /^Save$/i }))
+
+    await waitFor(() => expect(saveSpy).toHaveBeenCalled())
+    expect(saveSpy.mock.calls[0][0]).toMatchObject({
+      summarize_provider: 'anthropic', summarize_anthropic_api_key: 'sk-ant-123', summarize_model: 'claude-haiku-4-5',
+    })
+  })
+
+  it('picks the backup folder by browsing instead of pasting', async () => {
+    vi.spyOn(api, 'getSettings').mockResolvedValue(managedStatus())
+    const browseSpy = vi.spyOn(api, 'browseFolders').mockResolvedValue({
+      path: '/home/you', parent: '/home', home: '/home/you', sep: '/',
+      entries: [{ name: 'Dropbox', path: '/home/you/Dropbox' }],
+    })
+    render(<SettingsModal onClose={() => {}} onChanged={() => {}} onUnauthorized={() => {}} />)
+
+    await openTab(/sync/i)
+    await userEvent.click(await screen.findByRole('button', { name: /Browse/i }))
+    // Descend into a subfolder, then commit the current directory.
+    await userEvent.click(await screen.findByRole('button', { name: /Dropbox/i }))
+    await waitFor(() => expect(browseSpy).toHaveBeenCalledWith('/home/you/Dropbox'))
+    await userEvent.click(screen.getByRole('button', { name: /Use this folder/i }))
+
+    expect((screen.getByLabelText(/Backup folder/i) as HTMLInputElement).value).toBe('/home/you')
   })
 })

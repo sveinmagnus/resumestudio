@@ -70,7 +70,13 @@ export interface AppSettings {
   summarize_compat_url: string
   /** Optional API key for the compat endpoint. */
   summarize_compat_api_key: string
-  /** Chat model name (e.g. 'llama3.2:3b', 'gpt-4o-mini'). */
+  /** Anthropic (Claude) API key (provider=anthropic). */
+  summarize_anthropic_api_key: string
+  /** Google Gemini API key (provider=gemini). */
+  summarize_gemini_api_key: string
+  /** Mistral API key (provider=mistral). */
+  summarize_mistral_api_key: string
+  /** Chat model name (e.g. 'llama3.2:3b', 'gpt-4o-mini', 'claude-haiku-4-5'). */
   summarize_model: string
 }
 
@@ -94,6 +100,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   summarize_openai_api_key: '',
   summarize_compat_url: '',
   summarize_compat_api_key: '',
+  summarize_anthropic_api_key: '',
+  summarize_gemini_api_key: '',
+  summarize_mistral_api_key: '',
   summarize_model: '',
 }
 
@@ -153,6 +162,9 @@ function coerce(raw: unknown): AppSettings {
     summarize_openai_api_key: str(o.summarize_openai_api_key, DEFAULT_SETTINGS.summarize_openai_api_key).trim(),
     summarize_compat_url: str(o.summarize_compat_url, DEFAULT_SETTINGS.summarize_compat_url).trim(),
     summarize_compat_api_key: str(o.summarize_compat_api_key, DEFAULT_SETTINGS.summarize_compat_api_key).trim(),
+    summarize_anthropic_api_key: str(o.summarize_anthropic_api_key, DEFAULT_SETTINGS.summarize_anthropic_api_key).trim(),
+    summarize_gemini_api_key: str(o.summarize_gemini_api_key, DEFAULT_SETTINGS.summarize_gemini_api_key).trim(),
+    summarize_mistral_api_key: str(o.summarize_mistral_api_key, DEFAULT_SETTINGS.summarize_mistral_api_key).trim(),
     summarize_model: str(o.summarize_model, DEFAULT_SETTINGS.summarize_model).trim(),
   }
 }
@@ -206,6 +218,9 @@ export function applyToEnv(s: AppSettings): void {
   setOrClear('SUMMARIZE_OPENAI_API_KEY', s.summarize_openai_api_key)
   setOrClear('SUMMARIZE_COMPAT_URL', s.summarize_compat_url)
   setOrClear('SUMMARIZE_COMPAT_API_KEY', s.summarize_compat_api_key)
+  setOrClear('SUMMARIZE_ANTHROPIC_API_KEY', s.summarize_anthropic_api_key)
+  setOrClear('SUMMARIZE_GEMINI_API_KEY', s.summarize_gemini_api_key)
+  setOrClear('SUMMARIZE_MISTRAL_API_KEY', s.summarize_mistral_api_key)
   setOrClear('SUMMARIZE_MODEL', s.summarize_model)
 }
 
@@ -217,6 +232,9 @@ export function settingsToSummarizeConfig(s: AppSettings): SummarizeConfig {
     ollama: { url: (ollamaUrl || DOCKER_OLLAMA_URL).replace(/\/+$/, '') },
     openai: { apiKey: s.summarize_openai_api_key },
     compat: { url: s.summarize_compat_url.replace(/\/+$/, ''), apiKey: s.summarize_compat_api_key },
+    anthropic: { apiKey: s.summarize_anthropic_api_key },
+    gemini: { apiKey: s.summarize_gemini_api_key },
+    mistral: { apiKey: s.summarize_mistral_api_key },
     model: s.summarize_model,
   }
 }
@@ -308,6 +326,9 @@ function summarizeFromEnv(): Partial<AppSettings> {
     summarize_openai_api_key: process.env.SUMMARIZE_OPENAI_API_KEY ?? '',
     summarize_compat_url: process.env.SUMMARIZE_COMPAT_URL ?? '',
     summarize_compat_api_key: process.env.SUMMARIZE_COMPAT_API_KEY ?? '',
+    summarize_anthropic_api_key: process.env.SUMMARIZE_ANTHROPIC_API_KEY ?? '',
+    summarize_gemini_api_key: process.env.SUMMARIZE_GEMINI_API_KEY ?? '',
+    summarize_mistral_api_key: process.env.SUMMARIZE_MISTRAL_API_KEY ?? '',
     summarize_model: process.env.SUMMARIZE_MODEL ?? '',
   }
 }
@@ -334,6 +355,9 @@ export interface SettingsView {
   summarize_openai_api_key_set: boolean
   summarize_compat_url: string
   summarize_compat_api_key_set: boolean
+  summarize_anthropic_api_key_set: boolean
+  summarize_gemini_api_key_set: boolean
+  summarize_mistral_api_key_set: boolean
   summarize_model: string
 }
 
@@ -356,6 +380,9 @@ export function toView(s: AppSettings): SettingsView {
     summarize_openai_api_key_set: s.summarize_openai_api_key.trim().length > 0,
     summarize_compat_url: s.summarize_compat_url,
     summarize_compat_api_key_set: s.summarize_compat_api_key.trim().length > 0,
+    summarize_anthropic_api_key_set: s.summarize_anthropic_api_key.trim().length > 0,
+    summarize_gemini_api_key_set: s.summarize_gemini_api_key.trim().length > 0,
+    summarize_mistral_api_key_set: s.summarize_mistral_api_key.trim().length > 0,
     summarize_model: s.summarize_model,
   }
 }

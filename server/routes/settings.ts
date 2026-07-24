@@ -19,6 +19,7 @@ import { startTranslate, stopTranslate, translateReachable, dockerAvailable, DOC
 import { isSummarizeConfigured, summarize, SummarizeError, SUMMARIZE_PROVIDERS } from '../summarize.js'
 import { startSummarize, stopSummarize, ollamaReachable, dockerAvailable as ollamaDockerAvailable } from '../summarizeDocker.js'
 import { reconfigureBackup } from '../backupRuntime.js'
+import { listFolders, FolderError } from '../folders.js'
 
 const router = Router()
 
@@ -125,7 +126,10 @@ router.put('/', (req: Request, res: Response): void => {
     if (typeof body.summarize_docker !== 'boolean') { res.status(400).json({ error: 'summarize_docker must be a boolean' }); return }
     patch.summarize_docker = body.summarize_docker
   }
-  for (const key of ['summarize_openai_api_key', 'summarize_compat_api_key', 'summarize_model'] as const) {
+  for (const key of [
+    'summarize_openai_api_key', 'summarize_compat_api_key', 'summarize_model',
+    'summarize_anthropic_api_key', 'summarize_gemini_api_key', 'summarize_mistral_api_key',
+  ] as const) {
     if (key in body) {
       if (typeof body[key] !== 'string') { res.status(400).json({ error: `${key} must be a string` }); return }
       patch[key] = body[key] as string
@@ -184,6 +188,31 @@ router.post('/translate/test', (req: Request, res: Response): void => {
 })
 
 /**
+ * POST /api/settings/folders — list a folder's subdirectories so the Settings
+ * screen can navigate to the backup/sync folder instead of pasting a path.
+ * Body: { path?: string } (omitted/empty → the user's home directory).
+ *
+ * DESKTOP-ONLY: this exposes the local directory tree, which is appropriate on
+ * the user's own machine but must never be reachable on the shared VPS build.
+ * POST (not GET) so Windows paths with backslashes ride in the JSON body rather
+ * than a URL-encoded query string.
+ */
+router.post('/folders', (req: Request, res: Response): void => {
+  if (!isDesktop()) {
+    res.status(403).json({ error: 'Folder browsing is only available in the desktop build.' })
+    return
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>
+  const dir = typeof body.path === 'string' ? body.path : undefined
+  try {
+    res.json(listFolders(dir))
+  } catch (err) {
+    if (err instanceof FolderError) { res.status(err.status).json({ error: err.message }); return }
+    res.status(500).json({ error: 'Could not list that folder.' })
+  }
+})
+
+/**
  * POST /api/settings/docker — manage the local Docker LibreTranslate (desktop).
  * Body: { action: 'start' | 'stop' | 'status' }.
  */
@@ -224,6 +253,9 @@ router.post('/summarize/test', (req: Request, res: Response): void => {
       if (str('summarize_compat_url') !== undefined) merged.summarize_compat_url = (body.summarize_compat_url as string).trim()
       if (str('summarize_openai_api_key')) merged.summarize_openai_api_key = body.summarize_openai_api_key as string
       if (str('summarize_compat_api_key')) merged.summarize_compat_api_key = body.summarize_compat_api_key as string
+      if (str('summarize_anthropic_api_key')) merged.summarize_anthropic_api_key = body.summarize_anthropic_api_key as string
+      if (str('summarize_gemini_api_key')) merged.summarize_gemini_api_key = body.summarize_gemini_api_key as string
+      if (str('summarize_mistral_api_key')) merged.summarize_mistral_api_key = body.summarize_mistral_api_key as string
       if (str('summarize_model') !== undefined) merged.summarize_model = (body.summarize_model as string).trim()
     }
     const cfg = settingsToSummarizeConfig(merged)

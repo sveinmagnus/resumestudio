@@ -7,12 +7,15 @@
  * the note in sections.tsx and CLAUDE.md §14.
  */
 
-import { FolderSync } from 'lucide-react'
+import { useState } from 'react'
+import { FolderSync, FolderSearch } from 'lucide-react'
 import { useSettingsForm } from './context'
 import { SaveToFileSection } from './sections'
+import { FolderPicker } from './FolderPicker'
 
 export function SyncTab() {
   const { managed, backupDir, setBackupDir } = useSettingsForm()
+  const [browsing, setBrowsing] = useState(false)
 
   return (
     <>
@@ -20,15 +23,33 @@ export function SyncTab() {
         <section className="sm-sec">
           <div className="sm-sec-head"><FolderSync size={15} /> Backup &amp; sync folder</div>
           <p className="sm-help">
-            Paste the path to a cloud-synced folder (Google Drive / Dropbox /
-            OneDrive). Resume Studio keeps one backup file there and merges
-            newer content from it on launch — point a second computer at the
-            same folder to share your CVs. Leave blank to turn sync off.
+            Point Resume Studio at a cloud-synced folder (Google Drive / Dropbox /
+            OneDrive). It keeps one backup file there and, while running, writes
+            your edits out and merges newer content back in — so pointing a second
+            computer at the <strong>same</strong> folder shares your CVs across
+            both. Leave blank to turn sync off.
           </p>
-          <input
-            className="sm-input" placeholder="e.g. C:\Users\you\Google Drive\ResumeStudio"
-            value={backupDir} onChange={(e) => setBackupDir(e.target.value)} aria-label="Backup folder"
-          />
+          <div className="sm-field-row">
+            <input
+              className="sm-input" placeholder="e.g. C:\Users\you\Google Drive\ResumeStudio"
+              value={backupDir} onChange={(e) => setBackupDir(e.target.value)} aria-label="Backup folder"
+            />
+            <button type="button" className="sm-btn" onClick={() => setBrowsing((b) => !b)}
+              aria-expanded={browsing} title="Browse for a folder">
+              <FolderSearch size={13} /> Browse…
+            </button>
+          </div>
+          <p className="sm-help">
+            Type or paste a path, or <strong>Browse…</strong> to navigate to it. The
+            folder must already exist (create it in your cloud app first).
+          </p>
+          {browsing && (
+            <FolderPicker
+              initialPath={backupDir}
+              onSelect={(p) => setBackupDir(p)}
+              onClose={() => setBrowsing(false)}
+            />
+          )}
         </section>
       )}
       <SaveToFileSection />

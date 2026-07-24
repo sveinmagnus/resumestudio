@@ -40,16 +40,23 @@ The full catalog with per-feature design detail is in
   translate everywhere — that's what the 19-language/4-translated state this
   replaced looked like from the user's side.
 - **AI assist (BYO backend)** — server-proxied summarize (Docker-managed local
-  Ollama / OpenAI / any OpenAI-compatible endpoint) drafts a one-line short
-  description from a long one: per-column in `DualField`, or the whole section
-  via "Bulk summarize" (confirmation-gated) in the section bar (`lib/summarizeBatch.ts`).
-  Drafts are always review-required. Hidden entirely when nothing is
-  configured. The Ollama model field is a datalist over
-  `lib/ollamaCatalog.ts` (curated open-weight shortlist + sizes) merged with
-  what the instance has pulled (`GET /api/summarize/models`), with a Refresh
-  button; it stays free-text, so any tag works. The same model can also power
-  **translation** (`translate_provider: 'llm'`) instead of a separate engine —
-  `summarize.ts → chatComplete()` is the one shared chat round-trip.
+  Ollama / OpenAI / Anthropic / Google Gemini / Mistral / any OpenAI-compatible
+  endpoint) drafts a one-line short description from a long one: per-column in
+  `DualField`, or the whole section via "Bulk summarize" (confirmation-gated) in
+  the section bar (`lib/summarizeBatch.ts`). Drafts are always review-required.
+  Hidden entirely when nothing is configured. **Provider wire protocols:**
+  `summarize.ts → endpointFor()` splits on `protocol` — most speak OpenAI **Chat
+  Completions** (ollama/openai/compat/gemini/mistral; Gemini via Google's
+  OpenAI-compat endpoint, both Bearer-auth); **anthropic** is the native
+  **Messages** API (`x-api-key`+`anthropic-version`, top-level `system`, no
+  `temperature` — current Claude models reject it, `content[].text` reply). The
+  Ollama model field is a datalist over `lib/ollamaCatalog.ts` (curated
+  open-weight shortlist + sizes) merged with what the instance has pulled (`GET
+  /api/summarize/models`) with a Refresh button; the hosted providers get a
+  static curated shortlist (`lib/cloudModelCatalog.ts`). Both stay free-text, so
+  any model id works. The same model can also power **translation**
+  (`translate_provider: 'llm'`) and the **writing coach** instead of a separate
+  engine — `summarize.ts → chatComplete()` is the one shared chat round-trip.
 - **Registries** — shared Skill / Role / Industry registries with merge,
   usage counts, and a "By category" view (renamable Skill **and** Role
   categories); `SkillCategory` entities drive skill grouping + the Skills

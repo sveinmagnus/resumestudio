@@ -15,8 +15,15 @@ import type { InstalledModel } from '../../lib/ollamaCatalog'
 
 /** The translation provider as the UI models it (Docker vs remote are one provider server-side). */
 export type UiProvider = 'off' | 'libre_docker' | 'libre_remote' | 'deepl' | 'google' | 'azure' | 'llm'
-/** Same idea for the summarize provider. */
-export type SummUiProvider = 'off' | 'ollama_docker' | 'ollama_remote' | 'openai' | 'compat'
+/** Same idea for the summarize provider (Ollama's Docker vs remote is one
+ *  provider server-side; the hosted ones map 1:1 to SummarizeProvider). */
+export type SummUiProvider =
+  | 'off' | 'ollama_docker' | 'ollama_remote'
+  | 'openai' | 'anthropic' | 'gemini' | 'mistral' | 'compat'
+
+/** API-key form fields for the summarize providers that take a key. */
+export interface SummKeys { openai: string; anthropic: string; gemini: string; mistral: string; compat: string }
+export type SummKeyName = keyof SummKeys
 
 /** An async action's transient result (Test / Docker / update buttons). */
 export interface ActionState { busy: boolean; text?: string; ok?: boolean }
@@ -53,9 +60,9 @@ export interface SettingsForm {
   setSummCompatUrl: (v: string) => void
   summModel: string
   setSummModel: (v: string) => void
-  summKeys: { openai: string; compat: string }
-  setSummKeys: React.Dispatch<React.SetStateAction<{ openai: string; compat: string }>>
-  summKeySet: { openai: boolean; compat: boolean }
+  summKeys: SummKeys
+  setSummKeys: React.Dispatch<React.SetStateAction<SummKeys>>
+  summKeySet: Record<SummKeyName, boolean>
   summTest: ActionState
   onTestSummarize: () => Promise<void>
   summDocker: ActionState

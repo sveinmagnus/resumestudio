@@ -5,6 +5,7 @@
 
 import { Loader2, Check, AlertCircle, Server, Box, Power, RefreshCw, Sparkles } from 'lucide-react'
 import { useSettingsForm, type SummUiProvider } from './context'
+import { cloudModelOptions, modelPlaceholder } from '../../lib/cloudModelCatalog'
 
 export function AiAssistTab() {
   const {
@@ -19,13 +20,13 @@ export function AiAssistTab() {
   if (!managed) {
     return (
       <section className="sm-sec">
-        <div className="sm-sec-head"><Sparkles size={15} /> Summarize (AI short descriptions)</div>
+        <div className="sm-sec-head"><Sparkles size={15} /> AI assist (Summarize, Writing coach &amp; translation)</div>
         <div className="sm-note">
           On this deployment, settings are controlled by the server's environment
           variables, not from the app.
         </div>
         <div className="sm-row">
-          <span>Summarize</span>
+          <span>AI assist</span>
           <span className={status?.summarize?.configured ? 'sm-pill sm-pill-ok' : 'sm-pill'}>
             {status?.summarize?.configured ? 'Configured' : 'Off'}
           </span>
@@ -35,25 +36,44 @@ export function AiAssistTab() {
   }
 
   const installedCount = installed.length
+  // Cloud providers map 1:1 to their server name, so the UI value is the catalog
+  // key. Ollama has its own (dynamic) list; both feed the same datalist below.
+  const cloudModels = cloudModelOptions(summProvider)
+  const hasModelList = isOllama || cloudModels.length > 0
 
   return (
     <section className="sm-sec">
-      <div className="sm-sec-head"><Sparkles size={15} /> Summarize (AI short descriptions)</div>
+      <div className="sm-sec-head"><Sparkles size={15} /> AI assist (Summarize, Writing coach &amp; translation)</div>
       <p className="sm-help">
-        Powers the “Summarize” button that drafts a one-line short
-        description from a long one. Needs an LLM — run one locally with
-        Docker (private &amp; free), or point at OpenAI / an
-        OpenAI-compatible endpoint.
+        One LLM powers every AI assist in Resume Studio: the <strong>Summarize</strong>{' '}
+        button that drafts a one-line short description from a long one (per field,
+        or a whole section at once with <strong>Bulk summarize</strong>); the{' '}
+        <strong>Writing coach</strong>, which tightens an existing description's
+        prose without inventing facts; and — when the Translation tab is set to{' '}
+        <em>“AI-assist model”</em> — <strong>translation</strong> too. Every result
+        is a review-required draft.
+      </p>
+      <p className="sm-help">
+        Run a model locally with Docker (private &amp; free — nothing leaves this
+        computer), or use a hosted provider. Configure it once here and all three
+        features light up.
       </p>
 
       <label className="sm-field-label" htmlFor="sm-sum-provider">Provider</label>
       <select id="sm-sum-provider" className="sm-input" value={summProvider}
-        onChange={(e) => setSummProvider(e.target.value as SummUiProvider)} aria-label="Summarize provider">
-        <option value="off">Off — no Summarize button</option>
-        <option value="ollama_docker">Local LLM — Ollama (Docker-managed)</option>
-        <option value="ollama_remote">Ollama — remote URL</option>
-        <option value="openai">OpenAI</option>
-        <option value="compat">OpenAI-compatible (OpenRouter, Groq, LM Studio…)</option>
+        onChange={(e) => setSummProvider(e.target.value as SummUiProvider)} aria-label="AI assist provider">
+        <option value="off">Off — no AI assist</option>
+        <optgroup label="Local (private &amp; free)">
+          <option value="ollama_docker">Ollama — Docker-managed</option>
+          <option value="ollama_remote">Ollama — remote URL</option>
+        </optgroup>
+        <optgroup label="Hosted (bring your own API key)">
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="gemini">Google Gemini</option>
+          <option value="mistral">Mistral</option>
+          <option value="compat">Other OpenAI-compatible (OpenRouter, Groq, Together, LM Studio…)</option>
+        </optgroup>
       </select>
 
       {summProvider !== 'off' && (
@@ -65,9 +85,9 @@ export function AiAssistTab() {
               the running instance what it has pulled. */}
           <div className="sm-field-row">
             <input id="sm-sum-model" className="sm-input" value={summModel}
-              list={isOllama ? 'sm-model-list' : undefined}
-              placeholder={summProvider === 'openai' ? 'e.g. gpt-4o-mini' : 'e.g. llama3.2:3b'}
-              onChange={(e) => setSummModel(e.target.value)} aria-label="Summarize model" />
+              list={hasModelList ? 'sm-model-list' : undefined}
+              placeholder={modelPlaceholder(summProvider)}
+              onChange={(e) => setSummModel(e.target.value)} aria-label="AI assist model" />
             {isOllama && (
               <button className="sm-btn sm-btn-icon" onClick={() => void refreshModels()}
                 disabled={modelsBusy} title="Refresh the list from the running Ollama"
@@ -76,9 +96,11 @@ export function AiAssistTab() {
               </button>
             )}
           </div>
-          {isOllama && (
+          {hasModelList && (
             <datalist id="sm-model-list">
-              {modelOpts.map((m) => <option key={m.name} value={m.name} label={m.label} />)}
+              {isOllama
+                ? modelOpts.map((m) => <option key={m.name} value={m.name} label={m.label} />)
+                : cloudModels.map((m) => <option key={m.name} value={m.name} label={m.note} />)}
             </datalist>
           )}
           {isOllama && (
@@ -87,6 +109,9 @@ export function AiAssistTab() {
                 ? `${installedCount} model(s) already pulled. Others download on first use.`
                 : 'Pick a model — smaller is faster and downloads less. Any Ollama tag works.'}
             </p>
+          )}
+          {!isOllama && cloudModels.length > 0 && (
+            <p className="sm-help">Smaller/“mini/flash” models are cheapest and plenty for one-line drafts. Any model id the provider accepts works.</p>
           )}
         </div>
       )}
@@ -130,6 +155,34 @@ export function AiAssistTab() {
           <input className="sm-input" type="password" placeholder={keyPlaceholder(summKeySet.openai)}
             value={summKeys.openai} onChange={(e) => setSummKeys((k) => ({ ...k, openai: e.target.value }))}
             aria-label="OpenAI API key" />
+          <p className="sm-help">Get a key at <code>platform.openai.com</code>.</p>
+        </div>
+      )}
+
+      {summProvider === 'anthropic' && (
+        <div className="sm-sub">
+          <input className="sm-input" type="password" placeholder={keyPlaceholder(summKeySet.anthropic)}
+            value={summKeys.anthropic} onChange={(e) => setSummKeys((k) => ({ ...k, anthropic: e.target.value }))}
+            aria-label="Anthropic API key" />
+          <p className="sm-help">Native Claude Messages API. Get a key at <code>console.anthropic.com</code>.</p>
+        </div>
+      )}
+
+      {summProvider === 'gemini' && (
+        <div className="sm-sub">
+          <input className="sm-input" type="password" placeholder={keyPlaceholder(summKeySet.gemini)}
+            value={summKeys.gemini} onChange={(e) => setSummKeys((k) => ({ ...k, gemini: e.target.value }))}
+            aria-label="Google Gemini API key" />
+          <p className="sm-help">Uses Google's OpenAI-compatible endpoint. Get a key at <code>aistudio.google.com</code>.</p>
+        </div>
+      )}
+
+      {summProvider === 'mistral' && (
+        <div className="sm-sub">
+          <input className="sm-input" type="password" placeholder={keyPlaceholder(summKeySet.mistral)}
+            value={summKeys.mistral} onChange={(e) => setSummKeys((k) => ({ ...k, mistral: e.target.value }))}
+            aria-label="Mistral API key" />
+          <p className="sm-help">Get a key at <code>console.mistral.ai</code>.</p>
         </div>
       )}
 

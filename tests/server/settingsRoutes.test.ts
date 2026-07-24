@@ -159,3 +159,52 @@ describe('POST /api/settings/docker', () => {
     expect(res.status).toBe(400)
   })
 })
+
+describe('PUT /api/settings — hosted summarize providers', () => {
+  it('saves anthropic + key, masking the key and reflecting summarize.configured', async () => {
+    const put = await request(app).put('/api/settings').send({
+      summarize_provider: 'anthropic', summarize_anthropic_api_key: 'sk-ant-xxx',
+    })
+    expect(put.status).toBe(200)
+    expect(put.body.settings.summarize_provider).toBe('anthropic')
+    expect(put.body.settings.summarize_anthropic_api_key_set).toBe(true)
+    expect(put.body.settings).not.toHaveProperty('summarize_anthropic_api_key')
+    // A key alone is enough — the default model kicks in.
+    expect(put.body.summarize.configured).toBe(true)
+  })
+
+  it('rejects an unknown summarize provider', async () => {
+    const res = await request(app).put('/api/settings').send({ summarize_provider: 'bogus' })
+    expect(res.status).toBe(400)
+  })
+})
+
+describe('POST /api/settings/folders', () => {
+  it('lists the home directory by default (desktop build)', async () => {
+    const res = await request(app).post('/api/settings/folders').send({})
+    expect(res.status).toBe(200)
+    expect(res.body.path).toBe(os.homedir())
+    expect(Array.isArray(res.body.entries)).toBe(true)
+  })
+
+  it('lists a given folder\'s subfolders', async () => {
+    const res = await request(app).post('/api/settings/folders').send({ path: dataDir })
+    expect(res.status).toBe(200)
+    expect(res.body.path).toBe(fs.realpathSync(dataDir))
+  })
+
+  it('404s for a folder that does not exist', async () => {
+    const res = await request(app).post('/api/settings/folders').send({ path: path.join(dataDir, 'nope-nope') })
+    expect(res.status).toBe(404)
+  })
+
+  it('403s when not running the desktop build', async () => {
+    delete process.env.RESUME_DESKTOP
+    try {
+      const res = await request(app).post('/api/settings/folders').send({})
+      expect(res.status).toBe(403)
+    } finally {
+      process.env.RESUME_DESKTOP = '1'
+    }
+  })
+})

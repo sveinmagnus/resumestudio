@@ -12,6 +12,7 @@ import { useDialog } from './ui/useDialog'
 import { useStore } from '../store/useStore'
 import {
   SettingsFormProvider, type SettingsForm, type UiProvider, type SummUiProvider,
+  type SummKeys, type SummKeyName,
 } from './settings/context'
 import { SettingsTabs, type TabDef } from './settings/SettingsTabs'
 import { VersionTab } from './settings/VersionTab'
@@ -88,8 +89,9 @@ export function SettingsModal({ onClose, onChanged, onUnauthorized }: SettingsMo
   const [summOllamaUrl, setSummOllamaUrl] = useState('')
   const [summCompatUrl, setSummCompatUrl] = useState('')
   const [summModel, setSummModel] = useState('')
-  const [summKeys, setSummKeys] = useState({ openai: '', compat: '' })
-  const [summKeySet, setSummKeySet] = useState({ openai: false, compat: false })
+  const [summKeys, setSummKeys] = useState<SummKeys>({ openai: '', anthropic: '', gemini: '', mistral: '', compat: '' })
+  const [summKeySet, setSummKeySet] = useState<Record<SummKeyName, boolean>>(
+    { openai: false, anthropic: false, gemini: false, mistral: false, compat: false })
   const [summTest, setSummTest] = useState<{ busy: boolean; text?: string; ok?: boolean }>({ busy: false })
   const [summDocker, setSummDocker] = useState<{ busy: boolean; text?: string; ok?: boolean }>({ busy: false })
   // Models the running Ollama has pulled, merged with the curated catalog to
@@ -124,8 +126,14 @@ export function SettingsModal({ onClose, onChanged, onUnauthorized }: SettingsMo
     setSummOllamaUrl(v.summarize_ollama_url ?? '')
     setSummCompatUrl(v.summarize_compat_url ?? '')
     setSummModel(v.summarize_model ?? '')
-    setSummKeys({ openai: '', compat: '' })
-    setSummKeySet({ openai: !!v.summarize_openai_api_key_set, compat: !!v.summarize_compat_api_key_set })
+    setSummKeys({ openai: '', anthropic: '', gemini: '', mistral: '', compat: '' })
+    setSummKeySet({
+      openai: !!v.summarize_openai_api_key_set,
+      anthropic: !!v.summarize_anthropic_api_key_set,
+      gemini: !!v.summarize_gemini_api_key_set,
+      mistral: !!v.summarize_mistral_api_key_set,
+      compat: !!v.summarize_compat_api_key_set,
+    })
   }, [])
 
   useEffect(() => {
@@ -200,6 +208,18 @@ export function SettingsModal({ onClose, onChanged, onUnauthorized }: SettingsMo
       case 'openai':
         u.summarize_provider = 'openai'
         if (summKeys.openai.trim()) u.summarize_openai_api_key = summKeys.openai.trim()
+        break
+      case 'anthropic':
+        u.summarize_provider = 'anthropic'
+        if (summKeys.anthropic.trim()) u.summarize_anthropic_api_key = summKeys.anthropic.trim()
+        break
+      case 'gemini':
+        u.summarize_provider = 'gemini'
+        if (summKeys.gemini.trim()) u.summarize_gemini_api_key = summKeys.gemini.trim()
+        break
+      case 'mistral':
+        u.summarize_provider = 'mistral'
+        if (summKeys.mistral.trim()) u.summarize_mistral_api_key = summKeys.mistral.trim()
         break
       case 'compat':
         u.summarize_provider = 'compat'; u.summarize_compat_url = summCompatUrl.trim()

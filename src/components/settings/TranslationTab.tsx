@@ -1,5 +1,6 @@
 /**
- * Translation settings — which backend powers the "Draft translation" button.
+ * Translation settings — the backend behind the side-by-side "Draft translation"
+ * button that machine-fills the secondary-language column.
  *
  * On an env-managed (VPS) build the whole thing is server-controlled, so this
  * shows the resolved status instead of the form.
@@ -20,7 +21,7 @@ export function TranslationTab() {
   if (!managed) {
     return (
       <section className="sm-sec">
-        <div className="sm-sec-head"><Languages size={15} /> Translation (Draft button)</div>
+        <div className="sm-sec-head"><Languages size={15} /> Translation (side-by-side drafting)</div>
         <div className="sm-note">
           On this deployment, settings are controlled by the server's environment
           variables, not from the app.
@@ -37,10 +38,20 @@ export function TranslationTab() {
 
   return (
     <section className="sm-sec">
-      <div className="sm-sec-head"><Languages size={15} /> Translation (Draft button)</div>
+      <div className="sm-sec-head"><Languages size={15} /> Translation (side-by-side drafting)</div>
       <p className="sm-help">
-        The “Draft translation” button needs a translation service.
-        “Copy from primary” always works without one.
+        Resume Studio edits every field in two languages side by side, so one
+        master CV holds all its translations. To fill the secondary-language
+        column, <strong>Copy from primary</strong> duplicates the text as-is
+        (always available — no service needed), and, once you configure a
+        translation service here, a <strong>Draft translation</strong> button
+        appears next to it that machine-translates the primary text for you.
+      </p>
+      <p className="sm-help">
+        Drafts are review-required: they fill the field so you correct rather
+        than type from scratch. Pick a backend below — a hosted service (DeepL,
+        Google, Azure), a local LibreTranslate, or reuse the model from the AI
+        assist tab. Leave it <em>Off</em> and only “Copy from primary” shows.
       </p>
 
       <label className="sm-field-label" htmlFor="sm-provider">Provider</label>
