@@ -1,4 +1,4 @@
-import { useState, useId } from 'react'
+import { useState, useId, useEffect, useRef, type ReactNode } from 'react'
 import { useStore, newId } from '../../store/useStore'
 import { useSortedItems } from '../../store/useSortedItems'
 import { DualField } from '../ui/DualField'
@@ -23,11 +23,13 @@ import type {
   Presentation, HonorAward, Publication, SpokenLanguage, KeyQualification,
   KeyCompetency, Recommendation, Role, LocalizedString, CefrCategory, CefrLevel,
 } from '../../types'
-import { X, ChevronUp, ChevronDown, Plus, GripVertical } from 'lucide-react'
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
+import { X, ChevronUp, ChevronDown, Plus, GripVertical, Pencil } from 'lucide-react'
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { RegistryLightbox } from './RegistryCategoryView'
+import { confirmDialog } from '../ui/ConfirmDialog'
+import { UNASSIGNED_GROUP, chipDragId, parseChipDragId, reassignCompetency } from '../../lib/competencyBundles'
 
 /** Current year+month as a YearMonth — the default "To" date for a new course. */
 function thisMonth(): { year: number; month: number } {
@@ -638,14 +640,134 @@ function bundlesContaining(quals: KeyQualification[], id: string): KeyQualificat
 }
 
 /**
+ * The "Belongs to profiles" line for a competency, with an edit pencil that
+ * opens a multi-select popover to toggle which profiles include this
+ * competency. Membership is the single source of truth on each profile's
+ * `competency_ids`, so ticking a profile appends this competency's id to that
+ * profile's bundle (and un-ticking removes it) — the same mutation the Profile
+ * page performs. Used by both the list-view card and the by-profile lightbox.
+ */
+function ProfileMembershipEditor({ competencyId }: { competencyId: string }) {
+  const { data, primaryLocale, updateItem } = useStore()
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLSpanElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const profiles = data.key_qualifications.filter((q) => !q.disabled)
+  const memberLabels = profiles
+    .filter((q) => (q.competency_ids ?? []).includes(competencyId))
+    .map((q) => resolve(q.tag_line, primaryLocale) || '(unnamed profile)')
+
+  const toggle = (q: KeyQualification) => {
+    const ids = q.competency_ids ?? []
+    const next = ids.includes(competencyId)
+      ? ids.filter((x) => x !== competencyId)
+      : [...ids, competencyId]
+    updateItem('key_qualifications', q.id, { competency_ids: next })
+  }
+
+  return (
+    <span className="kc-membership" ref={wrapRef}>
+      <span className="kc-bundles" role="note">
+        {memberLabels.length
+          ? <>Belongs to {memberLabels.length === 1 ? 'profile' : 'profiles'}: <strong>{memberLabels.join(', ')}</strong>.</>
+          : <>Not in any profile — add it to a profile to have it appear in a view.</>}
+      </span>
+      <button type="button" className="kc-mem-edit" ref={triggerRef}
+        aria-expanded={open} aria-haspopup="true" aria-label="Edit profile membership"
+        title="Edit which profiles this competency belongs to"
+        onClick={() => setOpen((o) => !o)}>
+        <Pencil size={13} />
+      </button>
+      {open && (
+        <div className="kc-mem-pop" role="group" aria-label="Profiles this competency belongs to"
+          onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); triggerRef.current?.focus() } }}>
+          {profiles.length === 0 ? (
+            <p className="kc-mem-empty">No profiles yet — add one on the Profile page first.</p>
+          ) : profiles.map((q) => (
+            <label key={q.id} className="kc-mem-row">
+              <input type="checkbox" checked={(q.competency_ids ?? []).includes(competencyId)}
+                onChange={() => toggle(q)} />
+              <span>{resolve(q.tag_line, primaryLocale) || '(unnamed profile)'}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      <style>{`
+        .kc-membership { position: relative; display: inline-flex; align-items: baseline; gap: 6px; margin-top: 4px; }
+        .kc-mem-edit { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid transparent; border-radius: var(--r-sm); background: none; color: var(--ink-faint); cursor: pointer; align-self: center; }
+        .kc-mem-edit:hover { background: var(--paper-sunken); color: var(--accent); border-color: var(--line-strong); }
+        .kc-mem-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; min-width: 220px; max-height: 260px; overflow-y: auto; overscroll-behavior: contain; padding: 5px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: var(--r-md); box-shadow: var(--shadow-md); }
+        .kc-mem-row { display: flex; align-items: center; gap: 8px; padding: 5px 7px; border-radius: var(--r-sm); cursor: pointer; font-size: 13px; color: var(--ink); }
+        .kc-mem-row:hover { background: var(--paper-sunken); }
+        .kc-mem-empty { margin: 4px 7px; font-size: 12.5px; color: var(--ink-faint); font-style: italic; }
+      `}</style>
+    </span>
+  )
+}
+
+/**
+ * A competency chip in the by-profile view. Draggable (to move it between
+ * profiles) yet still click-to-edit — the PointerSensor's distance activation
+ * lets a plain click through while a drag past the threshold picks the chip up.
+ * The draggable id carries BOTH the source group and the competency so the drop
+ * handler knows which profile to detach it from (a competency can sit in
+ * several profiles at once — only the dragged instance's profile is touched).
+ */
+function DraggableChip({ groupId, competency, primaryLocale, onOpen }: {
+  groupId: string; competency: KeyCompetency; primaryLocale: string; onOpen: (id: string) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: chipDragId(groupId, competency.id) })
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.4 : 1,
+    zIndex: isDragging ? 20 : undefined,
+  }
+  return (
+    <button ref={setNodeRef} style={style} type="button" className="kcp-chip"
+      {...attributes} {...listeners}
+      onClick={() => onOpen(competency.id)}
+      title="Drag to move between profiles · click to edit">
+      {resolve(competency.title, primaryLocale) || 'Untitled competency'}
+    </button>
+  )
+}
+
+/** One profile (or the Unassigned bucket) as a drop target for competency chips. */
+function ProfileDropGroup({ id, label, count, muted, children }: {
+  id: string; label: string; count: number; muted?: boolean; children: ReactNode
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+  return (
+    <div ref={setNodeRef} className={`kcp-group ${isOver ? 'is-over' : ''}`}>
+      <div className={`kcp-head ${muted ? 'kcp-head-un' : ''}`}>{label} <span className="kcp-count">{count}</span></div>
+      <div className="kcp-chips">{children}</div>
+    </div>
+  )
+}
+
+/**
  * Read/navigate grouping of the competency library BY PROFILE — each profile's
  * bundle listed under its tag line, plus an "Unassigned" group for competencies
  * in no profile. A competency in several profiles appears once under EACH (the
- * point of the view). Chips open the competency in a lightbox to edit; membership
- * itself is edited on the Profile page. Mirrors the registries' "By category".
+ * point of the view). Chips open the competency in a lightbox to edit.
+ *
+ * Chips also drag-and-drop between groups to reassign membership: a drop detaches
+ * the competency from the source profile and attaches it to the target (the
+ * Unassigned bucket detaches only). Other profiles holding the same competency
+ * are left untouched — only the dragged instance's profile changes.
  */
 function CompetenciesByProfile({ onOpen }: { onOpen: (id: string) => void }) {
-  const { data, primaryLocale } = useStore()
+  const { data, primaryLocale, updateItem } = useStore()
   const byId = new Map(data.key_competencies.map((c) => [c.id, c]))
   const inSome = new Set<string>()
   const groups = data.key_qualifications.filter((q) => !q.disabled).map((p) => {
@@ -657,39 +779,58 @@ function CompetenciesByProfile({ onOpen }: { onOpen: (id: string) => void }) {
   })
   const unassigned = data.key_competencies.filter((c) => !c.disabled && !inSome.has(c.id))
 
-  const chip = (c: KeyCompetency) => (
-    <button key={c.id} type="button" className="kcp-chip" onClick={() => onOpen(c.id)} title="Click to edit">
-      {resolve(c.title, primaryLocale) || 'Untitled competency'}
-    </button>
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
+  const onDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e
+    if (!over) return
+    const parsed = parseChipDragId(String(active.id))
+    if (!parsed) return
+    // Detach from the source profile / attach to the target — one updateItem per
+    // touched profile; other profiles holding this competency stay untouched.
+    for (const patch of reassignCompetency(data.key_qualifications, parsed.group, String(over.id), parsed.competencyId)) {
+      updateItem('key_qualifications', patch.profileId, { competency_ids: patch.competency_ids })
+    }
+  }
+
+  // The Unassigned bucket stays visible whenever any profile exists, so a chip
+  // can be dragged OUT of a profile (detach) even when nothing is unassigned yet.
+  const showUnassigned = unassigned.length > 0 || groups.length > 0
+
   return (
-    <div className="kcp">
-      {groups.map((g) => (
-        <div key={g.id} className="kcp-group">
-          <div className="kcp-head">{g.label} <span className="kcp-count">{g.comps.length}</span></div>
-          <div className="kcp-chips">
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <div className="kcp">
+        {groups.map((g) => (
+          <ProfileDropGroup key={g.id} id={g.id} label={g.label} count={g.comps.length}>
             {g.comps.length === 0
-              ? <span className="kcp-empty">No competencies — add them from this profile on the Profile page.</span>
-              : g.comps.map(chip)}
-          </div>
-        </div>
-      ))}
-      {unassigned.length > 0 && (
-        <div className="kcp-group">
-          <div className="kcp-head kcp-head-un">Unassigned <span className="kcp-count">{unassigned.length}</span></div>
-          <div className="kcp-chips">{unassigned.map(chip)}</div>
-        </div>
-      )}
-      {groups.length === 0 && unassigned.length === 0 && (
-        <p className="kcp-empty" style={{ padding: '4px 2px' }}>No competencies yet.</p>
-      )}
-    </div>
+              ? <span className="kcp-empty">No competencies — drag one here, or add from this profile on the Profile page.</span>
+              : g.comps.map((c) => (
+                  <DraggableChip key={c.id} groupId={g.id} competency={c} primaryLocale={primaryLocale} onOpen={onOpen} />
+                ))}
+          </ProfileDropGroup>
+        ))}
+        {showUnassigned && (
+          <ProfileDropGroup id={UNASSIGNED_GROUP} label="Unassigned" count={unassigned.length} muted>
+            {unassigned.length === 0
+              ? <span className="kcp-empty">Drag a competency here to remove it from its profile.</span>
+              : unassigned.map((c) => (
+                  <DraggableChip key={c.id} groupId={UNASSIGNED_GROUP} competency={c} primaryLocale={primaryLocale} onOpen={onOpen} />
+                ))}
+          </ProfileDropGroup>
+        )}
+        {groups.length === 0 && unassigned.length === 0 && (
+          <p className="kcp-empty" style={{ padding: '4px 2px' }}>No competencies yet.</p>
+        )}
+      </div>
+    </DndContext>
   )
 }
 
 export function KeyCompetenciesEditor() {
-  const { data, primaryLocale, addItem } = useStore()
+  const { data, primaryLocale, addItem, updateItem, removeItem } = useStore()
   const items = useSortedItems('key_competencies')
   const [byProfile, setByProfile] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -711,7 +852,27 @@ export function KeyCompetenciesEditor() {
     setEditingId(k.id)
   }
   const editing = editingId ? data.key_competencies.find((c) => c.id === editingId) ?? null : null
-  const editingBundles = editing ? bundlesContaining(data.key_qualifications, editing.id) : []
+  // Delete the open competency from the library AND detach it from every
+  // profile bundle it sits in (dangling ids would otherwise linger, harmless
+  // but untidy). Mirrors the list-view card's delete affordance.
+  const deleteEditing = () => {
+    if (!editing) return
+    void confirmDialog({
+      title: 'Delete competency?',
+      message: `Delete "${resolve(editing.title, primaryLocale) || 'Untitled competency'}"? This removes it from the library and every profile that uses it.`,
+      confirmLabel: 'Delete', danger: true, undoHint: true,
+    }).then((ok) => {
+      if (!ok) return
+      for (const q of data.key_qualifications) {
+        const ids = q.competency_ids ?? []
+        if (ids.includes(editing.id)) {
+          updateItem('key_qualifications', q.id, { competency_ids: ids.filter((x) => x !== editing.id) })
+        }
+      }
+      removeItem('key_competencies', editing.id)
+      setEditingId(null)
+    })
+  }
 
   return (
     <div className="section-pane">
@@ -750,11 +911,7 @@ export function KeyCompetenciesEditor() {
               preview={richToPlain(resolve(k.description, primaryLocale))}
               starred={k.starred} disabled={k.disabled}>
               <CompetencyFields competency={k} />
-              <p className="kc-bundles" role="note">
-                {bundles.length
-                  ? <>Belongs to {bundles.length === 1 ? 'profile' : 'profiles'}: <strong>{bundles.map((q) => resolve(q.tag_line, primaryLocale) || '(unnamed profile)').join(', ')}</strong>. Manage membership on the Profile page.</>
-                  : <>Not yet in any profile — add it from a profile on the Profile page to have it appear in a view.</>}
-              </p>
+              <ProfileMembershipEditor competencyId={k.id} />
             </EditorCard>
             )
           })}
@@ -767,13 +924,10 @@ export function KeyCompetenciesEditor() {
           title={resolve(editing.title, primaryLocale) || 'Competency'}
           ariaLabel="Edit competency"
           onClose={() => setEditingId(null)}
+          onDelete={deleteEditing}
         >
           <CompetencyFields competency={editing} />
-          <p className="kc-bundles" role="note">
-            {editingBundles.length
-              ? <>Belongs to: <strong>{editingBundles.map((q) => resolve(q.tag_line, primaryLocale) || '(unnamed profile)').join(', ')}</strong>. Manage membership on the Profile page.</>
-              : <>Not in any profile — add it from a profile on the Profile page to have it appear in a view.</>}
-          </p>
+          <ProfileMembershipEditor competencyId={editing.id} />
         </RegistryLightbox>
       )}
 
@@ -788,13 +942,15 @@ export function KeyCompetenciesEditor() {
         .kc-add { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border: 1px solid var(--accent); border-radius: var(--r-sm); background: var(--accent-wash); color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; }
         .kc-add:hover { background: var(--accent); color: #fff; }
         .kcp { display: flex; flex-direction: column; gap: 14px; }
-        .kcp-group { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); overflow: hidden; }
+        .kcp-group { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-raised); overflow: hidden; transition: border-color .12s ease, box-shadow .12s ease, background-color .12s ease; }
+        .kcp-group.is-over { border-color: var(--secondary-line); box-shadow: 0 0 0 2px var(--secondary-tint); background: var(--secondary-tint); }
         .kcp-head { padding: 8px 12px; background: var(--paper-sunken); border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 700; color: var(--ink); }
         .kcp-head-un { color: var(--ink-soft); font-style: italic; }
         .kcp-count { display: inline-block; margin-left: 4px; font-size: 11.5px; font-weight: 600; color: var(--ink-faint); }
-        .kcp-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
-        .kcp-chip { border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper); padding: 4px 12px; font-size: 12.5px; font-weight: 500; color: var(--ink); cursor: pointer; }
+        .kcp-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; min-height: 20px; }
+        .kcp-chip { border: 1px solid var(--line-strong); border-radius: 999px; background: var(--paper); padding: 4px 12px; font-size: 12.5px; font-weight: 500; color: var(--ink); cursor: grab; touch-action: none; }
         .kcp-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-wash); }
+        .kcp-chip:active { cursor: grabbing; }
         .kcp-empty { font-size: 12.5px; color: var(--ink-faint); font-style: italic; }
       `}</style>
     </div>

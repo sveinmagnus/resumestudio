@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ComponentType } from 'react'
 import {
@@ -198,6 +198,65 @@ describe('KeyCompetenciesEditor — by-profile grouping', () => {
     await userEvent.click(screen.getByRole('button', { name: 'By profile' }))
     await userEvent.click(screen.getAllByRole('button', { name: 'Shared' })[0])
     expect(screen.getByRole('dialog', { name: 'Edit competency' })).toBeInTheDocument()
+  })
+
+  it('deletes a competency (and detaches it from every profile) from the by-profile lightbox', async () => {
+    seedGrouped()
+    render(<KeyCompetenciesEditor />)
+    await userEvent.click(screen.getByRole('button', { name: 'By profile' }))
+    // Open "Shared" (in p1 AND p2) then delete it via the lightbox trash icon.
+    await userEvent.click(screen.getAllByRole('button', { name: 'Shared' })[0])
+    const lightbox = screen.getByRole('dialog', { name: 'Edit competency' })
+    await userEvent.click(within(lightbox).getByRole('button', { name: 'Delete' }))
+    // Confirm in the branded confirm dialog.
+    const confirm = screen.getByRole('dialog', { name: 'Delete competency?' })
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => {
+      const state = useStore.getState().data
+      expect(state.key_competencies.find((c) => c.id === 'c1')).toBeUndefined()
+      // Detached from both profiles it belonged to — no dangling ids.
+      expect(state.key_qualifications.find((q) => q.id === 'p1')!.competency_ids).toEqual(['c2'])
+      expect(state.key_qualifications.find((q) => q.id === 'p2')!.competency_ids).toEqual([])
+    })
+  })
+})
+
+describe('KeyCompetenciesEditor — profile membership pencil', () => {
+  beforeEach(() => resetStore())
+
+  function seedMembership() {
+    const data = emptyStore()
+    data.key_competencies.push(makeKeyCompetency({ id: 'c1', title: { en: 'Alpha' } }))
+    data.key_qualifications.push(
+      makeKQ({ id: 'p1', tag_line: { en: 'Architect' }, competency_ids: ['c1'] }),
+      makeKQ({ id: 'p2', tag_line: { en: 'Leader' }, competency_ids: [] }),
+    )
+    seed(data)
+    // Expand the competency card so its membership editor renders (List view).
+    useStore.setState({ expandedItemId: 'c1' })
+  }
+
+  it('adds the competency to another profile via the multi-select popover', async () => {
+    seedMembership()
+    render(<KeyCompetenciesEditor />)
+
+    await userEvent.click(screen.getByRole('button', { name: /edit profile membership/i }))
+    // Architect is ticked (member), Leader is not.
+    expect(screen.getByRole('checkbox', { name: 'Architect' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Leader' })).not.toBeChecked()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Leader' }))
+    expect(useStore.getState().data.key_qualifications.find((q) => q.id === 'p2')!.competency_ids).toEqual(['c1'])
+  })
+
+  it('removes the competency from a profile by un-ticking it', async () => {
+    seedMembership()
+    render(<KeyCompetenciesEditor />)
+
+    await userEvent.click(screen.getByRole('button', { name: /edit profile membership/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Architect' }))
+    expect(useStore.getState().data.key_qualifications.find((q) => q.id === 'p1')!.competency_ids).toEqual([])
   })
 })
 
