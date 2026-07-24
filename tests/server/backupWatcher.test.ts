@@ -3,6 +3,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { BackupWatcher } from '../../server/backupWatcher'
+import { BackupScheduler } from '../../server/backupScheduler'
 import { BACKUP_FILENAME, buildStoreBackup, writeBackupAtomic } from '../../server/backup'
 import { createResumeDb, type ResumeBackupEntry, type ResumeDb } from '../../server/db'
 
@@ -121,6 +122,25 @@ describe('BackupWatcher', () => {
 
     pollOnce() // unchanged mtime → cheap-exit, no read/merge
     expect(restoreSpy).not.toHaveBeenCalled()
+    w.stop()
+  })
+
+  it('the outbound scheduler and inbound watcher do not collide (own write is a no-op)', () => {
+    db.restoreResumes([entry()])
+    const w = make()
+    w.start() // gate seeded at 0 (no file yet) so the next poll actually reads
+
+    // A real scheduler writes our OWN current DB state to the same folder,
+    // atomically (temp file + rename). The watcher must recognise it as ours
+    // and NOT re-import it — the feedback-loop guard is the file-vs-DB signature.
+    const scheduler = new BackupScheduler({ db, dir, intervalMs: INTERVAL, log: (m) => logs.push(m) })
+    const restoreSpy = vi.spyOn(db, 'restoreResumes')
+    scheduler.flush() // writes resume-studio-backup.json with the live store
+
+    pollOnce() // watcher reads the file, fileSig === dbSig → returns before restoring
+    expect(restoreSpy).not.toHaveBeenCalled()
+
+    scheduler.stop()
     w.stop()
   })
 
