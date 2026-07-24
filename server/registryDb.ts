@@ -51,7 +51,7 @@ export interface RegistryUpsert {
 }
 
 export type RegistryResult =
-  | { ok: true; entry: RegistryEntry }
+  | { ok: true; entry: RegistryEntry; created?: boolean }
   | { ok: false; reason: 'not_found' }
   | { ok: false; reason: 'conflict'; current: RegistryEntry }
 
@@ -186,9 +186,17 @@ export function createRegistryStore(db: Database): RegistryStore {
       return { ok: true, entry: getRegistryEntry(input.id)! }
     }
 
+    // Create: the registry dedups by (kind, key), so a repeat "create" of an
+    // existing key is a REUSE, not an error. Return the existing entry rather
+    // than letting the INSERT hit the UNIQUE(kind, key) index and surface as a
+    // 500 — this matches the canonical-registry intent (one entry per key).
+    // `created: false` lets the route answer 200 instead of a lying 201.
+    const dup = selectByKindKey.get(input.kind, key) as Row | undefined
+    if (dup) return { ok: true, entry: rowToEntry(dup), created: false }
+
     const id = randomUUID()
     insert.run({ id, kind: input.kind, name: JSON.stringify(input.name), key, extra, updated_at: now })
-    return { ok: true, entry: getRegistryEntry(id)! }
+    return { ok: true, entry: getRegistryEntry(id)!, created: true }
   }
 
   function deleteRegistryEntry(id: string): boolean {
@@ -263,6 +271,11 @@ export function createRegistryStore(db: Database): RegistryStore {
           }
         } else {
           // New key → insert with the INCOMING id so synced resume links resolve.
+          // A tampered/corrupt file could reuse an id that already belongs to a
+          // DIFFERENT (kind, key); inserting it would violate the PRIMARY KEY and
+          // abort the whole merge transaction. Skip such a row instead (normal
+          // UUIDs never collide, so this only ever guards against a bad file).
+          if (selectById.get(e.id)) continue
           insertWithId.run({
             id: e.id, kind: e.kind, name: JSON.stringify(e.name ?? {}), key: e.key,
             extra: JSON.stringify(e.extra ?? {}), version: e.version ?? 1,

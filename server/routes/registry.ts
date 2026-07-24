@@ -54,8 +54,10 @@ router.post('/', (req: Request, res: Response): void => {
     extra: (body.extra && typeof body.extra === 'object' && !Array.isArray(body.extra))
       ? (body.extra as Record<string, unknown>) : {},
   })
-  // Create can't conflict/not-found; narrow for the type.
-  if (result.ok) res.status(201).json({ entry: result.entry })
+  // Create can't conflict/not-found; narrow for the type. A create whose key
+  // already exists REUSES the canonical entry (201 for a fresh insert, 200 for
+  // a reuse) rather than 500ing on the UNIQUE(kind, key) index.
+  if (result.ok) res.status(result.created ? 201 : 200).json({ entry: result.entry })
   else res.status(500).json({ error: 'Could not create entry' })
 })
 

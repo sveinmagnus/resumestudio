@@ -60,6 +60,16 @@ describe('/api/registry', () => {
     expect(conflict.body.current.version).toBe(2)
   })
 
+  it('reuses an existing key on a repeat create (200, same entry) instead of 500ing', async () => {
+    const first = await request(app).post('/api/registry').send({ kind: 'skill', name: { en: 'React' } })
+    expect(first.status).toBe(201)
+    // Key-equal create (React.js ≡ react) must reuse the entry, not hit the
+    // UNIQUE(kind,key) index and surface as a 500.
+    const again = await request(app).post('/api/registry').send({ kind: 'skill', name: { en: 'React.js' } })
+    expect(again.status).toBe(200)
+    expect(again.body.entry.id).toBe(first.body.entry.id)
+  })
+
   it('rejects an unknown kind and a non-localized name', async () => {
     expect((await request(app).get('/api/registry?kind=bogus')).status).toBe(400)
     expect((await request(app).post('/api/registry').send({ kind: 'bogus', name: {} })).status).toBe(400)

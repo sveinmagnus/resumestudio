@@ -71,6 +71,20 @@ describe('registry CRUD', () => {
     expect(db.deleteRegistryEntry(created.entry.id)).toBe(false)
   })
 
+  it('reuses (does not 500 / duplicate) a create whose (kind, key) already exists', () => {
+    const db = freshDb()
+    const first = db.upsertRegistryEntry({ kind: 'skill', name: { en: 'React' } })
+    if (!first.ok) throw new Error('setup')
+    expect(first.created).toBe(true)
+    // A second create with a key-equal name (React.js ≡ react) must reuse, not throw.
+    const second = db.upsertRegistryEntry({ kind: 'skill', name: { en: 'React.js' } })
+    expect(second.ok).toBe(true)
+    if (!second.ok) return
+    expect(second.created).toBe(false)
+    expect(second.entry.id).toBe(first.entry.id) // same canonical entry
+    expect(db.listRegistry('skill')).toHaveLength(1) // no duplicate row
+  })
+
   it('persists skill extras (classification / category link)', () => {
     const db = freshDb()
     const r = db.upsertRegistryEntry({ kind: 'skill', name: { en: 'Go' }, extra: { classification: 'Technical', category_id: 'cat1' } })
@@ -174,5 +188,21 @@ describe('mergeRegistry() — desktop cross-machine sync', () => {
     db.upsertRegistryEntry({ kind: 'role', name: { en: 'SRE' } })
     db.mergeRegistry([{ id: '', kind: 'skill', key: '', name: {}, extra: {}, version: 1, updated_at: '' } as never])
     expect(db.listRegistry('role')).toHaveLength(1) // untouched
+  })
+
+  it('skips a colliding-id row (tampered file) instead of aborting the whole merge', () => {
+    const db = freshDb()
+    const local = db.upsertRegistryEntry({ kind: 'skill', name: { en: 'React' } })
+    if (!local.ok) throw new Error('setup')
+    // A corrupt file reuses the existing id for a DIFFERENT (kind,key) — the raw
+    // INSERT would hit the PRIMARY KEY and throw. It must be skipped, and a valid
+    // sibling in the same batch must still merge.
+    const r = db.mergeRegistry([
+      entry(local.entry.id, 'role', 'architect', { en: 'Architect' }, '2999-01-01T00:00:00Z'),
+      entry('remote-good', 'skill', 'go', { en: 'Go' }, '2999-01-01T00:00:00Z'),
+    ])
+    expect(r).toEqual({ added: 1, updated: 0 })          // only the valid sibling
+    expect(db.getRegistryEntry(local.entry.id)?.kind).toBe('skill') // original intact
+    expect(db.getRegistryEntry('remote-good')?.name.en).toBe('Go')
   })
 })
