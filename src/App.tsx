@@ -21,6 +21,7 @@ import { ResumeViewsEditor } from './components/editor/ResumeViewsEditor'
 import { CoverLettersEditor } from './components/editor/CoverLettersEditor'
 import { ConflictModal } from './components/ConflictModal'
 import { NewerDataNotice } from './components/NewerDataNotice'
+import { RemoteUpdateNotice } from './components/RemoteUpdateNotice'
 import { RegistryConflictNotice } from './components/RegistryConflictNotice'
 import { useRoute, navigate, Link } from './lib/router'
 import { dropLegacyCache } from './lib/localCache'
@@ -85,7 +86,7 @@ function EditorRoute({ resumeId, routeSection, routeViewId, onUnauthorized }: {
   const activeViewId = useStore((s) => s.activeViewId)
   const hasData = useStore((s) => s.hasData)
   const data = useStore((s) => s.data)
-  const { loadState, saveState, cacheSavedAt, unsyncedCount, conflict, resolveConflict, retry } = useResumePersistence(resumeId)
+  const { loadState, saveState, cacheSavedAt, unsyncedCount, conflict, resolveConflict, retry, remoteUpdate, reloadFromServer } = useResumePersistence(resumeId)
   // Propagate a rename of a SHARED registry entry to the instance registry so
   // other resumes pick it up on load (no-op unless entries are linked).
   useCanonicalRegistrySync()
@@ -141,6 +142,10 @@ function EditorRoute({ resumeId, routeSection, routeViewId, onUnauthorized }: {
   // re-opens it. A fresh conflict re-opens automatically.
   const [conflictDismissed, setConflictDismissed] = useState(false)
   useEffect(() => { if (conflict) setConflictDismissed(false) }, [conflict])
+
+  // The remote-update notice is dismissible; a fresh detection re-shows it.
+  const [remoteUpdateDismissed, setRemoteUpdateDismissed] = useState(false)
+  useEffect(() => { if (remoteUpdate) setRemoteUpdateDismissed(false) }, [remoteUpdate])
 
   // Sidebar drawer open state for narrow viewports. The Sidebar itself uses
   // CSS to decide whether to render as inline or as a drawer; this state only
@@ -216,6 +221,11 @@ function EditorRoute({ resumeId, routeSection, routeViewId, onUnauthorized }: {
         />
 
         <NewerDataNotice />
+        <RemoteUpdateNotice
+          show={remoteUpdate && !remoteUpdateDismissed}
+          onReload={reloadFromServer}
+          onDismiss={() => setRemoteUpdateDismissed(true)}
+        />
         <RegistryConflictNotice />
 
         {conflict && !conflictDismissed && (

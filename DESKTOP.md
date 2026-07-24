@@ -177,14 +177,20 @@ resumes. It is written atomically (so the sync client never sees a half file):
 - once on a clean shutdown,
 - and on demand from the picker's **Sync & backup** panel ("Back up now").
 
-On every launch, Resume Studio also **merges in** anything newer from that file.
-So the typical flow is:
+Resume Studio **merges in** anything newer from that file continuously while it
+runs — not only at launch. It watches the backup file (and re-checks it on a
+short interval as a backstop, since cloud-drive folders don't always fire file
+events), so edits made on another computer land here within seconds of the sync
+service delivering them, even if this machine has been left running for days.
+It still also merges once at startup. So the typical flow is:
 
 1. On computer A, open **Settings** and set the backup folder to e.g.
    `…/Google Drive/ResumeStudio`, then use the app normally.
-2. On computer B, set the **same** synced folder in Settings and relaunch (or
-   click **Restore from folder** in the picker's Sync panel). B pulls A's
-   resumes in automatically (the log shows `sync-in: +N new`).
+2. On computer B, set the **same** synced folder in Settings. B pulls A's
+   resumes in automatically (the log shows `sync-in: +N new` at launch, and
+   `backup-watch: merged from sync folder` when it picks up a later change). If
+   the resume you're viewing on B was updated on A, a small **"updated on
+   another device — Reload"** notice appears above the editor.
 
 **Merge rules (safe by design).** Merging is *newest-wins per resume*, keyed on
 each resume's last-saved time, and a union across machines:

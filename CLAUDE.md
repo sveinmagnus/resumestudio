@@ -191,7 +191,9 @@ server/              ← Express API + SQLite persistence
 ├── registryDb.ts (instance-level cross-resume registry: canonical entries,
 │   promoteFromResumes, mergeRegistry for desktop sync) · skillKey.ts
 │   (server mirror of the client skill key; cross-check test guards drift)
-├── backup.ts (whole-store StoreBackupV1 — NOT the client backup) + backupScheduler/-Runtime
+├── backup.ts (whole-store StoreBackupV1 — NOT the client backup) + backupScheduler
+│   (writes edits OUT) + backupWatcher (fs.watch+poll; merges other machines' edits IN
+│   while running, not just at launch) + backupRuntime (owns both)
 ├── settings.ts (desktop settings.json; applyToEnv; isDesktop gate) · storage.ts (payloadStats)
 ├── translate.ts (pluggable proxy: libretranslate/deepl/google/azure) · translateDocker.ts
 ├── summarize.ts (pluggable proxy: ollama/openai/compat; no heuristic fallback) ·
@@ -403,6 +405,14 @@ Navigation: `setActiveSection(key)` / `setExpandedItem(id)`. Undo/redo: `useUndo
 - **Backup** (`lib/backup.ts`, per-resume `BackupV1`): loading one from the
   picker creates a **new** resume. Distinct from the server's whole-store sync
   file (§14).
+- **Live sync (desktop)**: the whole-store sync folder is kept current in BOTH
+  directions while the app runs, not only at launch — `backupScheduler` writes
+  our edits out, `backupWatcher` (fs.watch + mtime-poll backstop) merges other
+  machines' edits in as a sync service drops them into the folder. The open
+  editor polls its resume's server `version` and, when a background merge moved
+  it past what the editor holds (and there are no local edits), surfaces
+  `RemoteUpdateNotice` → one-click reload. With local edits the next save 409s
+  into the conflict modal instead. See §14.
 - **Snapshots** (server-side, 50/resume, deduped, stored **image-free** via
   `stripSnapshotImages`; restore re-attaches current images). The History modal
   restores via **`replaceData`** so a restore is undoable + re-saved.
@@ -599,6 +609,7 @@ Full end-user + build docs in **`DESKTOP.md`**. Load-bearing invariants for work
 - **The launcher is bundled to CJS** (esbuild, `better-sqlite3` external). So **launcher code must not use `import.meta`/`__dirname`** — it uses env + `process.cwd()`. `app.ts`/`db.ts` guard `import.meta.url` (`import.meta.url ? … : process.cwd()`) because esbuild emits `""` for it; don't "simplify" that back or the bundle crashes at boot.
 - **Paths come from `server/config.ts`** (pure). The launcher sets `RESUME_DB_PATH` + `RESUME_CLIENT_DIR` before `createApp()`/first DB use. **Data dir** is per-user OS-standard (`%APPDATA%\ResumeStudio`, `~/Library/Application Support/ResumeStudio`, `~/.local/share/resume-studio`), overridable via `RESUME_DATA_DIR` — matches Electron's `app.getPath('userData')`.
 - **Sync model = whole-store JSON backup, NOT the live DB in the cloud folder.** `RESUME_BACKUP_DIR` holds one `resume-studio-backup.json` written atomically. Merge is **newest-wins per resume by `saved_at`, union, never deletes** (`db.restoreResumes`, `merge` mode). The file also carries the **instance registry** (cross-resume shared skills/roles, `StoreBackupV1.registry`); `db.mergeRegistry` unions it by key (newest-wins by `updated_at`, keeps the existing id, never deletes) so a synced resume's `canonical_id` links resolve on the other machine — a dangling link just degrades to per-resume display, fixable by re-publishing. Live SQLite in a sync folder is intentionally avoided (corruption); `RESUME_DB_JOURNAL=TRUNCATE` is the documented escape hatch.
+- **Sync runs continuously, both directions (not just at launch).** `backupScheduler` polls the DB and writes edits OUT on `backup_interval_ms`; `backupWatcher` (fs.watch on the folder + an mtime-poll backstop for cloud/network folders where events are unreliable) merges other machines' edits IN whenever the sync service updates the file. This matters because the app is normally left running for days, so a launch-only boot restore would rarely re-read the file. Both are owned by `backupRuntime` and started/stopped together by `reconfigureBackup`/`stopBackup`. **Feedback-loop guard:** before merging, the watcher compares the file's `backupSignature` to the live DB's — our own scheduler write matches, so it's a no-op; only a file carrying state the DB lacks triggers a restore. The watcher merge bumps each affected resume's `version`, which the open editor's `version` poll notices → `RemoteUpdateNotice` (reload); a half-written file mid-sync is caught (`UnreadableBackupError`) and retried next tick, never fatal.
 - **`db.close()`** does `wal_checkpoint(TRUNCATE)` then close. Keep shutdown ordering: `tray.kill()` → `flushBackup()` → `closeDefaultDb()` → `server.close()`.
 - **System-tray icon = the user's Quit affordance** (`desktop/tray.ts`, `systray2`). Tray Quit calls the same `shutdown()` — never add a "quit" control to the web UI. Gotchas: register `onClick`/`onError` only after `await systray.ready()`; the CJS↔ESM interop puts the `SysTray` constructor in different places under `tsx` vs the bundle (`tray.ts` resolves defensively). `systray2` is **external + vendored** in the build; best-effort (any failure → null, app keeps running).
 - **Two backup concepts, don't conflate:** `src/lib/backup.ts` = per-resume client download (`resumestudio/v1`); `server/backup.ts` = whole-store sync file (`resumestudio-store/v1`).
