@@ -516,7 +516,7 @@ category-vocabulary revisions, a fix so a hidden section heading keeps its **top
 margin**, a fix so the editor **type Filter can't trap** the user on one item,
 and **"Bulk summarize"** (renamed from "Summarize all empty", now confirm-gated).
 
-**v0.9.2–v0.9.3 + unreleased wave:** **continuous desktop sync** — the
+**v0.9.2–v0.9.4 wave:** **continuous desktop sync** — the
 whole-store sync folder is now merged IN while the app runs, not only at launch
 (`server/backupWatcher.ts` = fs.watch on the folder + an mtime-poll backstop;
 feedback-guarded against `backupScheduler`'s own writes), with a
@@ -533,7 +533,20 @@ description's prose without inventing facts. **Europass XML export**
 round-trip partner of the Europass importer). **Drift** false-positive fixes
 (numeral-vs-word, one-sided incidental numbers, short structured fields) + a
 per-finding **permanent ignore**. Overview panel/heading layout polish; the
-short summary moved below the full profile.
+short summary moved below the full profile. **Competency profile-membership
+editing** (v0.9.4) — a "Belongs to profiles" line on every competency card with
+an edit pencil (multi-select popover to toggle profiles), plus **drag a
+competency chip between profile groups** in the By-profile view; both write the
+single source of truth (each profile's `competency_ids`), with the reassignment
+branching factored into pure, unit-tested `lib/competencyBundles.ts` (a chip id
+carries source group + competency so a drop detaches only the dragged instance;
+dropping onto a profile that already holds it is a no-op; other profiles keep
+their shared memberships). **CI / supply-chain hardening** (v0.9.4) — every
+GitHub Action SHA-pinned with Dependabot keeping the pins fresh, a
+least-privilege `GITHUB_TOKEN`, workflow concurrency + per-job timeouts;
+canonical registry create + cross-machine merge hardened (`body-parser` bumped).
+**Repo hygiene** — regenerable build output swept from the working tree; the
+committed tree carries only app code + build/release config (no personal data).
 
 **Deferred / dropped:** **A4 Phase 2** (content-addressed asset table) was
 deliberately deferred — measurement infra shipped; build the table only when
