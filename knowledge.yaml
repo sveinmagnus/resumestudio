@@ -5,7 +5,7 @@
 kcp_version: "0.20"
 project: resume-studio
 version: 0.9.2
-updated: "2026-07-23"
+updated: "2026-07-24"
 language: en
 hints:
   recommended_entry_point: claude-instructions
@@ -34,7 +34,7 @@ units:
     intent: "What features exist and how does each hang together? The exhaustive per-feature design catalog + the recently-shipped changelog, extracted from CLAUDE.md §1 to keep the instruction file lean."
     scope: global
     audience: [agent, developer]
-    validated: "2026-07-23"
+    validated: "2026-07-24"
     update_frequency: weekly
     depends_on: [claude-instructions]
     triggers: [features, changelog, skills-showcase, skill-category, registry, resume-views, import, what-exists]
@@ -53,7 +53,7 @@ units:
     intent: "What is Resume Studio and how do I install, run, and configure it?"
     scope: global
     audience: [human, agent]
-    validated: "2026-07-23"
+    validated: "2026-07-24"
     update_frequency: monthly
     triggers: [overview, quickstart, install, configuration, env]
     not_for: ["architecture", "data model", "code conventions"]
@@ -177,36 +177,47 @@ units:
     hints:
       token_estimate: 1400
 
+  - id: skill-ci-and-release
+    path: .claude/skills/ci-and-release.md
+    intent: "How do this repo's CI (ci.yml: typecheck/test/build/e2e/depcheck) and tag-driven release pipeline (release.yml) work, and how do you triage a red check or a failed release build?"
+    scope: project
+    audience: [agent, developer]
+    validated: "2026-07-24"
+    depends_on: [ci-policy, release-policy, skill-software-testing]
+    triggers: [ci-failure, red-check, release-build, triage, workflow, version-drift, updater-asset, sha256-sidecar]
+    hints:
+      token_estimate: 1500
+
   # ── Vendored third-party skills (Apache-2.0 / openly distributed) ─────────
   - id: skill-webapp-testing
     path: .claude/skills/webapp-testing/SKILL.md
-    intent: "How to drive and verify the running web app with Playwright — E2E checks, screenshots, browser logs?"
+    intent: "How to drive and verify the running web app with Playwright — E2E checks, screenshots, browser logs? (Note: this repo's own e2e is TypeScript Playwright — e2e/smoke.spec.ts / npm run test:e2e; the Python approach is for ad-hoc debugging only.)"
     scope: project
     audience: [agent]
-    validated: "2026-06-10"
-    depends_on: [skill-software-testing]
+    validated: "2026-07-24"
+    depends_on: [skill-software-testing, skill-ci-and-release]
     triggers: [e2e, playwright, browser, smoke-test, screenshot, live-verification]
     hints:
       token_estimate: 1000
 
   - id: skill-web-design-guidelines
     path: .claude/skills/web-design-guidelines/SKILL.md
-    intent: "How to audit UI code against Web Interface Guidelines — accessibility, focus, interaction states?"
+    intent: "How to audit UI code against Web Interface Guidelines — accessibility, focus, interaction states? Self-contained: rules vendored at references/command.md (offline-capable), with an optional upstream refresh + a project cross-check against CLAUDE.md a11y + cartavio-brand tokens."
     scope: project
     audience: [agent]
-    validated: "2026-06-10"
+    validated: "2026-07-24"
     depends_on: [skill-cartavio-brand]
     triggers: [accessibility, a11y, ui-audit, ux-review, wcag]
     hints:
-      token_estimate: 300
+      token_estimate: 1900   # SKILL.md + references/command.md (vendored snapshot)
 
   - id: skill-github-actions-docs
     path: .claude/skills/github-actions-docs/SKILL.md
-    intent: "How to ground GitHub Actions workflow changes in official documentation instead of stale memory?"
+    intent: "How to ground GitHub Actions workflow SYNTAX/concept questions in official docs instead of stale memory? (For THIS repo's CI/release triage, use skill-ci-and-release.)"
     scope: project
     audience: [agent]
-    validated: "2026-06-10"
-    depends_on: [ci-policy, release-policy]
+    validated: "2026-07-24"
+    depends_on: [ci-policy, release-policy, skill-ci-and-release]
     triggers: [github-actions, workflow, ci-config, runners, release-pipeline]
     hints:
       token_estimate: 3350   # SKILL.md + references/topic-map.md
@@ -291,7 +302,7 @@ units:
     intent: "What does Resume Studio do today, feature by feature? (Most current end-user feature list.)"
     scope: global
     audience: [human, agent]
-    validated: "2026-07-23"
+    validated: "2026-07-24"
     update_frequency: monthly
     triggers: [features, capabilities, what-shipped]
     not_for: ["architecture", "implementation detail"]
@@ -303,7 +314,7 @@ units:
     intent: "How does an end user perform day-to-day tasks — first launch, editing, views, exporting, translation and AI assist, syncing?"
     scope: global
     audience: [human]
-    validated: "2026-07-17"
+    validated: "2026-07-24"
     update_frequency: monthly
     not_for: ["code or implementation questions"]
     hints:
@@ -314,7 +325,7 @@ units:
     intent: "Where does an end user download the desktop build for each OS?"
     scope: global
     audience: [human]
-    validated: "2026-07-17"
+    validated: "2026-07-24"
     update_frequency: monthly
     hints:
       token_estimate: 1000
@@ -392,6 +403,15 @@ relationships:
     type: governs
   - from: desktop-guide
     to: release-policy
+    type: enables
+  - from: ci-policy
+    to: skill-ci-and-release
+    type: context
+  - from: release-policy
+    to: skill-ci-and-release
+    type: context
+  - from: skill-github-actions-docs
+    to: skill-ci-and-release
     type: enables
   # Current-state docs supersede the historical design plans — navigation should
   # follow these edges rather than treating a shipped plan as live guidance.

@@ -20,10 +20,15 @@ Use this skill when the request is about:
 
 Do not use this skill for:
 
-- A specific failing PR check, missing workflow log, or CI failure triage. Use `gh-fix-ci`.
-- General GitHub pull request, branch, or repository operations. Use `github`.
-- CodeQL-specific configuration or code scanning guidance. Use `codeql`.
-- Dependabot configuration, grouping, or dependency update strategy. Use `dependabot`.
+- A specific failing PR check or CI/release failure in **this** repo. Use the
+  project's `ci-and-release` skill (it covers `ci.yml` + `release.yml` and their
+  real failure modes).
+- General GitHub pull request, branch, or repository operations. Handle
+  directly with the `gh` CLI (this project has no separate `github` skill).
+- CodeQL / code-scanning or Dependabot configuration. **Not applicable here** —
+  this repo has no CodeQL workflow or `dependabot.yml`; dependency hygiene is
+  the advisory `depcheck` CI job plus `npm audit` (see the `security-review`
+  skill §6). If either is ever adopted, add a dedicated skill then.
 
 ## Workflow
 

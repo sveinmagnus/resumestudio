@@ -6,6 +6,15 @@ license: Complete terms in LICENSE.txt
 
 # Web Application Testing
 
+> **Resume Studio note (project stack):** this project's own end-to-end suite is
+> **TypeScript Playwright**, not Python — `e2e/smoke.spec.ts`, run via
+> `npm run test:e2e` (build + `npx playwright test`), and it's what CI runs
+> (`ci.yml` e2e job). For the project's regression coverage, extend that suite
+> in TypeScript rather than standing up a parallel Python toolchain. Reach for
+> the Python approach below only for **ad-hoc, throwaway** exploration/debugging
+> of a running app where a quick script beats adding a spec. See the
+> `software-testing` and `ci-and-release` skills for the project's test gate.
+
 To test local web applications, write native Python Playwright scripts.
 
 **Helper Scripts Available**:
