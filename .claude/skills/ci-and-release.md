@@ -42,6 +42,15 @@ environmental (the harness noise in `software-testing` §6 is about *local* runs
 Node is pinned to **22** across all jobs (see release.yml comment for why 20 is
 out: EOL + no better-sqlite3 abi115 prebuilds + rolldown needs ≥22.12).
 
+**Workflow-level hardening (don't regress):** `ci.yml` runs with
+`permissions: contents: read` (least privilege — CI never writes), a
+`concurrency` group that supersedes redundant **PR** runs but never cancels an
+in-flight run on `main`, and a `timeout-minutes` on every job so a hang can't
+burn the 6-hour default. `release.yml` keeps `permissions: contents: write`
+(it must attach release assets) and its own per-job timeouts. If you add a job,
+give it a `timeout-minutes`; if a job needs a broader token, scope the extra
+permission on that job, not the whole workflow.
+
 ## 2. The release pipeline (`release.yml`, on `v*` tags)
 
 Tag-driven: `git tag vX.Y.Z && git push origin vX.Y.Z` builds the portable

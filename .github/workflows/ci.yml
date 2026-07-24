@@ -5,10 +5,23 @@ on:
     branches: [master, main]
   pull_request:
 
+# Least privilege: CI only reads the repo. It never writes contents, comments,
+# or statuses, so drop the default read/write token down to read-only.
+permissions:
+  contents: read
+
+# Don't pile up redundant runs. A rapid re-push to the SAME ref supersedes the
+# previous run — but only cancel PR runs; never cancel an in-flight run on
+# main (we want every pushed commit on a protected branch fully verified).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   verify:
     name: typecheck • test • build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v6
@@ -34,6 +47,7 @@ jobs:
   e2e:
     name: e2e smoke (Playwright)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v6
@@ -67,6 +81,7 @@ jobs:
   depcheck:
     name: depcheck (advisory)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Advisory only — flags unused deps + phantom (undeclared) imports but must
     # never block a merge. We deliberately stayed on npm rather than pnpm; this
     # is the cheap guardrail that recovers pnpm's one real benefit (catching

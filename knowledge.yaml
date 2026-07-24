@@ -334,11 +334,11 @@ units:
   - id: ci-policy
     kind: policy
     path: .github/workflows/ci.yml
-    intent: "What checks must pass on every push and PR? (typecheck + test + build, plus the Playwright e2e smoke job)"
+    intent: "What checks must pass on every push and PR? (typecheck + test + build, plus the Playwright e2e smoke job + advisory depcheck). Hardened with least-privilege token, concurrency, and per-job timeouts."
     format: yaml
     scope: project
     audience: [developer, agent]
-    validated: "2026-06-10"
+    validated: "2026-07-24"
     update_frequency: rarely
     triggers: [ci, checks, pipeline]
     content_structure:
@@ -354,7 +354,7 @@ units:
     format: yaml
     scope: project
     audience: [developer, agent]
-    validated: "2026-06-15"
+    validated: "2026-07-24"
     update_frequency: rarely
     depends_on: [desktop-guide]
     triggers: [release, publish, tarball, versioning, version]
