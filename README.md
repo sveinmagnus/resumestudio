@@ -120,9 +120,17 @@ The full feature tour lives on the
   in the registry, and authoritative classifications in the skill-matrix export.
 - **Shared registries with merge.** Skills, roles, **and industries** each live
   once and are referenced everywhere; "Merge this into…" consolidates
-  duplicates ("Finance" / "finance") and rewrites every reference.
+  duplicates ("Finance" / "finance") and rewrites every reference. With more
+  than one CV in the instance you can **share a registry across resumes** — a
+  rename in any CV then propagates to all of them (each person keeps their own
+  proficiency/highlights) — and a **"who knows what"** skill × person matrix on
+  the picker shows team overlap vs. bus-factor risks.
 - **Career timeline.** The Overview draws your employments and projects as a
   timeline and flags gaps in your work history.
+- **Cross-language drift check.** The Overview flags fields whose two languages
+  have drifted — a number changed on one side but not the other, or prose that
+  grew in one language while the other stayed a stub — and jumps you to the
+  field. A false positive can be permanently ignored.
 - **Global search.** Ctrl/Cmd+K opens a command palette that searches every
   section, registry and field, and jumps straight to the match.
 - **Stay current.** An Overview "Needs attention" panel flags expired/expiring

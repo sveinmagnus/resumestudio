@@ -206,9 +206,13 @@ person hopping between computers.
 2. Use the app normally. Resume Studio writes a single
    `resume-studio-backup.json` in that folder, atomically, whenever your CVs
    change (about once a minute, only if something actually changed).
-3. On computer B, set the **same** folder in Settings and relaunch — or click
-   **Restore from folder** in the picker's **Sync & backup** panel. B pulls
-   in A's CVs automatically.
+3. On computer B, set the **same** folder in Settings. B pulls in A's CVs
+   automatically — at launch, and then **continuously while it runs**: it
+   watches the folder and merges anything newer your sync client drops in,
+   within seconds, without a relaunch. (You can still force it from the
+   picker's **Sync & backup** panel with **Restore from folder**.) If the CV
+   you happen to have open was updated on the other machine, an **"updated on
+   another device — Reload"** notice appears above the editor.
 
 **Merge rules** (safe by design):
 
@@ -219,9 +223,9 @@ person hopping between computers.
   snapshot first so it's reversible from History.
 
 If you edit the *same* CV on two machines without syncing in between, the last
-one to sync wins. (The in-app **Conflict** modal protects you on a single
-machine across browser tabs, but it can't see edits that haven't been written
-to the shared folder yet.)
+one to sync wins. (If a background sync brings in a change to a CV you have
+open, the Reload notice offers it; if you *also* have unsaved edits, the next
+save raises the **Conflict** modal instead so you choose which side wins.)
 
 ## Backups
 

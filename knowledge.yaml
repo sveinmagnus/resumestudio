@@ -4,7 +4,7 @@
 # re-verify a unit's accuracy, and when you change a document, update its unit here.
 kcp_version: "0.20"
 project: resume-studio
-version: 0.9.2
+version: 0.9.3
 updated: "2026-07-24"
 language: en
 hints:

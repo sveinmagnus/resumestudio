@@ -428,9 +428,13 @@ prescriptive.
   a free loopback port and opens the browser. Data lives in a stable per-user OS
   folder; an optional **whole-store JSON backup** written to a cloud-synced
   folder (Google Drive/Dropbox/OneDrive) syncs CVs across computers via a
-  newest-wins merge on launch. Build with `npm run build:desktop`. See
-  CLAUDE.md §14 and `DESKTOP.md`. The persistence architecture is unchanged, so
-  a later move to Electron is repackaging, not a rewrite.
+  newest-wins merge — kept current in BOTH directions **continuously while the
+  app runs** (`backupScheduler` writes out; `backupWatcher` = fs.watch + a
+  poll backstop merges other machines' edits in), not only at launch. The open
+  editor polls its resume's `version` and shows `RemoteUpdateNotice` when a
+  background merge advances it. Build with `npm run build:desktop`. See
+  CLAUDE.md §8/§14 and `DESKTOP.md`. The persistence architecture is unchanged,
+  so a later move to Electron is repackaging, not a rewrite.
 - **Automatic updates (desktop build)** — the system-tray "Check for updates"
   item (plus an in-app picker banner + Settings → Updates) checks GitHub
   Releases daily / on demand, toggles to "Install update (vX.Y.Z)" when a newer
@@ -511,6 +515,25 @@ in the Key Competencies library, **Presentations from/to range** (shape v13),
 category-vocabulary revisions, a fix so a hidden section heading keeps its **top
 margin**, a fix so the editor **type Filter can't trap** the user on one item,
 and **"Bulk summarize"** (renamed from "Summarize all empty", now confirm-gated).
+
+**v0.9.2–v0.9.3 + unreleased wave:** **continuous desktop sync** — the
+whole-store sync folder is now merged IN while the app runs, not only at launch
+(`server/backupWatcher.ts` = fs.watch on the folder + an mtime-poll backstop;
+feedback-guarded against `backupScheduler`'s own writes), with a
+`RemoteUpdateNotice` in the open editor driven by a `version` poll
+(`useResumePersistence`). **Whole-store backup restore from the picker** — the
+import dispatcher now defaults unrecognised input to Resume Studio's own content
+(whole-store + per-resume + bare `ResumeStore`), with a POSITIVE CVpartner
+detector, so a self-export never restores blank (`importResumeStudio`,
+`isCVPartnerFormat`). A view **purpose note** (`ResumeView.purpose`) records why
+a view exists — read-only with an edit pencil, never exported. An AI **writing
+coach** (`lib/writingCoach.ts` + `WritingCoachPanel`) strengthens an existing
+description's prose without inventing facts. **Europass XML export**
+(`lib/exporterEuropass.ts`, `SkillsPassport` — DOM + `XMLSerializer`, the
+round-trip partner of the Europass importer). **Drift** false-positive fixes
+(numeral-vs-word, one-sided incidental numbers, short structured fields) + a
+per-finding **permanent ignore**. Overview panel/heading layout polish; the
+short summary moved below the full profile.
 
 **Deferred / dropped:** **A4 Phase 2** (content-addressed asset table) was
 deliberately deferred — measurement infra shipped; build the table only when

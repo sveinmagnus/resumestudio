@@ -99,6 +99,9 @@ an API key.
   matched against your existing registry so it links "React" rather than
   minting "React.js".
 - **Drafted project highlights** from the project description.
+- **Strengthen the wording.** Coach an existing description into tighter,
+  stronger prose — grounded in what you actually wrote, never inventing
+  employers, numbers, or claims.
 - **Anonymization check.** Scan an anonymized view for real client names
   that leaked through in prose.
 - **Cover-letter draft.** Turn a job posting plus the CV you're sending into a
@@ -128,6 +131,9 @@ an API key.
 
 - **Curated subsets of the master CV.** A view names a set of sections to
   include, items to exclude, a starred-only toggle, and a custom intro.
+- **Purpose note.** Jot down why a view exists — which client, tender, or role
+  it's for — as a private reminder shown on the view (with an edit pencil).
+  It's never exported.
 - **Per-section detail levels.** Each section can be Off, Summary, Tabulated
   (aligned columns), or Full — so a one-pager and a deep technical CV share
   the same source data. Sections can also flip to starred-only individually
@@ -228,7 +234,11 @@ an API key.
 
 - **Backup folder in your existing cloud sync** (Google Drive, Dropbox,
   OneDrive). Resume Studio writes a single JSON file there, atomically, and
-  merges newer content from it on every launch.
+  merges newer content back in **continuously while it runs** — not only at
+  launch — so edits made on another computer land within seconds of your sync
+  client delivering them, even if you leave the app open for days. If the CV
+  you're viewing was updated elsewhere, a small **"updated on another device —
+  Reload"** notice appears.
 - **Newest-wins per resume, never deletes.** Safe by design — a restore
   drops a snapshot first, so it's reversible from History.
 - **No real-time multi-writer.** Designed for one person hopping between

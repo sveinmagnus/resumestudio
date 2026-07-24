@@ -53,7 +53,7 @@ exposed to your network.
 ## Build from source
 
 If you'd rather build your own copy, or you're on a platform we don't ship a
-binary for yet, all you need is Node.js 20+ and Git.
+binary for yet, all you need is Node.js 22+ and Git.
 
 ```bash
 git clone {{ site.repo_url }}.git
