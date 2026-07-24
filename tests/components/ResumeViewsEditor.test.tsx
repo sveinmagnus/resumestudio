@@ -54,12 +54,31 @@ describe('<ResumeViewsEditor>', () => {
     render(<ResumeViewsEditor />)
     await userEvent.click(screen.getByRole('button', { name: /new view/i }))
 
+    // Purpose is read-only until the edit pencil is clicked (like the name).
+    await userEvent.click(screen.getByRole('button', { name: /edit purpose/i }))
     await userEvent.type(screen.getByLabelText(/purpose/i), 'For the Equinor architect role')
     expect(useStore.getState().data.views[0].purpose).toBe('For the Equinor architect role')
 
     // Back on the list, the note is what tells the views apart.
     await userEvent.click(screen.getByRole('button', { name: /all views/i }))
     expect(screen.getByText('For the Equinor architect role')).toBeInTheDocument()
+  })
+
+  it('shows the purpose read-only with a pencil; the "never exported" caveat only in edit mode', async () => {
+    seed()
+    render(<ResumeViewsEditor />)
+    await userEvent.click(screen.getByRole('button', { name: /new view/i }))
+
+    // Read-only: the "Purpose" label shows, but there's no editable textbox and
+    // no "never exported" caveat until you open it.
+    expect(screen.getByText('Purpose')).toBeInTheDocument()
+    expect(screen.queryByText(/never exported/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /purpose/i })).not.toBeInTheDocument()
+
+    // The pencil opens edit mode → the textbox and the caveat appear.
+    await userEvent.click(screen.getByRole('button', { name: /edit purpose/i }))
+    expect(screen.getByRole('textbox', { name: /purpose/i })).toBeInTheDocument()
+    expect(screen.getByText(/never exported/i)).toBeInTheDocument()
   })
 
   it('keeps the purpose note out of the exported document', async () => {

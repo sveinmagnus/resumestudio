@@ -488,8 +488,10 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
   const [docxBusy, setDocxBusy] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
-  // The view name is display-only until the user opens it with the pencil.
+  // The view name and purpose are display-only until opened with the pencil —
+  // both are "note to self" identity, not editable-every-time config.
   const [editingName, setEditingName] = useState(false)
+  const [editingPurpose, setEditingPurpose] = useState(false)
   // Which section rows are expanded (item list + style overrides shown). All
   // collapsed by default so the list reads as a sortable overview (#3).
   const [openSections, setOpenSections] = useState<Set<string>>(() => new Set())
@@ -641,7 +643,9 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
       <div className={`rv-editor-grid${showPreview ? '' : ' rv-grid-solo'}`}>
         <div className="rv-editor-controls">
 
-      {/* ── Name — display-only until opened with the pencil ── */}
+      {/* ── Name + purpose — both "note to self" identity, display-only until
+          opened with a pencil. Grouped in ONE block (no divider between them)
+          so they read as related, and set apart from the editable config below. */}
       <div className="rv-section-block">
         {editingName ? (
           <>
@@ -673,21 +677,48 @@ export function ViewEditor({ view, onBack, onDelete, onUpdate }: {
             </button>
           </div>
         )}
-      </div>
 
-      {/* ── Purpose — a note to self, never exported (see ResumeView.purpose) ── */}
-      <div className="rv-section-block">
-        <label className="rv-field-label" htmlFor="rv-purpose-input">
-          Purpose <span className="rv-label-note">— your note, never exported</span>
-        </label>
-        <textarea
-          id="rv-purpose-input"
-          className="rv-purpose-input"
-          value={view.purpose ?? ''}
-          onChange={(e) => onUpdate({ purpose: e.target.value })}
-          rows={2}
-          placeholder="Why this view exists — e.g. tailored for the Equinor lead-architect posting; keep to 2 pages"
-        />
+        {/* Purpose — a note to self, never exported (see ResumeView.purpose).
+            Read-only with a pencil, like the name; the "never exported" caveat
+            only shows while editing, but the "Purpose" label always does. */}
+        <div className="rv-purpose">
+          {editingPurpose ? (
+            <>
+              <label className="rv-field-label" htmlFor="rv-purpose-input">
+                Purpose <span className="rv-label-note">— your note, never exported</span>
+              </label>
+              <textarea
+                id="rv-purpose-input"
+                className="rv-purpose-input"
+                value={view.purpose ?? ''}
+                autoFocus
+                onChange={(e) => onUpdate({ purpose: e.target.value })}
+                onBlur={() => setEditingPurpose(false)}
+                onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setEditingPurpose(false) } }}
+                rows={2}
+                placeholder="Why this view exists — e.g. tailored for the Equinor lead-architect posting; keep to 2 pages"
+              />
+            </>
+          ) : (
+            <>
+              <div className="rv-purpose-head">
+                <span className="rv-field-label rv-purpose-label">Purpose</span>
+                <button
+                  type="button"
+                  className="rv-name-edit-btn"
+                  onClick={() => setEditingPurpose(true)}
+                  aria-label="Edit purpose"
+                  title="Edit purpose"
+                >
+                  <Pencil size={14} />
+                </button>
+              </div>
+              {view.purpose?.trim()
+                ? <p className="rv-purpose-display">{view.purpose}</p>
+                : <p className="rv-purpose-display rv-purpose-empty">A reminder to yourself about why this view exists.</p>}
+            </>
+          )}
+        </div>
       </div>
 
       {/* ── Introduction text ── */}

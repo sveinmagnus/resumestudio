@@ -108,10 +108,18 @@ export function Styles() {
       .rv-name-input:focus {
         outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash);
       }
-      /* Purpose — a note to self, NOT document content. It sits two blocks
-         above the exported Introduction textarea, so it has to read as
-         different at a glance: sunken rather than raised, normal-weight italic
-         placeholder, and a label that says so outright. */
+      /* Purpose — a note to self, NOT document content. Grouped under the view
+         name (same block, no divider), read-only with a pencil like the name. */
+      .rv-purpose { margin-top: 20px; }
+      .rv-purpose-head { display: flex; align-items: center; gap: 8px; }
+      .rv-purpose-label { margin-bottom: 0; }
+      .rv-purpose-display {
+        font-size: 13px; color: var(--ink-soft); margin: 4px 0 0;
+        white-space: pre-wrap; word-break: break-word;
+      }
+      .rv-purpose-empty { font-style: italic; color: var(--ink-faint); }
+      /* When editing, the note reads as different from the exported Introduction
+         below: sunken rather than raised, italic placeholder, dashed border. */
       .rv-purpose-input {
         width: 100%; padding: 8px 11px; background: var(--paper-sunken);
         border: 1px dashed var(--line); border-radius: var(--r-sm);
