@@ -1,0 +1,26 @@
+# Dependabot — https://docs.github.com/code-security/dependabot
+#
+# Scope is deliberately narrow: ONLY the github-actions ecosystem. Its single
+# job here is to keep the SHA-pinned actions in .github/workflows/*.yml fresh —
+# we pin every action to a full commit SHA (supply-chain hardening: a moved tag
+# can't silently swap the code that runs in CI / builds our release artifacts),
+# and Dependabot is what bumps the SHA + version comment when a new release
+# ships. Without it, SHA pins rot silently.
+#
+# NOT enabled for npm on purpose: this repo manages runtime deps by hand
+# (bundle-size discipline, lazy chunks) and already runs advisory `depcheck` +
+# `npm audit` in CI. Turn on an `npm` ecosystem block here only if that changes.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+    # One grouped PR for all action bumps instead of one PR per action.
+    groups:
+      github-actions:
+        patterns:
+          - "*"

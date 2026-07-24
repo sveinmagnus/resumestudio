@@ -25,10 +25,13 @@ Do not use this skill for:
   real failure modes).
 - General GitHub pull request, branch, or repository operations. Handle
   directly with the `gh` CLI (this project has no separate `github` skill).
-- CodeQL / code-scanning or Dependabot configuration. **Not applicable here** —
-  this repo has no CodeQL workflow or `dependabot.yml`; dependency hygiene is
-  the advisory `depcheck` CI job plus `npm audit` (see the `security-review`
-  skill §6). If either is ever adopted, add a dedicated skill then.
+- CodeQL / code-scanning: **not applicable here** — this repo has no CodeQL
+  workflow. If it's ever adopted, add a dedicated skill then.
+- Dependabot: there IS a `.github/dependabot.yml`, but it's deliberately narrow
+  — **github-actions ecosystem only**, whose sole job is keeping the workflows'
+  SHA-pinned actions fresh (documented in the `ci-and-release` skill). It does
+  NOT manage npm deps (that's the advisory `depcheck` job + `npm audit`; see the
+  `security-review` skill §6). No separate Dependabot skill is needed.
 
 ## Workflow
 

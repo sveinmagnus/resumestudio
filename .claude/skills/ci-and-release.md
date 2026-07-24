@@ -51,6 +51,18 @@ burn the 6-hour default. `release.yml` keeps `permissions: contents: write`
 give it a `timeout-minutes`; if a job needs a broader token, scope the extra
 permission on that job, not the whole workflow.
 
+**Actions are SHA-pinned (supply-chain hardening) — keep them that way.** Every
+`uses:` in both workflows points at a full **commit SHA** with a trailing
+`# vX` comment, not a floating tag. A moved tag can't silently swap the code
+that runs in CI or builds the release artifacts users auto-update from. This
+matters most for the third-party `softprops/action-gh-release` (it publishes
+the release + assets), but all actions are pinned uniformly. When adding an
+action, resolve its SHA (`gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`)
+and pin to that, `# <version>`. **`.github/dependabot.yml`** (github-actions
+ecosystem only, weekly, grouped into one PR) is what keeps these pins current —
+without it, SHA pins rot silently. Don't replace a SHA pin with a bare tag to
+"simplify"; that's the regression this closes.
+
 ## 2. The release pipeline (`release.yml`, on `v*` tags)
 
 Tag-driven: `git tag vX.Y.Z && git push origin vX.Y.Z` builds the portable

@@ -364,6 +364,23 @@ units:
     hints:
       token_estimate: 900
 
+  - id: dependabot-policy
+    kind: policy
+    path: .github/dependabot.yml
+    intent: "Why does Dependabot run, and how narrowly? github-actions ecosystem only — its job is keeping the workflows' SHA-pinned actions fresh; npm is deliberately excluded."
+    format: yaml
+    scope: project
+    audience: [developer, agent]
+    validated: "2026-07-24"
+    update_frequency: rarely
+    depends_on: [ci-policy, release-policy, skill-ci-and-release]
+    triggers: [dependabot, dependencies, sha-pin, supply-chain, action-updates]
+    content_structure:
+      primary: code
+      density: sparse
+    hints:
+      token_estimate: 200
+
   - id: env-reference
     path: .env.example
     intent: "Which environment variables does the server read, and what do they default to?"
