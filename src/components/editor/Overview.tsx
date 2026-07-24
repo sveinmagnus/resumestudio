@@ -217,6 +217,7 @@ export function Overview() {
       <div className="ov-card">
       <h3 className="ov-section-title">Translation completeness</h3>
       <p className="ov-trans-hint">Click a row to see which fields are missing in that language.</p>
+      <div className="ov-panel">
       <div className="ov-trans">
         {locales.map((l) => {
           const c = completeness[l] || { percent: 0, missing: [] }
@@ -272,6 +273,7 @@ export function Overview() {
         })}
       </div>
       </div>
+      </div>
 
       {/* Cross-language drift — only with a second language selected. Compares
           the editing pair for fields whose two versions have diverged. */}
@@ -284,10 +286,12 @@ export function Overview() {
             </span>
           </h3>
           {drift.findings.length === 0 ? (
-            <p className="ov-trans-hint ov-drift-ok">
-              <Check size={14} /> The {drift.comparedFields} field{drift.comparedFields !== 1 ? 's' : ''} filled in both
-              languages look consistent — no diverging numbers or lengths.
-            </p>
+            <div className="ov-panel">
+              <p className="ov-trans-hint ov-drift-ok">
+                <Check size={14} /> The {drift.comparedFields} field{drift.comparedFields !== 1 ? 's' : ''} filled in both
+                languages look consistent — no diverging numbers or lengths.
+              </p>
+            </div>
           ) : (
             <>
               <p className="ov-trans-hint">
@@ -295,6 +299,7 @@ export function Overview() {
                 have drifted. Click one to open it. These are hints, not errors — the two languages differ in a way
                 worth a glance.
               </p>
+              <div className="ov-panel">
               <ul className="ov-drift-list">
                 {(driftOpen ? drift.findings : drift.findings.slice(0, 6)).map((f, i) => (
                   <li key={`${f.meta.section}:${f.meta.itemId ?? 'root'}:${f.meta.fieldLabel}:${i}`}>
@@ -317,6 +322,7 @@ export function Overview() {
                   {driftOpen ? 'Show fewer' : `Show all ${drift.findings.length}`}
                 </button>
               )}
+              </div>
             </>
           )}
         </div>
@@ -450,17 +456,20 @@ export function Overview() {
           width: 1px; height: 14px; background: var(--line); transform: translateY(-50%);
         }
 
-        /* Boxed sections (Translation completeness, Cross-language check) — the
-           same blue-ish panel as the stat cards / Needs-attention box, so the
-           Overview reads as one system. The top margin also gives every section
-           heading (incl. the Career timeline above, at 28px) the SAME spacing —
-           previously these two headings sat flush against the element above. */
-        .ov-card {
-          margin-top: 28px; padding: 16px 18px;
+        /* Section wrapper — spacing ONLY, mirroring .ct-card (Career timeline).
+           Gives every section heading the same 28px above it; previously these
+           two sat flush against the element before them. The heading stays on
+           the page background, exactly like the Career timeline's. */
+        .ov-card { margin-top: 28px; }
+        /* The content box — mirrors .ct-chart, so the Overview's panels all
+           share the stat-card / pill-strip blue-ish surface. */
+        .ov-panel {
+          padding: 14px 16px;
           background: var(--paper-raised); border: 1px solid var(--line);
           border-radius: var(--r-md);
         }
-        .ov-card > .ov-section-title:first-child { margin-top: 0; }
+        /* A lone status line inside a panel shouldn't leave a trailing gap. */
+        .ov-panel > .ov-trans-hint:only-child { margin-bottom: 0; }
         .ov-section-title { font-size: 22px; margin-bottom: 6px; }
         .ov-trans-hint { font-size: 12px; color: var(--ink-faint); margin-bottom: 14px; }
         .ov-trans { display: flex; flex-direction: column; gap: 4px; max-width: 680px; }
