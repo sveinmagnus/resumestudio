@@ -1177,8 +1177,8 @@ export function ProfileEditor() {
           preview={richToPlain(resolve(kq.summary, primaryLocale))}
           starred={kq.starred} disabled={kq.disabled}>
           <DualField label="Tag line" value={kq.tag_line} onChange={(v) => updateItem('key_qualifications', kq.id, { tag_line: v })} placeholder="e.g. Senior Cloud Architect" />
-          <RichField label="Short summary (summary mode)" value={kq.summary_short ?? {}} onChange={(v) => updateItem('key_qualifications', kq.id, { summary_short: v })} />
           <RichField label="Full profile (full mode)" value={kq.summary} onChange={(v) => updateItem('key_qualifications', kq.id, { summary: v })} />
+          <RichField label="Short summary (summary mode)" value={kq.summary_short ?? {}} onChange={(v) => updateItem('key_qualifications', kq.id, { summary_short: v })} placeholder="A one- or two-line alternative shown in Summary mode (never alongside the full profile)" />
           <ProfileBundleEditor kq={kq} />
         </EditorCard>
       ))}
